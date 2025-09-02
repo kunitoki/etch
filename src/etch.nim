@@ -23,7 +23,7 @@ when isMainModule:
 
   # Check for test mode first
   if paramCount() >= 1 and paramStr(1) == "--test":
-    let testDir = if paramCount() >= 2: paramStr(2) else: "examples"
+    let testDir = if paramCount() >= 2: paramStr(2) else: "tests"
     quit runTests(testDir)
 
   var runVm = false
