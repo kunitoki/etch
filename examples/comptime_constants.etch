@@ -1,0 +1,71 @@
+fn fibonacci(n: int) -> int {
+    if n <= 1 {
+        return n;
+    } else {
+        return fibonacci(n - 1) + fibonacci(n - 2);
+    }
+}
+
+fn gcd(a: int, b: int) -> int {
+    if b == 0 {
+        return a;
+    } else {
+        return gcd(b, a % b);
+    }
+}
+
+fn isPrime(n: int) -> int {
+    if n <= 1 {
+        return 0;
+    }
+    if n <= 3 {
+        return 1;
+    }
+    if n % 2 == 0 {
+        return 0;
+    }
+    let i: int = 3;
+    while i * i <= n {
+        if n % i == 0 {
+            return 0;
+        }
+        i = i + 2;
+    }
+    return 1;
+}
+
+fn main() -> void {
+    let max_size: int = comptime(1024 * 8);
+    print(max_size);
+    
+    let buffer_count: int = comptime(8192 / 64);
+    print(buffer_count);
+    
+    let fib10: int = comptime(fibonacci(10));
+    print(fib10);
+    
+    let fib15: int = comptime(fibonacci(15));
+    print(fib15);
+    
+    let gcd_result: int = comptime(gcd(48, 18));
+    print(gcd_result);
+    
+    let prime_check: int = comptime(isPrime(17));
+    print(prime_check);
+    
+    let not_prime: int = comptime(isPrime(15));
+    print(not_prime);
+    
+    let table_size: int = comptime(power_of_two(6));
+    print(table_size);
+}
+
+fn power_of_two(exp: int) -> int {
+    let result: int = 1;
+    let i: int = 0;
+    while i < exp {
+        result = result * 2;
+        i = i + 1;
+    }
+    return result;
+}

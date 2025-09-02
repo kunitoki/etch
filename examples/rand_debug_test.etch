@@ -1,0 +1,16 @@
+fn main() -> void {
+    seed(42);
+    let x: int = rand(100, 20);  // Should be in range [20, 100]
+    print(x);
+    
+    // Let's also test if x is in the expected range
+    if x < 20 {
+        print(-1);  // Error: x is too small
+    } else {
+        if x > 100 {
+            print(-2);  // Error: x is too large  
+        } else {
+            print(1);   // Success: x is in valid range
+        }
+    }
+}

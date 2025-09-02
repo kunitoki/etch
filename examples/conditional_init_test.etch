@@ -1,0 +1,10 @@
+fn main() -> void {
+    var x: int;
+    var y: bool = true;
+    
+    if y {
+        x = 42;
+    }
+    
+    print(x);  // This should fail - x may not be initialized if y is false
+}

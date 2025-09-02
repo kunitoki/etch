@@ -1,0 +1,6 @@
+fn main() -> void {
+    comptime {
+        print(123);
+    }
+    print(42);
+}

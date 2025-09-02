@@ -1,0 +1,17 @@
+fn main() -> void {
+    // Practical example using array length
+    let numbers: array[int] = [10, 20, 30, 40, 50];
+    let count: int = #numbers;
+    
+    // Safely access the middle element
+    let middleIndex: int = count / 2;
+    let middle: int = numbers[middleIndex];
+    
+    // Create a slice from middle to end
+    let secondHalf: array[int] = numbers[middleIndex:];
+    let secondHalfLen: int = #secondHalf;
+    
+    // Process all elements (would be used in a loop if supported)
+    let first: int = numbers[0];
+    let last: int = numbers[count - 1];
+}

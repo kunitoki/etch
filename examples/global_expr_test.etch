@@ -1,0 +1,11 @@
+fn computeValue(x: int) -> int {
+    return x * 2 + 1;
+}
+
+let computed_global: int = computeValue(5);
+let math_global: int = 3 + 4 * 2;
+
+fn main() -> void {
+    print(computed_global);
+    print(math_global);
+}

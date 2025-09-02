@@ -1,0 +1,5 @@
+examples/type_mismatch.etch:3:7: error: initialization type mismatch: string vs int
+  2 | fn main() -> void {
+  3 |   let x: int = test();
+            ^
+  4 | }

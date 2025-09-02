@@ -1,0 +1,6 @@
+fn main() -> void {
+    let x: int = 10;
+    let y: int = 2;
+    let result: int = x / y;
+    print(result);
+}

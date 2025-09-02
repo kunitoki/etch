@@ -1,3 +1,7 @@
 nimcache/
 nimblecache/
 htmldocs/
+__etch__/
+
+*.etcx
+.DS_Store

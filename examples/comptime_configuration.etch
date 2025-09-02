@@ -1,0 +1,49 @@
+fn main() -> void {
+    let debug_mode: int = comptime(1);
+    let max_iterations: int = comptime(debug_mode * 1000 + (1 - debug_mode) * 10000);
+    let buffer_size: int = comptime(debug_mode * 64 + (1 - debug_mode) * 4096);
+    let log_level: int = comptime(debug_mode * 3 + (1 - debug_mode) * 1);
+    
+    print(max_iterations);
+    print(buffer_size);
+    print(log_level);
+    
+    let version_major: int = comptime(2);
+    let version_minor: int = comptime(1);
+    let version_patch: int = comptime(0);
+    let version_code: int = comptime(version_major * 10000 + version_minor * 100 + version_patch);
+    
+    print(version_code);
+    
+    let feature_flag_a: int = comptime(1);
+    let feature_flag_b: int = comptime(0);
+    let features_enabled: int = comptime(feature_flag_a * 1 + feature_flag_b * 2);
+    
+    print(features_enabled);
+    
+    if features_enabled % 2 == 1 {
+        print(100);
+    }
+    
+    if features_enabled / 2 == 1 {
+        print(200);
+    }
+    
+    let memory_pool_count: int = comptime(calculatePoolCount(buffer_size, 16));
+    print(memory_pool_count);
+    
+    let hash_table_size: int = comptime(nextPowerOfTwo(memory_pool_count * 3 / 4));
+    print(hash_table_size);
+}
+
+fn calculatePoolCount(total_size: int, pool_size: int) -> int {
+    return total_size / pool_size;
+}
+
+fn nextPowerOfTwo(n: int) -> int {
+    let power: int = 1;
+    while power < n {
+        power = power * 2;
+    }
+    return power;
+}

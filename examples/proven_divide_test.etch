@@ -1,0 +1,8 @@
+fn divide_safe(x: int, y: int = 2) -> int {
+    return x / y;  // y has default value 2 (non-zero)
+}
+
+fn main() -> void {
+    print(divide_safe(10));    // Uses default y=2
+    print(divide_safe(10, 5)); // Uses provided y=5
+}

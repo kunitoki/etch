@@ -1,0 +1,11 @@
+fn main() -> void {
+    var x: int;
+    var i: int = 0;
+    
+    while i < 5 {
+        x = i * 2;
+        i = i + 1;
+    }
+    
+    print(x);  // This should fail - x may not be initialized if loop doesn't execute
+}

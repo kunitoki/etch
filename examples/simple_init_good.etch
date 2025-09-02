@@ -1,0 +1,12 @@
+fn main() -> void {
+    var x: int;
+    var condition: bool = true;
+    
+    if condition {
+        x = 42;
+    } else {
+        x = 99;
+    }
+    
+    print(x);  // This should be fine - x is always initialized
+}

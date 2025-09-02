@@ -1,0 +1,9 @@
+fn main() -> void {
+  let d: int = 1 - 1;
+  d = 0;
+  d = 1;
+  d = 0;
+  if 1 == 0 {
+    print(10           / d);
+  }
+}

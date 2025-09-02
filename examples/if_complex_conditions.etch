@@ -1,0 +1,36 @@
+// Test complex boolean expressions with parentheses
+// Shows operator precedence and grouping
+
+fn main() -> void {
+  let x: int = rand(20);  // 0-20
+  let y: int = rand(10);  // 0-10
+  print(x);
+  print(y);
+  
+  // Test operator precedence: and binds tighter than or
+  if x > 10 or y < 3 and x < 15 {
+    print(100);  // equivalent to: x > 10 or (y < 3 and x < 15)
+  }
+  
+  // Test explicit parentheses changing precedence  
+  if (x > 10 or y < 3) and x < 15 {
+    print(200);  // different from above
+  }
+  
+  // Test nested elif with complex conditions
+  if x < 5 and y > 7 {
+    print(300);
+  } elif (x >= 5 and x < 10) or y == 0 {
+    print(400);
+  } elif x >= 15 and (y > 5 or y < 2) {
+    print(500);
+  } else {
+    print(600);
+  }
+  
+  // Test safety analysis with boolean conditions
+  let divisor: int = rand(10, 1);  // 1-10, never zero
+  if divisor > 5 and (divisor < 8 or divisor > 9) {
+    print(1000 / divisor);  // Safe: divisor proven non-zero
+  }
+}

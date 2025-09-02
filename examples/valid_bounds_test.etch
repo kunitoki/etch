@@ -1,0 +1,15 @@
+fn main() -> void {
+    // Test that valid operations work fine
+    let numbers: array[int] = [10, 20, 30, 40, 50];
+    
+    // All of these should work
+    let first: int = numbers[0];
+    let last: int = numbers[4];
+    let middle: int = numbers[2];
+    
+    // Valid slices
+    let slice1: array[int] = numbers[1:4];
+    let slice2: array[int] = numbers[:3];
+    let slice3: array[int] = numbers[2:];
+    let slice4: array[int] = numbers[:];
+}

@@ -1,0 +1,15 @@
+// Test: Overflow detection with large ranges
+// Shows how the prover catches potential overflows
+
+fn main() -> void {
+  // These should be safe
+  let small_a: int = rand(1000);      // Range: [0, 1000]
+  let small_b: int = rand(500);       // Range: [0, 500]
+  let safe_sum: int = small_a + small_b; // Range: [0, 1500] - safe
+  print(safe_sum);
+
+  // This would cause overflow error if uncommented:
+  let large_a: int = rand(2000000000);  // Range: [0, 2B]
+  let large_b: int = rand(1000000000);  // Range: [0, 1B]
+  let overflow_risk: int = large_a + large_b;  // Safe: no potential overflow on int64
+}

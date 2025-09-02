@@ -1,0 +1,4 @@
+examples/generic_max.etch:5:3: warning: unreachable code (condition is always false) in max<int>
+examples/generic_max.etch:5:3: warning: unreachable code (condition is always false) in max<float>
+20
+2.0

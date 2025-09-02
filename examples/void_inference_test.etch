@@ -1,0 +1,8 @@
+fn doSomething() {
+    let x: int = 42;
+    let y: string = "hello";
+}
+
+fn main() -> void {
+    doSomething();
+}

@@ -1,0 +1,8 @@
+fn test(x: int, y: int = 5) -> int {
+    return x + y;
+}
+
+fn main() -> void {
+    let result: int = test(10);
+    print(result);
+}

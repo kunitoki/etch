@@ -1,0 +1,32 @@
+// Mixed while loop test - some dead, some alive
+// Shows the prover correctly distinguishes possible from impossible
+
+fn main() -> void {
+  seed(42);  // Set deterministic seed
+  let x: int = rand(100, 20);  // Range: [20, 100]
+  print(x);
+  
+  // Test 1: Dead while loop (impossible condition)
+  while x > 200 {
+    print(999);  // Never executes
+  }
+  
+  // Test 2: Live while loop (possible condition) 
+  var counter: int = 0;
+  while counter < 3 {
+    print(counter);
+    counter = counter + 1;
+  }
+  
+  // Test 3: Another dead loop (x can never be < 10)
+  while x < 10 {
+    print(888);  // Never executes  
+  }
+  
+  // Test 4: Constant false condition (traditional dead code)
+  while false {
+    print(777);  // Never executes
+  }
+  
+  print(555);  // End marker
+}

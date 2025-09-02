@@ -1,0 +1,15 @@
+fn test(condition: bool) -> void {
+    var x: int;
+    
+    if condition {
+        x = 42;
+    } else {
+        x = 99;
+    }
+    
+    print(x);  // This should be fine - x is always initialized
+}
+
+fn main() -> void {
+    test(true);
+}

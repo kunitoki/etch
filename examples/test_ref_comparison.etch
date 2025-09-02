@@ -1,0 +1,12 @@
+fn main() -> void {
+    let ref_var: Ref[int] = newref(42);
+    
+    // Valid: explicit comparison with nil
+    if ref_var != nil {
+        print("Reference is not null");
+    }
+    
+    // Valid: explicit comparison
+    let is_null: bool = ref_var == nil;
+    print(is_null);
+}

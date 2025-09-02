@@ -1,0 +1,25 @@
+fn main() -> void {
+    // Array literal creation
+    let numbers: array[int] = [1, 2, 3, 4, 5];
+
+    // Array indexing
+    let first: int = numbers[0];
+    let last: int = numbers[rand(4)];
+    print(numbers[0]);
+    print(numbers[4]);
+
+    // Array slicing variations
+    let slice1: array[int] = numbers[1:4];    // [2, 3, 4]
+    let slice2: array[int] = numbers[2:];     // [3, 4, 5]
+    let slice3: array[int] = numbers[:3];     // [1, 2, 3]
+    let slice4: array[int] = numbers[:];      // [1, 2, 3, 4, 5] (full copy)
+
+    // Nested arrays
+    let matrix: array[array[int]] = [[1, 2], [3, 4]];
+    let row: array[int] = matrix[0];
+    let element: int = matrix[1][0];  // Should be 3
+
+    // String arrays
+    let words: array[string] = ["hello", "world", "etch"];
+    let greeting: string = words[0];
+}

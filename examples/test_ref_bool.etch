@@ -1,0 +1,8 @@
+fn main() -> void {
+    let ref_var: Ref[int] = newref(42);
+    
+    // This should fail - reference doesn't evaluate to bool
+    if ref_var {
+        print("This should not compile");
+    }
+}

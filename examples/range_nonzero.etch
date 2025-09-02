@@ -1,0 +1,12 @@
+// Test: Non-zero ranges enable safe division
+// Shows how ranges that exclude zero prove divisor safety
+
+fn main() -> void {
+  let min5_max10: int = rand(10, 5);    // Range: [5, 10] - never zero
+  let safe_div: int = 100 / min5_max10; // Safe: divisor proven non-zero
+  print(safe_div);
+  
+  let negative: int = rand(-5, -10);    // Range: [-10, -5] - never zero
+  let safe_div2: int = 200 / negative;  // Safe: divisor proven non-zero  
+  print(safe_div2);
+}

@@ -1,0 +1,10 @@
+fn main() -> void {
+    // Test case 1: Known array size, known index - should be caught at compile time
+    let numbers: array[int] = [1, 2, 3, 4, 5];
+    
+    // Valid access - should work fine  
+    let valid: int = numbers[2];
+    
+    // This should be caught by prover as out of bounds
+    let invalid: int = numbers[100];
+}

@@ -1,0 +1,4 @@
+Setting A: Value1
+Setting B: Value2
+Setting C: Value3
+Setting D: Value4

@@ -1,0 +1,20 @@
+fn main() -> void {
+    // Test # operator for array length
+    let arr1: array[int] = [1, 2, 3, 4, 5];
+    let len1: int = #arr1;  // Should be 5
+    
+    let arr2: array[string] = ["hello", "world"];
+    let len2: int = #arr2;  // Should be 2
+    
+    // Empty array test skipped for now - type inference limitation
+    
+    // Test with nested arrays
+    let matrix: array[array[int]] = [[1, 2], [3, 4, 5]];
+    let rows: int = #matrix;  // Should be 2
+    let firstRowLen: int = #matrix[0];  // Should be 2
+    let secondRowLen: int = #matrix[1];  // Should be 3
+    
+    // Test with slices - array length should work on slices too
+    let slice: array[int] = arr1[1:4];  // [2, 3, 4]
+    let sliceLen: int = #slice;  // Should be 3
+}

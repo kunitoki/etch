@@ -1,0 +1,7 @@
+fn divide_default(x: int, y: int = 2) -> int {
+    return x / y;
+}
+
+fn main() -> void {
+    print(divide_default(10));
+}

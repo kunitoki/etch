@@ -1,0 +1,20 @@
+// Generics + concepts demo
+concept Ordered { cmp; } // tiny syntax: 'cmp' marks need for comparisons
+
+fn max[T: Comparable](a: T, b: T) -> T {
+  if a > b {
+    return a;
+  } else {
+    return b;
+  }
+}
+
+fn main() -> void {
+  let x: int = 10;
+  let y: int = 20;
+  print( max(x, y) ); // 20
+
+  let z: float = 1.0;
+  let w: float = 2.0;
+  print( max(z, w) ); // 2.0
+}

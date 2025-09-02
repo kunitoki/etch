@@ -1,0 +1,3 @@
+let y: string = x;
+let x: string = "global";
+fn main() -> void { print(y); }

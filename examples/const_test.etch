@@ -1,0 +1,5 @@
+fn main() -> void {
+    let zero: int = 0;
+    let result: int = 10 / zero;  // Direct division - should be caught
+    print(result);
+}

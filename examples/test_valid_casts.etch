@@ -1,0 +1,21 @@
+fn main() -> void {
+    // Test valid explicit casts
+    let x: int = 42;
+    let y: float = 3.14;
+    
+    // Valid casts
+    let int_to_float: float = float(x);
+    let float_to_int: int = int(y);
+    let int_to_string: string = string(x);
+    let float_to_string: string = string(y);
+    
+    // Arithmetic with matching types
+    let int_sum: int = x + 10;
+    let float_sum: float = y + 2.5;
+    
+    // Arithmetic with explicit casts
+    let mixed_sum: float = float(x) + y;
+    let mixed_sum2: int = x + int(y);
+    
+    print("All casts successful");
+}

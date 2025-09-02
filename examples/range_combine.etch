@@ -1,0 +1,9 @@
+// Test: Random + Random = Combined Range
+// Shows how two random ranges combine
+
+fn main() -> void {
+  let a: int = rand(10);         // Range: [0, 10]
+  let b: int = rand(5);          // Range: [0, 5] 
+  let result: int = a + b;       // Range: [0, 15] - safe
+  print(result);
+}

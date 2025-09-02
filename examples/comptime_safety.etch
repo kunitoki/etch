@@ -1,0 +1,50 @@
+fn safeDivide(dividend: int, divisor: int) -> int {
+    return dividend / divisor;
+}
+
+fn calculateArrayIndex(base: int, offset: int, stride: int) -> int {
+    return base + offset * stride;
+}
+
+fn main() -> void {
+    let compile_time_divisor: int = comptime(5 + 3 - 2);
+    let safe_division: int = safeDivide(100, compile_time_divisor);
+    print(safe_division);
+    
+    let array_stride: int = comptime(4 * 2);
+    let index: int = calculateArrayIndex(1000, 5, array_stride);
+    print(index);
+    
+    let bounds_check: int = comptime(10 * 10);
+    if index < bounds_check {
+        print(1);
+    } else {
+        print(0);
+    }
+    
+    let power_of_ten: int = comptime(powerOfTen(3));
+    let scaled_value: int = 42 * power_of_ten;
+    print(scaled_value);
+    
+    let factorial_bound: int = comptime(factorial(6));
+    let modulo_result: int = scaled_value % factorial_bound;
+    print(modulo_result);
+}
+
+fn powerOfTen(exp: int) -> int {
+    let result: int = 1;
+    let i: int = 0;
+    while i < exp {
+        result = result * 10;
+        i = i + 1;
+    }
+    return result;
+}
+
+fn factorial(n: int) -> int {
+    if n <= 1 {
+        return 1;
+    } else {
+        return n * factorial(n - 1);
+    }
+}

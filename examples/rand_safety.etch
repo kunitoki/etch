@@ -1,0 +1,18 @@
+// rand() safety analysis test
+// Tests: Random variables are unknown to prover, control-flow analysis works
+
+fn main() -> void {
+  // Test that random values make variables unknown to prover
+  let x: int = rand(10);  // x is unknown at compile-time
+  print(x);  // Show actual random value
+
+  if x != 0 {
+    print(100 / x);  // Safe: prover knows x != 0 in this branch
+  } else {
+    print(999);      // Handle x == 0 case
+  }
+
+  // Test with guaranteed non-zero range
+  let safe_divisor: int = rand(10, 1);  // 1-10, never zero
+  print(50 / safe_divisor);  // Always safe due to range
+}

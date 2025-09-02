@@ -1,0 +1,7 @@
+fn main() -> void {
+    // Test invalid slice where start > end
+    let arr: array[int] = [1, 2, 3, 4, 5];
+    
+    // This should be caught: start > end
+    let bad: array[int] = arr[4:2];
+}

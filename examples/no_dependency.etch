@@ -1,0 +1,6 @@
+let y: string = "independent";
+let x: string = "def";
+fn main() -> void {
+  print(y);
+  print(x);
+}

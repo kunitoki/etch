@@ -1,0 +1,11 @@
+fn main() -> void {
+    comptime {
+        let file_content: string = readFile("test_file.txt");
+        print(file_content);
+    }
+    
+    let file_content_runtime: string = comptime(readFile("test_file.txt"));
+    print(file_content_runtime);
+    
+    print(42);
+}

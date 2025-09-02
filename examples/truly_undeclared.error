@@ -1,0 +1,5 @@
+examples/truly_undeclared.etch:2:16: error: use of undeclared variable 'undeclared_var'
+  1 | fn main() -> void {
+  2 |   let x: int = undeclared_var;
+                     ^
+  3 | }

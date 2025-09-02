@@ -1,0 +1,8 @@
+fn test_divide(y: int) -> int {
+    return 10 / y;  // Direct division in function
+}
+
+fn main() -> void {
+    print(test_divide(2));  // This should work
+    print(test_divide(0));  // This should be caught by call-site analysis
+}

@@ -1,0 +1,9 @@
+fn main() -> void {
+  print(test());
+}
+
+fn test() -> string {
+    return x;
+}
+
+let x: string = "def";

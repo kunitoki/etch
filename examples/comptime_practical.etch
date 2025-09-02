@@ -1,0 +1,43 @@
+fn kbToBytes(kb: int) -> int {
+    return kb * 1024;
+}
+
+fn calculateHash(seed: int, multiplier: int) -> int {
+    return seed * multiplier % 65536;
+}
+
+fn nextPowerOfTwo(n: int) -> int {
+    let power: int = 1;
+    while power < n {
+        power = power * 2;
+    }
+    return power;
+}
+
+fn main() -> void {
+    let buffer_size_kb: int = comptime(kbToBytes(64));
+    print(buffer_size_kb);
+    
+    let max_elements: int = comptime(65536 / 8);
+    print(max_elements);
+    
+    let hash_seed: int = comptime(calculateHash(12345, 31));
+    print(hash_seed);
+    
+    let table_size: int = comptime(nextPowerOfTwo(1000));
+    print(table_size);
+    
+    let version_number: int = comptime(2 * 10000 + 1 * 100 + 5);
+    print(version_number);
+    
+    let config_flags: int = comptime(1 * 1 + 0 * 2 + 1 * 4 + 0 * 8);
+    print(config_flags);
+    
+    if config_flags % 2 == 1 {
+        print(999);
+    }
+    
+    if (config_flags / 4) % 2 == 1 {
+        print(888);
+    }
+}

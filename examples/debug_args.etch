@@ -1,0 +1,15 @@
+fn test_args(x: int, y: int) -> void {
+    print(x);
+    print(y);
+}
+
+fn test_default(x: int, y: int = 42) -> void {
+    print(x);
+    print(y);
+}
+
+fn main() -> void {
+    test_args(10, 20);
+    test_default(100);
+    test_default(200, 300);
+}

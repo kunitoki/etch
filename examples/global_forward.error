@@ -1,0 +1,4 @@
+examples/global_forward.etch:1:17: error: use of uninitialized variable 'x' - variable may not be initialized in all control flow paths
+  1 | let y: string = x;
+                      ^
+  2 | let x: string = "global";

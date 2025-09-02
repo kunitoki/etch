@@ -1,0 +1,4 @@
+fn main() -> void {
+    let x: int = 42;  // immutable variable
+    x = 100;          // error: cannot assign to immutable variable
+}

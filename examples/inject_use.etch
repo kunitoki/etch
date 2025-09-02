@@ -1,0 +1,6 @@
+fn main() -> void {
+    comptime {
+        inject("injected_var", "string", "Hello from injection!");
+    }
+    print(injected_var);
+}

@@ -1,0 +1,5 @@
+examples/bounds_check_test.etch:9:32: error: array index 100 out of bounds [0, 4]
+  8 |     // This should be caught by prover as out of bounds
+  9 |     let invalid: int = numbers[100];
+                                     ^
+  10 | }

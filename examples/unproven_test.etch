@@ -1,0 +1,12 @@
+fn divide(x: int, y: int) -> int {
+  return x / y;  // Cannot prove y is non-zero
+}
+
+fn divide_default(x: int, y: int = 2) -> int {
+  return x / y;  // Cannot prove y is non-zero
+}
+
+fn main() -> void {
+  print(divide(10, 2)); // Can prove y is non-zero
+  print(divide_default(10)); // Can prove y is non-zero
+}

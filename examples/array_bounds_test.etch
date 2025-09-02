@@ -1,0 +1,9 @@
+fn main() -> void {
+    let arr: array[int] = [10, 20, 30];
+    
+    // This should work fine
+    let valid: int = arr[1];  // Should be 20
+    
+    // This should cause a bounds check error at runtime if uncommented
+    // let invalid: int = arr[5];  // Would be out of bounds
+}

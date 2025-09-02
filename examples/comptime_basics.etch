@@ -1,0 +1,42 @@
+fn add(a: int, b: int) -> int {
+    return a + b;
+}
+
+fn factorial(n: int) -> int {
+    if n <= 1 {
+        return 1;
+    } else {
+        return n * factorial(n - 1);
+    }
+}
+
+fn power(base: int, exp: int) -> int {
+    if exp == 0 {
+        return 1;
+    } else {
+        return base * power(base, exp - 1);
+    }
+}
+
+fn main() -> void {
+    let basic: int = comptime(5 + 3 * 2);
+    print(basic);
+
+    let arithmetic: int = comptime(100 - 25 + 10);
+    print(arithmetic);
+
+    let complex: int = comptime((4 + 6) * (3 - 1) / 2);
+    print(complex);
+
+    let func_call: int = comptime(add(10, 20));
+    print(func_call);
+
+    let fact5: int = comptime(factorial(5));
+    print(fact5);
+
+    let pow_result: int = comptime(power(2, 8));
+    print(pow_result);
+
+    let nested = comptime(add(factorial(4), power(3, 3)));
+    print(nested);
+}

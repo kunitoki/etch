@@ -1,0 +1,7 @@
+fn main() -> void {
+    let numbers: array[int] = [1, 2, 3, 4, 5];
+    let first: int = numbers[0];
+    let slice: array[int] = numbers[1:3];
+    let tail: array[int] = numbers[2:];
+    let head: array[int] = numbers[:3];
+}

@@ -1,0 +1,13 @@
+fn conditionalReturn(x: int) {
+    if x > 10 {
+        return x * 2;
+    } elif x > 5 {
+        return x + 1;
+    } else {
+        return 0;
+    }
+}
+
+fn main() -> void {
+    let result: int = conditionalReturn(15);
+}

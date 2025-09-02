@@ -1,0 +1,9 @@
+fn divide(x: int, y: int) -> int {
+    return x / y;  // This should be fine to define
+}
+
+fn main() -> void {
+    var zero: int = 0;
+    let result: int = divide(10, zero);  // This should be rejected - zero is not provably non-zero
+    print(result);
+}

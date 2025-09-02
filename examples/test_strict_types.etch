@@ -1,0 +1,27 @@
+fn main() -> void {
+    // Valid explicit casts
+    let x: int = 42;
+    let y: float = float(x);  // int to float cast
+    let z: int = int(y);      // float to int cast
+    let s: string = string(x); // int to string cast
+    let s2: string = string(y); // float to string cast
+    
+    // Type errors - these should fail
+    let invalid1: int = x + y;  // int + float without cast
+    let invalid2: float = x * 3.14; // int * float without cast
+    
+    // Reference comparisons
+    let ref_var: Ref[int] = newref(42);
+    let is_null: bool = ref_var == nil;  // Valid: reference vs nil
+    let is_not_null: bool = ref_var != nil;  // Valid: reference vs nil
+    
+    // Invalid: using reference as bool
+    if ref_var {  // Should fail - references don't evaluate to bool
+        print("This should not compile");
+    }
+    
+    // Valid: explicit comparison
+    if ref_var != nil {
+        print("Reference is not null");
+    }
+}

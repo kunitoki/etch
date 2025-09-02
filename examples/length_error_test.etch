@@ -1,0 +1,6 @@
+fn main() -> void {
+    let x: int = 42;
+    
+    // This should be caught by type checker - using # on non-array
+    let bad: int = #x;
+}

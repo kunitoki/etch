@@ -1,0 +1,37 @@
+fn greet(name: string, greeting: string = "Hello") -> void {
+    print(greeting);
+    print(name);
+}
+
+fn add(x: int, y: int = 5, z: int = 10) -> int {
+    return x + y + z;
+}
+
+fn divide(dividend: int, divisor: int = 2) -> int {
+    return dividend / divisor;
+}
+
+fn format(prefix: string = "Result: ", value: int, suffix: string = "!") -> void {
+    print(prefix);
+    print(value);
+    print(suffix);
+}
+
+fn main() -> void {
+    let result1: int = add(1);
+    let result2: int = add(1, 2);
+    let result3: int = add(1, 2, 3);
+
+    print(result1);
+    print(result2);
+    print(result3);
+
+    greet("World");
+    greet("Alice", "Hi");
+
+    let safe_division: int = divide(10);
+    print(safe_division);
+
+    format("Value:", 42, "    end");
+    format("Number:", 123);
+}

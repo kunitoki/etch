@@ -1,0 +1,9 @@
+// Test: Constant + Random = New Range
+// Shows how adding a constant shifts the range
+
+fn main() -> void {
+  let base: int = 100;           // Known constant: 100
+  let variance: int = rand(5);   // Range: [0, 5]
+  let result: int = base + variance;  // Range: [100, 105] - safe
+  print(result);
+}
