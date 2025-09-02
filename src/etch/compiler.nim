@@ -14,7 +14,6 @@ type
     sourceFile*: string
     runVM*: bool
     includeDebugInfo*: bool
-    emitC*: bool
     cOutFile*: string
 
 proc getBytecodeFileName*(sourceFile: string): string =
@@ -154,30 +153,27 @@ proc compileAndRun*(options: CompilerOptions): CompilerResult =
     # Parse and typecheck
     let (prog, srcHash, evaluatedGlobals) = parseAndTypecheck(options.sourceFile, options.includeDebugInfo)
 
+    # Compile to bytecode
+    let bytecodeProg = compileProgramWithGlobals(prog, srcHash, evaluatedGlobals, options.sourceFile, options.includeDebugInfo)
+
+    # Save bytecode to cache
+    let bytecodeFile = getBytecodeFileName(options.sourceFile)
+    saveBytecodeToCache(bytecodeProg, bytecodeFile)
+
     # Check if we should run the VM
+    var exitCode = 0
     if options.runVM:
-      # Compile to bytecode
-      let bytecodeProg = compileProgramWithGlobals(prog, srcHash, evaluatedGlobals, options.sourceFile, options.includeDebugInfo)
-      
-      # Save bytecode to cache
-      let bytecodeFile = getBytecodeFileName(options.sourceFile)
-      saveBytecodeToCache(bytecodeProg, bytecodeFile)
-
-      # Run the bytecode
       let vm = newBytecodeVM(bytecodeProg)
-      let exitCode = vm.runBytecode()
-      return CompilerResult(success: true, exitCode: exitCode)
-
-    # TODO: Handle C emission when needed
-    if options.emitC:
-      return CompilerResult(success: false, error: "C emission not yet implemented")
+      exitCode = vm.runBytecode()
 
     return CompilerResult(success: true, exitCode: 0)
 
   except EtchError as e:
     return CompilerResult(success: false, error: e.msg, exitCode: 1)
+
   except IOError as e:
     return CompilerResult(success: false, error: "File error: " & e.msg, exitCode: 1)
+
   except Exception as e:
     return CompilerResult(success: false, error: "Internal compiler error: " & e.msg, exitCode: 2)
 
