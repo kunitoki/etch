@@ -1,0 +1,16 @@
+// Test simplified import syntax - just names without signatures
+
+// Import from module - just names
+import lib/math {
+  add;
+  square;
+}
+
+fn main() {
+  // Test module imports work
+  print(add(10, 20));  // 30
+  print(square(5));    // 25
+
+  // FFI imports require explicit signatures with 'fn' keyword
+  // The simplified syntax only works for module imports
+}

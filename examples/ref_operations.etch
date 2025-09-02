@@ -1,0 +1,26 @@
+type Counter = object {
+    value: int;
+};
+
+fn increment(counter: ref[Counter]) {
+    counter.value = counter.value + 1;
+}
+
+fn main() {
+    seed(42);
+    var total = 0;
+
+    // Reference operations benchmark
+    for i in 0..<1000 {
+        var counter = new[Counter]( value: 0 );
+
+        // Multiple increments
+        for j in 0..<10 {
+            increment(counter);
+        }
+
+        total = total + counter.value;
+    }
+
+    print(total);
+}

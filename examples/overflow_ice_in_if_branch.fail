@@ -1,0 +1,5 @@
+examples/overflow_ice_in_if_branch.etch:11:20: error: addition overflow
+  10 |     let huge2 = 2000;
+  11 |     result = huge1 + huge2;  // Overflow!
+                          ^
+  12 |   } else {

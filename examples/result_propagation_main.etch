@@ -1,0 +1,6 @@
+
+fn main() {
+  let x = "123456";
+  let y = parseInt(x)?;
+  print(string(y)); // 123456
+}

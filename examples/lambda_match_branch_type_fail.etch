@@ -1,0 +1,12 @@
+// Lambda with match branches returning incompatible types (should fail)
+fn main() {
+  let toInt: fn(option[int]) -> int = |opt: option[int]| -> int {
+    return match opt {
+      some(value) => value,
+      none => "missing"  // string branch makes match type inconsistent
+    };
+  };
+
+  let sample: option[int] = some(1);
+  let _ = toInt(sample);
+}

@@ -1,0 +1,5 @@
+examples/initialization_prover_partial_object.etch:10:3: error: use of uninitialized variable 'p' - variable may not be initialized in all control flow paths
+  9 |   var p: Point;
+  10 |   p.x = 10;
+         ^
+  11 |   // p.y not initialized

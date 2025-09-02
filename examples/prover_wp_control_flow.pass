@@ -1,0 +1,12 @@
+Test multiple paths:
+Result1: 4
+Result2: 17
+
+Test division with guards:
+Division1: 5
+Division2: 5
+
+Test loop access:
+Loop result: 60
+
+✅ WP control flow tests passed!

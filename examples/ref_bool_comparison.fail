@@ -1,0 +1,5 @@
+examples/ref_bool_comparison.etch:5:5: error: if condition must be bool
+  4 |     // This should fail - reference doesn't evaluate to bool
+  5 |     if ref_var {
+          ^
+  6 |         print("This should not compile");

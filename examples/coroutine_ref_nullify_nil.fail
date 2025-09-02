@@ -1,0 +1,5 @@
+examples/coroutine_ref_nullify_nil.etch:4:11: error: potential null dereference: dereferencing variable 'x' that may be nil
+  3 |     let x: ref[string] = w;
+  4 |     print(@x); // this mayb be nil ?
+                ^
+  5 |     yield 2;

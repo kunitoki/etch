@@ -1,0 +1,28 @@
+// Test ref object with ref field - double indirection
+// Alias should keep the inner object alive
+type Inner = object {
+    value: int;
+};
+
+type Outer = object {
+    inner: ref[Inner];
+};
+
+fn main() {
+    var outer = new[Outer](inner: new[Inner](value: 42));
+
+    // Access inner through outer
+    let inner_ref = outer.inner;
+    if inner_ref != nil {
+        print(inner_ref.value);
+    }
+
+    // Modify outer's inner to point to a new object
+    outer.inner = new[Inner](value: 99);
+
+    // inner_ref holds its own strong reference to the original Inner(value: 42)
+    // so it should still be valid
+    if inner_ref != nil {
+        print(inner_ref.value);
+    }
+}

@@ -1,0 +1,5 @@
+examples/overflow_multiplication_mixed_signs.etch:19:12: error: multiplication range would overflow
+  18 |   let b = rand(3000000000);   // [0, 3B]
+  19 |   return a * b;  // Could be down to -12E18 - safe for int64
+                  ^
+  20 | }

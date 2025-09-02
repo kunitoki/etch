@@ -1,0 +1,13 @@
+fn main() -> void {
+    // Test case 1: positive integer type inference (this should work)
+    var x = 42;
+    print(x);
+
+    // Test case 2: negative integer type inference (this should fail)
+    var y = -42;
+    print(y);
+
+    // Test case 3: explicit typing with negative (this should work)
+    var z: int = -42;
+    print(z);
+}

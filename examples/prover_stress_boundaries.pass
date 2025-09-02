@@ -1,0 +1,10 @@
+Test 1 (zero-length check): 0
+Test 2 (single element): 42
+Test 3 (exact boundaries): 0
+Test 4 (off-by-one protection): 0
+Test 5 (narrow window): -1
+Test 6 (boundary with offset): 2
+Test 7 (multiple checks): 0
+Test 8 (minus one): 0
+
+✅ All boundary stress tests passed!

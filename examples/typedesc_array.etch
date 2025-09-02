@@ -1,0 +1,25 @@
+type X = int;
+type Y = distinct int;
+type Z = object {
+    a: int;
+    b: string;
+};
+
+fn main() {
+    let x: int = 42;
+    let y: X = 42;
+    let z: Y = 42;
+
+    var arr: array[typedesc] = [
+        typeof 3,
+        typeof "hello",
+        typeof x,
+        typeof y,
+        typeof z
+    ];
+
+    for t in arr {
+        print(string(t));
+        print(int(t));
+    }
+}

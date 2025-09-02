@@ -1,0 +1,11 @@
+fn main() -> void {
+    var x: int;
+    
+    if true {
+        x = 42;
+    } else {
+        x = 99;  // This is unreachable
+    }
+    
+    print(x);
+}

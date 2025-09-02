@@ -1,0 +1,8 @@
+simple = 42
+add-one = 6
+add(3,7) = 10
+mul(6,9) = 54
+string(15) = 15
+capture = 15
+nested = 7
+Lambda syntax test completed

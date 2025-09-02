@@ -1,0 +1,13 @@
+// Test importing multiple submodules with []
+
+import lib/ [ math, physics ]
+
+fn main() -> void {
+  // From math module
+  let sum: int = add(10, 20);
+  print(sum);  // 30
+
+  // From physics module
+  let f: int = force(5, 10);
+  print(f);    // 50
+}

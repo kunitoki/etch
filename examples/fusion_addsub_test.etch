@@ -1,0 +1,11 @@
+// Test AddSub fusion: a + b - c -> opAddSub
+fn main() {
+  let a = 20;
+  let b = 30;
+  let c = 15;
+
+  // This should fuse into a single opAddSub instruction
+  let result = a + b - c;
+
+  print(result);  // Should print 35 (50 - 15)
+}

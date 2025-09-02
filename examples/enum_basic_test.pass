@@ -1,0 +1,4 @@
+x = Color.Red: Color.Red
+y = Color.Green: Color.Green
+z = Color.Blue: Color.Blue
+All basic enum operations passed!

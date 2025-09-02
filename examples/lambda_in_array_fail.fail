@@ -1,0 +1,5 @@
+examples/lambda_in_array_fail.etch:3:38: error: array element type mismatch: expected fn(int) -> int, got fn(int, int) -> int
+  2 |     // Failing: array of lambdas with different signatures should fail
+  3 |     let funcs = [ (|x: int| x + 1), (|x: int, y: int| x + y) ];
+                                           ^
+  4 |     let f0 = funcs[0];

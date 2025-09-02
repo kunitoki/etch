@@ -1,0 +1,14 @@
+// Test: Function with ambiguous return type inference
+fn ambiguousFunc(x: int, y: int) {
+  if x > 0 {
+    return x + y;    // Could be int
+  } else {
+    return "error";  // Could be string
+  }
+  // This should fail: ambiguous return type
+}
+
+fn main() {
+  let result = ambiguousFunc(1, 2);
+  print(result);
+}

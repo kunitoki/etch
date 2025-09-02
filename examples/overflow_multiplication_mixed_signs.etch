@@ -1,0 +1,39 @@
+// Test: Multiplication with mixed signs near limits
+// Tests edge cases with positive and negative values
+
+fn testPositiveMultiplication() -> int {
+  let a = rand(3000000000);  // [0, 3B]
+  let b = rand(4);           // [0, 4]
+  return a * b;  // Could be up to 12B - safe for int64
+}
+
+fn testNegativeMultiplication() -> int {
+  let a = -rand(3000000000);  // [-3B, 0]
+  let b = rand(4);            // [0, 4]
+  return a * b;  // Could be down to -12B - safe for int64
+}
+
+fn testMixedSignsLarge() -> int {
+  let a = -rand(4000000000);  // [-4B, 0]
+  let b = rand(3000000000);   // [0, 3B]
+  return a * b;  // Could be down to -12E18 - safe for int64
+}
+
+fn main() -> void {
+  print("Test positive multiplication:");
+  let r1 = testPositiveMultiplication();
+  print("Result: " + string(r1));
+  print("");
+
+  print("Test negative multiplication:");
+  let r2 = testNegativeMultiplication();
+  print("Result: " + string(r2));
+  print("");
+
+  print("Test mixed signs:");
+  let r3 = testMixedSignsLarge();
+  print("Result: " + string(r3));
+  print("");
+
+  print("✅ Mixed sign multiplication tests passed!");
+}

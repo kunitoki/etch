@@ -1,0 +1,10 @@
+Starting test
+Coroutine going out of scope
+Created list
+Got value:
+1
+Destructor called for Node with value:
+1
+Destructor called for Node with value:
+2
+Done!

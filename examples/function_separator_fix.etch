@@ -1,0 +1,8 @@
+fn my__method(x: int) -> int {
+    return x + 1;
+}
+
+fn main() -> void {
+    let res = my__method(5);
+    print(string(res));
+}

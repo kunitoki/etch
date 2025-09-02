@@ -1,0 +1,9 @@
+Test 1 (deeply nested AND): -1
+Test 2 (complex OR chain): 0
+Test 3 (mixed AND/OR): 0
+Test 4 (nested OR in AND): -1
+Test 5 (complex boundary): -1
+Test 6 (four-way OR): 0
+Test 7 (negated condition): 0
+
+✅ All complex condition stress tests passed!

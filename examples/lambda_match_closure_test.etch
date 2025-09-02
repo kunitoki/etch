@@ -1,0 +1,21 @@
+// Lambda captures an option and pattern matches inside the closure
+fn main() {
+  let optValue: option[int] = some(7);
+  let withValue = [optValue] || {
+    return match optValue {
+      some(v) => "value=" + string(v),
+      none => "value=none"
+    };
+  };
+
+  let empty: option[int] = none;
+  let withoutValue = [empty] || {
+    return match empty {
+      some(v) => "value=" + string(v),
+      none => "value=none"
+    };
+  };
+
+  print(withValue());
+  print(withoutValue());
+}

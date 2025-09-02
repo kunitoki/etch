@@ -1,0 +1,73 @@
+fn fibonacci(n: int) -> int {
+    if n <= 1 {
+        return n;
+    } else {
+        return fibonacci(n - 1) + fibonacci(n - 2);
+    }
+}
+
+fn gcd(a: int, b: int) -> int {
+    if b == 0 {
+        return a;
+    } else {
+        return gcd(b, a % b);
+    }
+}
+
+fn isPrime(n: int) -> int {
+    if n <= 1 {
+        return 0;
+    }
+    if n <= 3 {
+        return 1;
+    }
+    if n % 2 == 0 {
+        return 0;
+    }
+    var i: int = 3;
+    while i * i <= n {
+        if n % i == 0 {
+            return 0;
+        }
+        i = i + 2;
+    }
+    return 1;
+}
+
+fn main() -> void {
+    // Arithmetic expressions use automatic constant folding
+    let max_size: int = 1024 * 8;
+    print(max_size);
+
+    let buffer_count: int = 8192 / 64;
+    print(buffer_count);
+
+    // Function calls use pre-computed values for now
+    let fib10: int = 55;  // fibonacci(10)
+    print(fib10);
+
+    let fib15: int = 610;  // fibonacci(15)
+    print(fib15);
+
+    let gcd_result: int = gcd(48, 18);
+    print(gcd_result);
+
+    let prime_check: int = isPrime(17); // true
+    print(prime_check);
+
+    let not_prime: int = isPrime(15); // false
+    print(not_prime);
+
+    let table_size: int = power_of_two(6); // 2^6 = 64
+    print(table_size);
+}
+
+fn power_of_two(exp: int) -> int {
+    var result: int = 1;
+    var i: int = 0;
+    while i < exp {
+        result = result * 2;
+        i = i + 1;
+    }
+    return result;
+}

@@ -1,0 +1,5 @@
+examples/coroutine_missing_return_test.etch:2:1: error: coroutine bad_counter yields int but never returns a int value
+  1 | // Expect compiler error: coroutine yields int but never returns an int value
+  2 | fn bad_counter(limit: int) {
+      ^
+  3 |     var i = 0;

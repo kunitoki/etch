@@ -1,0 +1,53 @@
+// Comprehensive enum test with explicit values and casting
+type Color = enum {
+  Red = 10;
+  Green = 20;
+  Blue = 30;
+};
+
+type Status = enum {
+  Active = "Active";
+  Inactive = "Inactive";
+  Pending = "Pending";
+};
+
+type Priority = enum {
+  Low = (1, "Low Priority");
+  Medium = (5, "Medium Priority");
+  High = (10, "High Priority");
+  Urgent;
+};
+
+fn main() {
+  // Test basic enum access
+  let red = Color.Red;
+  let active = Status.Active;
+  let high = Priority.High;
+
+  print("Testing basic enum access:");
+  print("Color.Red = " + string(red));
+  print("Status.Active = " + string(active));
+  print("Priority.High = " + string(high));
+
+  // Test int() casting
+  print("Testing int() casting:");
+  print("int(Color.Red) = " + string(int(Color.Red)));
+  print("int(Color.Green) = " + string(int(Color.Green)));
+  print("int(Color.Blue) = " + string(int(Color.Blue)));
+
+  // Test string() casting
+  print("Testing string() casting:");
+  print("string(Status.Active) = " + string(Status.Active));
+  print("string(Color.Red) = " + string(Color.Red));
+
+  // Test priority enum with tuple values
+  print("Testing enum with tuple values:");
+  print("Priority.Low = " + string(Priority.Low));
+  print("Priority.Low = " + string(int(Priority.Low)));
+  print("Priority.Medium = " + string(Priority.Medium));
+  print("Priority.Medium = " + string(int(Priority.Medium)));
+  print("Priority.Urgent = " + string(Priority.Urgent));
+  print("Priority.Urgent = " + string(int(Priority.Urgent)));
+
+  print("All enum casting and access tests passed!");
+}

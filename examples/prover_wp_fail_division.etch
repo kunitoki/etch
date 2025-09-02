@@ -1,0 +1,13 @@
+// Test: WP should catch division by zero
+// This test should FAIL at compile time
+
+fn unsafeDivide(a: int, b: int) -> int {
+  // WP should infer: requires b != 0
+  return a / b;
+}
+
+fn main() -> void {
+  // This should fail: b = 0
+  let result = unsafeDivide(42, 0);
+  print("Result: " + string(result));
+}

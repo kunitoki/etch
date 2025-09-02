@@ -1,0 +1,5 @@
+fn main() -> void {
+  // Test new() with type inference
+  let r: ref[int] = new(42);
+  print(deref(r));
+}

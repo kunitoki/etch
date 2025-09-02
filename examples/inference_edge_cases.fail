@@ -1,0 +1,5 @@
+examples/inference_edge_cases.etch:6:17: error: empty arrays not supported - cannot infer element type
+  5 |     // Empty arrays - cannot infer element type
+  6 |     let empty = [];                 // Should fail
+                      ^
+  7 |

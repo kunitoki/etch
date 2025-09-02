@@ -1,0 +1,10 @@
+// Capture syntax sanity test
+fn test() {
+  let prefix = "cap:";
+  let formatter = [prefix] |y: string| -> string { return prefix + y; };
+  print(formatter("ok"));
+}
+
+fn main() {
+  test();
+}

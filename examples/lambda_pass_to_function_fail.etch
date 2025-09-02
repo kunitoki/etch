@@ -1,0 +1,16 @@
+fn applyOne(arr: array[int], f: fn(int) -> int) -> array[int] {
+    var out: array[int] = [];
+    var i = 0;
+    while i < #arr {
+        out = out + [ f(arr[i]) ];
+        i = i + 1;
+    }
+    return out;
+}
+
+fn main() -> void {
+    // Failing: passing lambda with wrong arity to function
+    let a = [1, 2, 3];
+    let res = applyOne(a, |x: int, y: int| x + y);
+    print(string(#res));
+}

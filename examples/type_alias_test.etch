@@ -1,0 +1,10 @@
+// Test type aliases
+type MyInt = int;
+type MyString = string;
+
+fn main() {
+    let x: MyInt = 42;
+    let s: MyString = "hello";
+    print(x);
+    print(s);
+}

@@ -1,0 +1,13 @@
+// Test error: type mismatch when resuming
+fn int_generator() {
+    yield 1;
+    yield 2;
+    yield 3;
+    return 4;
+}
+
+fn main() {
+    let gen = spawn int_generator();
+    let val: string = resume gen;  // Error: resume now returns result[int]
+    print(val);
+}

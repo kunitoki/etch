@@ -1,0 +1,53 @@
+// Test reference counting with scopes
+type Node = object {
+    value: int;
+};
+
+fn scopeTest1() -> void {
+    // Refs created in function scope should be freed on return
+    let inner = new[Node]( value: 200 );
+    print("Inner function value:");
+    print(inner.value);
+}
+
+fn scopeTest2(x: int) -> void {
+    // Create ref based on parameter
+    let node = new[Node]( value: x );
+    print("Param-based value:");
+    print(node.value);
+}
+
+fn main() -> void {
+    print("=== Scope Tests ===");
+
+    // Test 1: Ref in outer scope survives function calls
+    let outer = new[Node]( value: 100 );
+    print("Outer value:");
+    print(outer.value);
+
+    // Call function that creates temporary refs
+    scopeTest1();
+    // inner ref from scopeTest1 should be freed
+
+    // Outer should still be valid
+    print("Outer after scopeTest1:");
+    print(outer.value);
+
+    // Test 2: Multiple function calls
+    scopeTest2(1);
+    scopeTest2(2);
+    scopeTest2(3);
+
+    // Test 3: Conditional scopes
+    if (true) {
+        let cond1 = new[Node]( value: 300 );
+        print("Conditional value:");
+        print(cond1.value);
+    }
+    // cond1 should be freed here
+
+    print("Outer after conditional:");
+    print(outer.value);
+
+    print("=== All Scope Tests Complete ===");
+}

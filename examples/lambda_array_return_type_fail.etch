@@ -1,0 +1,10 @@
+// Lambda declares it returns array[int] but concatenates array[string]
+fn main() {
+  let numbers = [1, 2];
+  let builder: fn(int) -> array[int] = [numbers] |value: int| -> array[int] {
+    let strings = ["bad"];
+    return numbers + strings;  // should fail: mismatched array element types
+  };
+
+  let _ = builder(5);
+}

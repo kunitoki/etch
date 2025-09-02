@@ -1,0 +1,8 @@
+fn test(x: int) -> void {
+    print(x);
+}
+
+fn main() {
+    test(100);
+    print(999);
+}

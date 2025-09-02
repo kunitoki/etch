@@ -1,0 +1,50 @@
+// Test conditional weak reference handling
+type Node = object {
+    value: int;
+};
+
+fn ~(node: Node) {
+    print("Destroying: " + string(node.value));
+}
+
+fn main() -> void {
+    print("=== Conditional Weak Test ===");
+
+    var weak_ref: weak[Node];
+    let condition: bool = true;
+
+    if condition {
+        let temp: ref[Node] = new[Node](value: 50);
+        weak_ref = temp;
+        print("Created weak ref in if block: " + string(temp.value));
+    }
+
+    // temp is destroyed, weak_ref should be nil
+    if weak_ref == nil {
+        print("Weak ref is nil after if block");
+    } else {
+        let promoted: ref[Node] = weak_ref;
+        if promoted != nil {
+            print("Weak ref still alive: " + string(promoted.value));
+        }
+    }
+
+    // Another test with else branch
+    var weak2: weak[Node];
+    if not condition {
+        let temp2: ref[Node] = new[Node](value: 60);
+        weak2 = temp2;
+    } else {
+        let temp3: ref[Node] = new[Node](value: 70);
+        weak2 = temp3;
+        print("Created weak2 in else block: " + string(temp3.value));
+    }
+
+    if weak2 == nil {
+        print("Weak2 is nil");
+    } else {
+        print("Weak2 is nil after else block");
+    }
+
+    print("=== Test Complete ===");
+}

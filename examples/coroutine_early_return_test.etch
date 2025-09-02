@@ -1,0 +1,54 @@
+// Test coroutine with early return
+fn conditional_generator(limit: int) {
+    var i = 0;
+    while i < 10 {
+        if i >= limit {
+            return i;
+        }
+        yield i;
+        i = i + 1;
+    }
+    return i;
+}
+
+fn main() {
+    let gen = spawn conditional_generator(3);
+
+    match resume gen {
+        ok(v0) => {
+            print("Value: ");
+            print(v0);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume gen {
+        ok(v1) => {
+            print("Value: ");
+            print(v1);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume gen {
+        ok(v2) => {
+            print("Value: ");
+            print(v2);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    print("Early return worked!");
+}

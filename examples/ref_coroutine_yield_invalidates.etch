@@ -1,0 +1,47 @@
+
+// Test coroutine with container argument
+// yield should invalidate knowledge about coroutine arguments (but not locals)
+type Node = object {
+    value: int;
+};
+
+type Container = object {
+    node: ref[Node];
+};
+
+fn coro_func(c: Container) -> coroutine[int] {
+    // Before yield, we know c.node from the initial call
+    if c.node != nil {
+        print(c.node.value);
+    }
+
+    yield 1;
+
+    // After yield, we cannot assume c.node is still valid
+    // because the caller could have modified it before resuming
+    // This should fail if we don't recheck
+    if c.node != nil {
+        print(c.node.value);
+    }
+
+    yield 2;
+    return 3;
+}
+
+fn main() {
+    var container = Container(node: new[Node](value: 42));
+    let coro = spawn coro_func(container);
+
+    match resume coro {
+        ok(v) => print(v),
+        error(msg) => print(msg)
+    };
+
+    // Modify the container while coroutine is suspended
+    container.node = new[Node](value: 99);
+
+    match resume coro {
+        ok(v) => print(v),
+        error(msg) => print(msg)
+    };
+}

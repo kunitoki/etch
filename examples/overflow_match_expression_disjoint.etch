@@ -1,0 +1,25 @@
+// Test: Overflow in match expressions
+// Tests if the prover tracks overflow through pattern matching
+
+fn testMatchDisjointRanges() -> int {
+  let choice = rand(4);  // [0, 3]
+
+  let value = match choice {
+    0 => 100;
+    1 => 1000;
+    2 => 10000;
+    3 => 100000;
+    _ => 1;
+  };
+
+  // value is in {1, 100, 1000, 10000, 100000}
+  // These are very disjoint ranges
+  let multiplied = value * 1000000;  // max: 100B - safe
+  return multiplied;
+}
+
+fn main() -> void {
+  seed(42);
+  let r4 = testMatchDisjointRanges();
+  print("Result: " + string(r4));
+}

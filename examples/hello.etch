@@ -1,0 +1,26 @@
+// Simple hello with safety-proved arithmetic and comptime folding
+
+let g: int = 1;
+var acc: int;
+
+fn add[T: Addable](a: T, b: T) -> T {
+  return a + b; // prover ensures no overflow for the call sites it can prove
+}
+
+fn main() -> void {
+  // constant folding: evaluated at compile time automatically
+  let k: int = 2 + 3;
+  acc = add(g, k);      // safe: constants prove no overflow
+  print(acc);           // 6
+
+  // division safety: prove non-zero via constant
+  let d: int = 1;
+  d = add (d, -g);
+  if d != 0 {
+    print(10 / d);        // safe: divisor proven non-zero
+  }
+
+  // references: new produces non-nil; deref requires proof of non-nil
+  let r: ref[int] = new(42);
+  print(deref(r));      // safe: r is non-nil by construction
+}

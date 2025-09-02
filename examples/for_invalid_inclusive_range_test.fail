@@ -1,0 +1,5 @@
+examples/for_invalid_inclusive_range_test.etch:5:5: error: unreachable code (for loop will never execute: start > end)
+  4 |
+  5 |     for x in 5..4 {
+          ^
+  6 |         print("This should never execute");

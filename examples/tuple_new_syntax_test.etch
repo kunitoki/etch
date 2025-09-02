@@ -1,0 +1,62 @@
+// Test new tuple syntax with (expr, ...)
+
+fn test_basic_tuple_syntax() {
+    // New syntax: (1, 2, 3)
+    let t1 = (1, 2, 3);
+    let a = t1[0];
+    let b = t1[1];
+    let c = t1[2];
+
+    discard a, b, c;
+}
+
+fn test_heterogeneous_tuples() {
+    // Mixed types
+    let t: tuple[int, string, bool] = (42, "hello", true);
+    let num = t[0];
+    let text = t[1];
+    let flag = t[2];
+
+    discard num, text, flag;
+}
+
+fn test_nested_tuples() {
+    // Nested tuples
+    let inner = (10, 20);
+    let outer = (5, inner);
+    let x = outer[0];
+    let nested = outer[1];
+
+    discard x, nested;
+}
+
+fn test_tuple_unpacking_new_syntax() {
+    // Unpacking with new syntax
+    let [a, b, c] = (1, 2, 3);
+    discard a, b, c;
+}
+
+fn test_empty_tuple() {
+    // Empty tuple
+    let empty: tuple[] = ();
+    discard empty;
+}
+
+fn test_single_vs_grouped() {
+    // (expr) is just grouping, not a tuple
+    let x = (5);  // Just the number 5
+
+    // (expr,) would be a single-element tuple, but we allow trailing comma
+    let single = (5,);  // Single element tuple
+
+    discard x, single;
+}
+
+fn main() {
+    test_basic_tuple_syntax();
+    test_heterogeneous_tuples();
+    test_nested_tuples();
+    test_tuple_unpacking_new_syntax();
+    test_empty_tuple();
+    test_single_vs_grouped();
+}

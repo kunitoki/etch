@@ -1,0 +1,75 @@
+// Test: Extended constant folding for all arithmetic operations
+// Tests that all arithmetic and comparison operations are properly folded
+
+fn main() -> void {
+  // Test 1: Basic arithmetic operations (already tested, but comprehensive)
+  let add_int = 10 + 20;
+  let sub_int = 100 - 35;
+  let mul_int = 6 * 7;
+  let div_int = 100 / 5;
+  let mod_int = 17 % 5;
+
+  // Test 2: Float arithmetic operations
+  let add_float = 10.5 + 20.5;
+  let sub_float = 100.0 - 35.5;
+  let mul_float = 6.5 * 2.0;
+  let div_float = 100.0 / 4.0;
+  let mod_float = 17.5 % 5.0;
+
+  // Test 3: Comparison operations with integers
+  let eq_int = 10 == 10;
+  let ne_int = 10 != 20;
+  let lt_int = 5 < 10;
+  let le_int = 10 <= 10;
+
+  // Test 4: Comparison operations with floats
+  let eq_float = 10.5 == 10.5;
+  let ne_float = 10.5 != 20.5;
+  let lt_float = 5.5 < 10.5;
+  let le_float = 10.5 <= 10.5;
+
+  // Test 5: Boolean operations
+  let and_bool = true and false;
+  let or_bool = true or false;
+
+  // Test 6: Mixed constant expressions
+  let complex1 = (10 + 20) * 2;
+  let complex2 = 100 / (5 + 5);
+  let complex3 = (20 - 5) % 7;
+
+  // Print results
+  print("Integer arithmetic:");
+  print("  10 + 20 = " + string(add_int));      // 30
+  print("  100 - 35 = " + string(sub_int));     // 65
+  print("  6 * 7 = " + string(mul_int));        // 42
+  print("  100 / 5 = " + string(div_int));      // 20
+  print("  17 % 5 = " + string(mod_int));       // 2
+
+  print("Float arithmetic:");
+  print("  10.5 + 20.5 = " + string(add_float)); // 31.0
+  print("  100.0 - 35.5 = " + string(sub_float)); // 64.5
+  print("  6.5 * 2.0 = " + string(mul_float));    // 13.0
+  print("  100.0 / 4.0 = " + string(div_float));  // 25.0
+  print("  17.5 % 5.0 = " + string(mod_float));   // 2.5
+
+  print("Integer comparisons:");
+  print("  10 == 10 = " + string(eq_int));      // true
+  print("  10 != 20 = " + string(ne_int));      // true
+  print("  5 < 10 = " + string(lt_int));        // true
+  print("  10 <= 10 = " + string(le_int));      // true
+
+  print("Float comparisons:");
+  print("  10.5 == 10.5 = " + string(eq_float)); // true
+  print("  10.5 != 20.5 = " + string(ne_float)); // true
+  print("  5.5 < 10.5 = " + string(lt_float));   // true
+  print("  10.5 <= 10.5 = " + string(le_float)); // true
+
+  print("Boolean operations:");
+  print("  true && false = " + string(and_bool)); // false
+  print("  true || false = " + string(or_bool));  // true
+
+  print("Complex expressions:");
+  print("  (10 + 20) * 2 = " + string(complex1)); // 60
+  print("  100 / (5 + 5) = " + string(complex2)); // 10
+  print("  (20 - 5) % 7 = " + string(complex3));  // 1
+}

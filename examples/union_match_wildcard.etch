@@ -1,0 +1,36 @@
+// Test union type matching with wildcard pattern
+
+type Result = int | string;
+
+fn processResult(r: Result) -> string {
+    return match r {
+        n: int => {
+            "Got number: " + string(n);
+        }
+        _ => {
+            // Wildcard catches all other cases (string in this case)
+            "Got something else";
+        }
+    };
+}
+
+// Test with inline union definition
+fn handle(value: int | float | bool) -> string {
+    return match value {
+        i: int => { "int: " + string(i); }
+        f: float => { "float: " + string(f); }
+        _ => { "other"; }
+    };
+}
+
+fn main() {
+    let r1: Result = 42;
+    let r2: Result = "error message";
+
+    print(processResult(r1));
+    print(processResult(r2));
+
+    print(handle(10));
+    print(handle(3.14));
+    print(handle(true));
+}

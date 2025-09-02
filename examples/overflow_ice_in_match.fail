@@ -1,0 +1,5 @@
+examples/overflow_ice_in_match.etch:14:29: error: addition overflow
+  13 |       let huge = 9223372036854775000;
+  14 |       let overflowed = huge + 2000;  // Overflow!
+                                   ^
+  15 |       overflowed;

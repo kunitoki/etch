@@ -1,0 +1,7 @@
+// Tuple comparison with different types
+fn main() {
+    let t1 = (1, 2);
+    let t2 = (1, 2, 3);
+    let result: bool = t1 == t2;  // Error: can't compare tuples of different sizes
+    discard result;
+}

@@ -1,0 +1,94 @@
+// Test loop invariants: while condition constraints are maintained in loop body
+
+fn readInputInt(defaultValue: int) -> int {
+  return match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => defaultValue;
+    };
+    error(_) => defaultValue;
+  };
+}
+
+fn testWhileInvariant() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  let x = readInputInt(0);
+
+  // While loop: x < 10
+  // Inside the loop, we know x is in [IMin, 9]
+  // Combined with x >= 0 check, x is in [0, 9]
+  while x < 10 {
+    if x >= 0 {
+      // Loop invariant: x < 10 from while condition
+      // Combined with x >= 0, we have x in [0, 9]
+      return arr[x];  // ✅ Should be proven safe!
+    }
+  }
+
+  return -1;
+}
+
+fn testWhileWithBounds() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
+  let x = readInputInt(5);
+
+  // While loop with compound condition: x >= 5 and x < 15
+  // Inside the loop, we maintain x in [5, 14]
+  while x >= 5 and x < 15 {
+    // x is guaranteed to be in [5, 14] by loop invariant
+    return arr[x];  // ✅ Should be proven safe! Array is [0..19]
+  }
+
+  return -1;
+}
+
+fn testWhileNarrowingInvariant() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+  let x = readInputInt(7);
+
+  // While loop: x >= 5 and x < 16
+  // Loop invariant ensures x is in [5, 15]
+  while x >= 5 and x < 16 {
+    // Inside loop: x is guaranteed to be in [5, 15]
+    // Array has 16 elements [0..15], so this is safe
+    return arr[x];  // ✅ Should be proven safe!
+  }
+
+  return -1;
+}
+
+fn testForLoopInvariant() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+  // For loop: i in 0..10 (inclusive, so [0, 10])
+  // Loop invariant: i is in [0, 10]
+  for i in 0..10 {
+    // i is guaranteed to be in [0, 10]
+    return arr[i];  // ✅ Should be proven safe!
+  }
+
+  return -1;
+}
+
+fn testForLoopArray() -> int {
+  let arr: array[int] = [10, 20, 30, 40, 50];
+
+  // For loop over array with exclusive range
+  // Loop variable i ranges from 0 to #arr-1, which is [0, 4]
+  for i in 0..<#arr {
+    // i is guaranteed to be in [0, 4]
+    return arr[i];  // ✅ Should be proven safe!
+  }
+
+  return -1;
+}
+
+fn main() -> void {
+  print("Test 1 (while with bounds): " + string(testWhileInvariant()));
+  print("Test 2 (while compound): " + string(testWhileWithBounds()));
+  print("Test 3 (while narrowing): " + string(testWhileNarrowingInvariant()));
+  print("Test 4 (for loop): " + string(testForLoopInvariant()));
+  print("Test 5 (for over array): " + string(testForLoopArray()));
+  print("");
+  print("✅ All loop invariant tests passed!");
+}

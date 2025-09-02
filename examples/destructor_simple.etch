@@ -1,0 +1,22 @@
+// Test basic destructor functionality
+// Destructor should be called when object goes out of scope
+
+type Resource = object {
+  name: string;
+  value: int;
+};
+
+fn ~(r: Resource) -> void {
+  print("Destructor called for resource: " + r.name);
+}
+
+fn main() -> void {
+  print("Creating resource...");
+  let res = new[Resource](
+    name: "TestResource",
+    value: 42
+  );
+  discard res;  // Explicitly discard to avoid unused variable warning
+  print("Resource created");
+  print("Exiting main (destructor should be called here)...");
+}

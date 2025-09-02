@@ -1,0 +1,80 @@
+// Test coroutine with multiple yields and state preservation
+fn fibonacci(n: int) {
+    var a = 0;
+    var b = 1;
+    var i = 0;
+    while i < n {
+        yield a;
+        let temp = a + b;
+        a = b;
+        b = temp;
+        i = i + 1;
+    }
+    return a;
+}
+
+fn main() {
+    let fib = spawn fibonacci(5);
+
+    match resume fib {
+        ok(v0) => {
+            print("Fibonacci 0: ");
+            print(v0);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume fib {
+        ok(v1) => {
+            print("Fibonacci 1: ");
+            print(v1);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume fib {
+        ok(v2) => {
+            print("Fibonacci 2: ");
+            print(v2);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume fib {
+        ok(v3) => {
+            print("Fibonacci 3: ");
+            print(v3);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume fib {
+        ok(v4) => {
+            print("Fibonacci 4: ");
+            print(v4);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    print("Done!");
+}

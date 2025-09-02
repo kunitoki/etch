@@ -1,0 +1,14 @@
+
+type Obj = object {
+  x: int
+};
+
+fn f(o: ref[Obj]) {
+  let x = o;
+  print(@x.x);
+}
+
+fn main() {
+  let o = new[Obj](x: 1);
+  f(o);
+}

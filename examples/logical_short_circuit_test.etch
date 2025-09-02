@@ -1,0 +1,29 @@
+// Test: Short-circuit logical operations
+// Tests that constant folding handles short-circuit cases correctly
+
+fn main() -> void {
+    // Short-circuit AND: false and X = false (regardless of X)
+    let false_and_unknown: bool = false and (5 > 3);  // false and true = false
+    let false_and_complex: bool = false and (10 < 5); // false and false = false
+
+    print(false_and_unknown);
+    print(false_and_complex);
+
+    // Short-circuit OR: true or X = true (regardless of X)
+    let true_or_unknown: bool = true or (5 > 3);   // true or true = true
+    let true_or_complex: bool = true or (10 < 5);  // true or false = true
+
+    print(true_or_unknown);
+    print(true_or_complex);
+
+    // Non-short-circuit cases where both operands matter
+    let true_and_unknown: bool = true and (5 > 3);   // true and true = true
+    let false_or_unknown: bool = false or (5 > 3);   // false or true = true
+    let true_and_false: bool = true and (10 < 5);    // true and false = false
+    let false_or_false: bool = false or (10 < 5);    // false or false = false
+
+    print(true_and_unknown);
+    print(false_or_unknown);
+    print(true_and_false);
+    print(false_or_false);
+}

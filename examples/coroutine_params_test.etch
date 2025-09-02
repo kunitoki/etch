@@ -1,0 +1,51 @@
+// Test coroutine with different parameter types
+fn string_generator(prefix: string, count: int) {
+    var i = 0;
+    while i < count {
+        yield i;
+        i = i + 1;
+    }
+    return i;
+}
+
+fn main() {
+    let gen = spawn string_generator("item", 3);
+
+    match resume gen {
+        ok(v0) => {
+            print("Generated: ");
+            print(v0);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume gen {
+        ok(v1) => {
+            print("Generated: ");
+            print(v1);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume gen {
+        ok(v2) => {
+            print("Generated: ");
+            print(v2);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    print("Complete!");
+}

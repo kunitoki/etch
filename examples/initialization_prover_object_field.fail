@@ -1,0 +1,5 @@
+examples/initialization_prover_object_field.etch:10:20: error: use of uninitialized variable 'p' - variable may not be initialized in all control flow paths
+  9 |   var p: Point;
+  10 |   let value: int = p.x; // Error: p.x is not initialized
+                          ^
+  11 |   print(value);

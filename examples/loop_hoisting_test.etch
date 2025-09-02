@@ -1,0 +1,18 @@
+// Test loop invariant code motion
+fn main() -> void {
+    let x: int = 10;
+    let y: int = 20;
+
+    // Loop with invariant calculation
+    var i: int = 0;
+    while i < 5 {
+        // This calculation is loop-invariant (x + y doesn't change)
+        let invariant: int = x + y;
+
+        // This uses the invariant
+        let res: int = invariant + i;
+        print(res);
+
+        i = i + 1;
+    }
+}

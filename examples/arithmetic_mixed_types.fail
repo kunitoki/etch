@@ -1,0 +1,5 @@
+examples/arithmetic_mixed_types.etch:6:24: error: + operator requires matching types, got int and float. Use explicit casts like int(x) or float(x)
+  5 |     // This should fail - mixed types without explicit cast
+  6 |     let res: float = x + y;
+                             ^
+  7 |     discard res;

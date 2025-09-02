@@ -1,0 +1,1294 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<title>Etch - Define once, Etch forever</title>
+
+		<link rel="stylesheet" href="dist/reset.css">
+		<link rel="stylesheet" href="dist/reveal.css">
+		<link rel="stylesheet" href="dist/theme/black.css">
+
+		<!-- Theme used for syntax highlighted code -->
+		<link rel="stylesheet" href="plugin/highlight/monokai.css">
+
+		<style>
+			/* Global reset and base styles */
+			.reveal h1, .reveal h2, .reveal h3 {
+				text-transform: none;
+				font-weight: 600;
+			}
+
+			/* Default heading sizes - balanced proportions */
+			.reveal h1 {
+				font-size: 2.2em;
+				margin-bottom: 0.5em;
+				line-height: 1.1;
+			}
+			.reveal h2 {
+				font-size: 1.5em;
+				margin-bottom: 0.4em;
+				line-height: 1.2;
+			}
+			.reveal h3 {
+				font-size: 1.15em;
+				margin-bottom: 0.35em;
+				line-height: 1.2;
+			}
+
+			/* Body text and lists - proportional to headings */
+			.reveal p, .reveal li {
+				font-size: 0.85em;
+				line-height: 1.5;
+				margin-bottom: 0.5em;
+			}
+			.reveal ul, .reveal ol {
+				margin-top: 0.5em;
+				margin-bottom: 0.5em;
+			}
+			.reveal li {
+				margin-bottom: 0.35em;
+			}
+
+			/* Strong text */
+			.reveal strong {
+				font-weight: 700;
+				color: #64FFDA;
+			}
+
+			/* Images */
+			.reveal section img {
+				border: none;
+				box-shadow: none;
+				background: none;
+			}
+
+			/* Color accents */
+			.reveal .checkmark {
+				color: #00FF00;
+			}
+			.reveal .xmark {
+				color: #FF6B6B;
+			}
+			.reveal .accent {
+				color: #64FFDA;
+			}
+
+			/* Code blocks - proportional sizing */
+			.reveal pre {
+				margin: 0.6em 0;
+				font-size: 0.7em;
+				width: 100%;
+			}
+			.reveal pre code {
+				max-height: 480px;
+				font-size: 0.7em;
+				line-height: 1.35;
+				padding: 0.8em;
+			}
+
+			/* Tables - balanced sizing */
+			.reveal table {
+				font-size: 0.6em;
+				line-height: 1.2;
+				margin: 0.5em auto;
+			}
+			.reveal table th,
+			.reveal table td {
+				padding: 0.3em 0.5em;
+			}
+
+			/* Blockquotes */
+			.reveal blockquote {
+				font-size: 0.85em;
+				padding: 0.6em 1em;
+				margin: 0.6em 0;
+			}
+
+			/* Slide alignment */
+			.slides section {
+				text-align: left;
+			}
+			.slides section.center {
+				text-align: center;
+			}
+
+			/* Compact slide styling for content-heavy slides - tighter spacing */
+			.reveal .compact h1 {
+				font-size: 1.4em;
+				margin-bottom: 0.25em;
+				line-height: 1.0;
+			}
+			.reveal .compact h2 {
+				font-size: 1.1em;
+				margin-bottom: 0.2em;
+				line-height: 1.0;
+			}
+			.reveal .compact h3 {
+				font-size: 0.9em;
+				margin-bottom: 0.15em;
+				line-height: 0.8;
+			}
+			.reveal .compact p {
+				font-size: 0.6em;
+				line-height: 1.2;
+				margin-bottom: 0.25em;
+			}
+			.reveal .compact li {
+				font-size: 0.58em;
+				line-height: 1.25;
+				margin-bottom: 0.15em;
+			}
+			.reveal .compact ul,
+			.reveal .compact ol {
+				margin-top: 0.25em;
+				margin-bottom: 0.25em;
+			}
+			.reveal .compact pre {
+				margin: 0.4em 0;
+				font-size: 0.68em;
+			}
+			.reveal .compact pre code {
+				max-height: 420px;
+				font-size: 0.68em;
+				line-height: 1.25;
+				padding: 0.6em;
+			}
+			.reveal .compact table {
+				font-size: 0.68em;
+				line-height: 1.25;
+			}
+		</style>
+
+		<style>
+			/* Custom syntax highlighting colors for Etch language */
+			.reveal .hljs table {
+ 			    margin: auto !important;
+			}
+			.reveal pre code .hljs-keyword {
+				color: #F92672 !important; /* Pink - keywords like if, else, while, for, return */
+			}
+			.reveal pre code .hljs-type {
+				color: #66D9EF !important; /* Cyan - types like int, float, void, bool */
+			}
+			.reveal pre code .hljs-built_in {
+				color: #A6E22E !important; /* Green - built-in functions like print, rand, readFile */
+			}
+			.reveal pre code .hljs-title {
+				color: #FD971F !important; /* Orange - function names in definitions */
+			}
+			.reveal pre code .hljs-string {
+				color: #E6DB74 !important; /* Yellow - string literals */
+			}
+			.reveal pre code .hljs-number {
+				color: #AE81FF !important; /* Purple - numeric literals */
+			}
+			.reveal pre code .hljs-literal {
+				color: #AE81FF !important; /* Purple - true, false */
+			}
+			.reveal pre code .hljs-function > .hljs-title:last-child {
+				color: #66D9EF !important; /* Orange - function names */
+			}
+			.reveal pre code .hljs-comment {
+				color: #75715E !important; /* Gray - comments */
+			}
+		</style>
+	</head>
+	<body>
+		<div class="reveal">
+			<div class="slides">
+				<!-- Slide: Title Slide -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						# **ETCH**
+						## Define **Once**, Etch **Forever**.
+
+						<img src="assets/slide0.jpg" alt="Etch Matches" style="max-width: 40%; border-radius: 10px; margin: 20px auto;">
+
+						A language that *keeps you safe* before it even runs,<br>
+						yet feels like *you're just scripting* - **until it blows your mind!**
+					</textarea>
+				</section>
+
+				<!-- Slide: Why Etch? -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## Why Etch? 🤔
+
+						**The Origin Story Nobody Asked For (But You're Getting Anyway)**
+
+						The Endless Quest: 🔍
+
+						- Spent *years* hunting for the "perfect" scripting engine.
+						- Lua? *Too bare.* Python? *Too slow.* JavaScript? *Too... JavaScript.*
+						- Tried them all. They all lacked *something*.
+						- Performance ⚡ vs Safety 🛡️ vs Simplicity 📝. You can only **pick two**.
+
+						---
+
+						## Why Etch? 🤔
+
+						**The Origin Story Nobody Asked For (But You're Getting Anyway)**
+
+						The "Why Not?" Moment: 💡
+
+						- **Plot twist:** Compilers are actually **FUN** to build! 🎉
+						- Living in the age of AI: *"Make an app!"* 🤖
+						- Me: *"...What if I make a LANGUAGE instead?"* 🎯
+						- **YOLO Compiler Theory!**
+
+						---
+
+						## Why Etch? 🤔
+
+						**The Origin Story Nobody Asked For (But You're Getting Anyway)**
+
+						The Mad Experiment: 🚀
+
+						- Built Etch as a *playground* for compiler tech
+						- Prove correctness? *Why not!*
+						- Safety without complexity? *Challenge accepted!*
+						- **Etch: Because life's too short** 🔥
+
+					</textarea>
+				</section>
+
+				<!-- Slide: The Problem -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## The Bugs That Haunt Your Dreams
+
+						Those sneaky runtime gremlins - the ones that compile just fine, only to explode right when you hit play.
+
+						**Numerical Safety Issues:**
+						- ❌ Division by zero crashes
+						- ❌ Integer overflow vulnerabilities
+
+						**Memory Safety Issues:**
+						- ❌ Nullptr dereferencing
+						- ❌ Uninitialized variable bugs
+
+						**Array and Bounds Issues:**
+						- ❌ Array bounds errors
+						- ❌ Buffer overflows
+						- ❌ Platform-dependent behavior
+
+						---
+
+						## Compile-Time Safety Verification
+
+						Etch proves safety properties at compile-time through static analysis.
+
+						**Safety Guarantees:**
+						- ✅ No division by zero
+						- ✅ No integer overflow
+						- ✅ No nullptr dereferences
+						- ✅ No uninitialized variables
+						- ✅ No array out of bounds errors
+
+						**Additional Benefits:**
+						- ✅ Dead code automatically eliminated
+						- ✅ Redundant checks removed
+						- ✅ Errors caught before deployment
+					</textarea>
+				</section>
+
+				<!-- Slide: Language Architecture Overview -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## 👋 nuqneH, Etch!
+
+						```etch [1-3]
+						fn main() -> void {
+						    print("Hello, World!");
+						}
+						```
+
+						**C-like syntax** you already know-*simple, clean, familiar*.
+
+						No need to learn *Klingon* to say hello! 🖖
+
+						---
+
+						## 🏗️ Language Architecture
+
+						**Multi-stage compilation pipeline:**
+
+						```txt
+
+											📄 Source Code
+												↓
+											🔍 Frontend (Lexer → Parser → AST)
+												↓
+											🎨 Type Checker (Inference + Validation)
+												↓
+											⚡ Comptime Executor (AST Transformation)
+												↓
+											🛡️ Safety Prover (Range Analysis + Symbolic Execution)
+														   ↓
+												┌──────────┴──────────┐
+												↓                     ↓
+											💾 Bytecode VM      🔧 C Code Generator
+
+
+						```
+
+						✅ **Each stage adds safety guarantees**
+
+						---
+
+						## 📋 The Compilation Pipeline
+
+						**Staged transformation with safety guarantees at each step:**
+
+						| Stage | Process | Output |
+						|-------|---------|--------|
+						| 1️⃣ | **Lexer** | Token stream (frontend/lexer) |
+						| 2️⃣ | **Parser** | AST (frontend/ast - frontend/parser) |
+						| 3️⃣ | **Type Checker** | Typed + Inferred AST (typechecker/) |
+						| 4️⃣ | **Comptime Executor** | Transformed AST (comptime/) |
+						| 5️⃣ | **Safety Prover** | Proven AST (prover/) |
+						| 6️⃣ | **Bytecode Generator** | Register VM bytecode (interpreter/) |
+						| 7️⃣ | **Cache** | Disk (`__etch__/` directory) |
+						| 8️⃣ | **VM / C Backend** | Execution or native binary (backend/) |
+					</textarea>
+				</section>
+
+				<!-- Slide: Frontend Design -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## 🔍 Frontend: Lexer → Parser
+
+						**Token-based lexical analysis:**
+						- 📍 Position tracking for error reporting
+						- ⚡ Efficient single-pass scanning
+						- 🎯 Source location preservation
+
+						**Recursive descent parser:**
+						- 🌳 Produces strongly-typed AST
+						- 📝 Expression kinds: Binary ops, Calls, Arrays, Pattern matching
+						- 🔀 Statement kinds: Declarations, Control flow, Assignments
+						- 🛡️ Syntax validation during parsing
+
+						---
+
+						## 🌳 AST Node Types
+
+						**Expression variants (20+ types):**
+						- 🔢 **Literals**: `ekInt`, `ekFloat`, `ekString`, `ekBool`, `ekChar`
+						- ➕ **Operations**: `ekBin`, `ekUn`, `ekCall`
+						- 📦 **Collections**: `ekArray`, `ekIndex`, `ekSlice`, `ekArrayLen`
+						- 🎭 **Pattern matching**: `ekMatch`, `ekOptionSome`, `ekResultOk`
+						- 🏗️ **Objects**: `ekObjectLiteral`, `ekFieldAccess`, `ekNew`
+
+						**Statement variants (15+ types):**
+						- 📌 **Declarations**: `skLet`, `skVar`, `skFun`, `skType`
+						- 🔀 **Control flow**: `skIf`, `skWhile`, `skFor`, `skReturn`
+						- ⚙️ **Others**: `skAssign`, `skCompoundAssign`, `skDefer`, `skComptime`
+
+						---
+
+						## 🎨 Type Kinds
+
+						**Primitive Types:**
+						- ✅ `tkBool` (1 byte)
+						- 📝 `tkChar` (1 byte)
+						- 🔢 `tkInt` (8 bytes, signed)
+						- 🔢 `tkFloat` (8 bytes, double)
+						- 📝 `tkString`
+						- 🚫 `tkVoid`
+
+						**Composite Types:**
+						- 📦 `tkArray` - Fixed and dynamic arrays
+						- 🔗 `tkRef` - References with generational tracking
+						- 🏗️ `tkObject` - Structured data with fields
+
+						---
+
+						## 🎨 Type Kinds
+
+						**Advanced Types:**
+						- ❓ `tkOption` - Optional values (some/none)
+						- ✨ `tkResult` - Result types (ok/error)
+						- 🎭 `tkGeneric` - Generic type parameters
+						- 🔗 `tkUnion` - Sum types
+
+						---
+
+						## 🎯 Type System: Three-Phase Process
+
+						**Phase 1: Type Collection** 📚
+
+						- Gather all type definitions and global variables
+						- Build forward reference table
+						- Create type environment
+
+						---
+
+						## 🎯 Type System: Three-Phase Process
+
+						**Phase 2: Type Inference** 🔮
+
+						- Hindley-Milner style inference for generics
+						- Constraint generation and unification
+						- Return type inference from body
+						- Generic function instantiation on demand
+
+						---
+
+						## 🎯 Type System: Three-Phase Process
+
+						**Phase 3: Type Validation** ✅
+
+						- Expression type checking
+						- Statement type checking
+						- Full program validation
+
+						---
+
+						## 🎨 Type System & Inference
+
+						```etch [1-6]
+						fn main() -> void {
+						    let x: int = 42;           // Explicit type
+						    let y = 3.14;              // Inferred as float
+						    let name = "Etch";         // Inferred as string
+						    let numbers = [1, 2, 3];   // Inferred as array[int]
+						}
+						```
+
+						- ✨ **Strong static typing**
+						- 🔮 **Smart type inference**
+						- ✅ **No surprises**
+
+						---
+
+						## 🏗️ Types and Objects
+
+						**Type Aliases, Unions and Object Definitions:**
+
+						```etch [2|3|6|8-12|15-16]
+						// Type aliases for clarity
+						type UserId = int;
+						type Email = distinct string;
+
+						// Union types for sum types
+						type IntOrString = int | string;
+
+						// Object types with fields
+						type Point = object {
+						  x: int;
+						  y: int;
+						};
+
+						fn main() -> void {
+						  let p: Point = { x: 10, y: 20 };
+						  print(p.x + p.y);  // 30
+						}
+						```
+
+						**Safety Guarantees:**
+						- 🛡️ All object fields must be initialized before use
+						- ✅ Prover tracks initialization of each field
+						- 🔍 Compile-time error if accessing uninitialized field
+					</textarea>
+				</section>
+
+				<!-- Slide: UFCS -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## 🎯 Uniform Function Call Syntax
+
+						**Call functions as methods using dot notation:**
+
+						```etch [1-3|6-7|9-10|12-14|16-17]
+						fn add(a: int, b: int) {
+						  return a + b;
+						}
+
+						fn main() {
+						  var x: int = 10;
+						  var y: int = 20;
+
+						  // Traditional call
+						  discard add(x, y);
+
+						  // UFCS - first argument becomes receiver
+						  var result2: int = x.add(y);
+						  print(result2); // 30
+
+						  // But also!
+						  print(5.add(15)); // 20
+						}
+						```
+
+						**Clean, readable method-style calls without OOP overhead!** 🚀
+					</textarea>
+				</section>
+
+				<!-- Slide: Prover Architecture -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## 🛡️ Prover: Safety Through Analysis
+
+						**Safety analysis through symbolic execution**
+
+						**Core Components:**
+						- 🔍 **expression_analysis**: Range propagation, expression evaluation
+						- ➕ **binary_operations**: Arithmetic operation range inference
+						- 🔀 **symbolic_execution**: Control flow analysis
+						- ⚡ **function_evaluation**: Pure function compile-time execution
+
+						**Key Concept is tracking values**<br>
+						- known/unknown
+						- min/max range
+						- non-zero/non-null
+						- initialized/used/last use
+						- is array/string
+						- array/string size
+
+						*Every variable has a proven state at every program point!*
+
+						---
+
+						## 🔬 Prover: Analysis Phases
+
+						**Phase 1: Environment Setup** 📋
+						- Initialize environment with variable declarations
+						- Add all globals to environment
+
+						---
+
+						## 🔬 Prover: Analysis Phases
+
+						**Phase 2: Global Analysis** 🌍
+						- Analyze global variable initializations
+						- Track global value ranges
+
+						---
+
+						## 🔬 Prover: Analysis Phases
+
+						**Phase 3: Function Analysis** 🎯
+						- Prove main function first
+						- Analyze all reachable functions
+						- Validate safety at every operation
+
+						---
+
+						## 🔬 Prover: Analysis Phases
+
+						**Phase 4: Property Validation** ✅
+						- Check non-zero divisors (division/modulo)
+						- Verify array bounds safety
+						- Prevent integer overflow
+						- Ensure variable initialization
+
+						---
+
+						## The Safety Prover in Action
+
+						```etch [3|4|5]
+						// ✅ Safe!
+						fn main() -> void {
+						    let divisor: int = rand(5, 10);         // Range: [5, 10]
+						    let calculation: int = 100 / divisor;   // ✅ Safe!
+						    print(calculation);
+						}
+						```
+
+						**Safe Example:** divisor ranges [5, 10] → division succeeds ✅
+
+						---
+
+						## The Safety Prover in Action
+
+						```etch [3|4|9-14]
+						// ❌ COMPILE ERROR
+						fn main() -> void {
+						    let divisor: int = rand(5);             // Range: [0, 5]
+						    let calculation: int = 100 / divisor;   // ❌ COMPILE ERROR
+							print(calculation);
+						}
+
+						/*
+						Compiling: xyz.etch
+						xyz.etch:4:32: error: cannot prove divisor is non-zero in main
+						3 |     let divisor: int = rand(5);             // Range: [0, 5]
+						4 |     let calculation: int = 100 / divisor;   // ❌ COMPILE ERROR
+														   ^
+						5 |     print(calculation);
+						*/
+						```
+
+						**Unsafe Example:** divisor ranges [0, 5] → *COMPILE ERROR* ❌
+
+						Compiler tracks value ranges and proves divisor should be non-zero.
+
+						---
+
+						## The Safety Prover in Action
+
+						```etch [3|4-6|7|8]
+						// ✅ Safe!
+						fn main() -> void {
+						    let divisor: int = rand(5);             // Range: [0, 5]
+							if (divisor == 0) {                     // Make sure it's not zero
+								return;
+							}
+						    let calculation: int = 100 / divisor;   // ✅ Compiler can ensure divisor is != 0
+							print(calculation);
+						}
+						```
+
+						**Back to safety:** divisor ranges [0, 5] → runtime check → division can happen ✅
+					</textarea>
+				</section>
+
+				<!-- Slide: Arrays with Safety Guarantees -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## 📦 Arrays with Safety Guarantees
+
+						```etch [1-7]
+						fn main() -> void {
+						    let numbers: array[int] = [10, 20, 30, 40, 50];
+
+						    let count: int = #numbers;              // Length operator
+						    let middle: int = numbers[count / 2];   // Bounds checked
+						    let slice = numbers[1:4];               // Safe slicing, inferred as array[int]
+						}
+						```
+
+						- ✅ Compile-time bounds checking when possible
+						- 🔍 Compiler enforces insertion of runtime checks when necessary
+						- 📝 Clear error messages
+					</textarea>
+				</section>
+
+				<!-- Slide: Pattern Matching - Basics -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## 🎨 Pattern Matching: Option & Result
+
+						**Safe value extraction with exhaustive matching:**
+
+						```etch [1-7|10|11-18|19]
+						fn divideInts(a: int, b: int) -> result[int] {
+						  if b == 0 {
+						    return error("Division by zero");
+						  } else {
+						    return ok(a / b);
+						  }
+						}
+
+						fn main() -> void {
+						  let divResult: result[int] = divideInts(42, 6);
+						  let message: string = match divResult {
+						    ok(value) => {
+						      "Success: " + toString(value);
+						    }
+						    error(err) => {
+						      "Failed: " + err;
+						    }
+						  };
+						  print(message);  // "Success: 7"
+						}
+						```
+
+						---
+
+						## 🎨 Pattern Matching: Advanced
+
+						**Option types and nested patterns:**
+
+						```etch [1-7|10|11|13-16|17]
+						fn tryGetElement(arr: array[int], index: int) -> option[int] {
+						  if index >= 0 and index < #arr {
+						    return some(arr[index]);
+						  } else {
+						    return none;
+						  }
+						}
+
+						fn main() -> void {
+						  let numbers: array[int] = [10, 20, 30];
+						  let maybeValue: option[int] = tryGetElement(numbers, 1);
+
+						  let res: string = match maybeValue {
+						    some(value) => "Found: " + toString(value);
+						    none => "Not found";
+						  };
+						  print(res);  // "Found: 20"
+						}
+						```
+
+						**Compiler enforces exhaustive pattern coverage!** ✅
+					</textarea>
+				</section>
+
+				<!-- Slide: Lambdas -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## 🔗 Lambdas: First-Class Functions
+
+						**Anonymous functions with closures:**
+
+						```etch [1-6|9-12]
+						fn main() -> void {
+						    // Simple lambda
+						    let square = |x: int| x * x;
+						    print(square(5));  // 25
+
+						    // Lambda with closure
+						    let multiplier = 3;
+						    let multiply = [multiplier] |x: int| x * multiplier;
+						    print(multiply(4));  // 12
+						}
+						```
+
+						**Full closure support** - captures variables from enclosing scope!
+
+						---
+
+						## 🔗 Lambda Use Cases
+
+						**Higher-order functions:**
+
+						```etch [1-8|11-15]
+						fn applyTwice(f: fn(int) -> int, x: int) -> int {
+						    return f(f(x));
+						}
+
+						fn main() -> void {
+						    let addOne = |x: int| x + 1;
+						    let result = applyTwice(addOne, 5);
+						    print(result);  // 7 (5 + 1 + 1)
+						}
+						```
+
+						**Functional programming patterns** - map, filter, reduce!
+
+						**Zero runtime overhead** - lambdas compile to efficient bytecode!
+					</textarea>
+				</section>
+
+				<!-- Slide: Defer -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## ⏰ Defer: Guaranteed Cleanup
+
+						**Execute cleanup code when scope exits:**
+
+						```etch [2|6|10|8|4]
+						fn main() {
+						  print("Start");
+
+						  defer { print("Cleanup - runs last!"); }
+
+						  print("Middle");
+
+						  defer { print("Second cleanup"); }
+
+						  print("End");
+						}
+						```
+
+						**Output:**
+						```txt
+						Start
+						Middle
+						End
+						Second cleanup
+						Cleanup - runs last!
+						```
+
+						**Defers execute in reverse order (LIFO)** - Perfect for resource cleanup! 🧹
+					</textarea>
+				</section>
+
+				<!-- Slide: Import System -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## 📦 Import System: Modules & CFFI
+
+						**Module Imports (Etch code):**
+						```etch [1-2]
+						import math
+						import math { sqrt, pow }
+						```
+
+						**C FFI Imports (Native libraries):**
+						```etch [1-5|8-10]
+						import ffi cmath {
+						  fn sin(x: float) -> float;
+						  fn cos(x: float) -> float;
+						  fn sqrt(x: float) -> float;
+						}
+
+						fn main() -> void {
+						  var pi: float = 3.14159;
+						  var sine: float = sin(pi / 2.0);
+						  print(sine);  // ~1.0
+						}
+						```
+
+						**Zero-cost abstractions:**
+						- 🚀 Direct C function calls (no overhead)
+						- 🔗 Dynamic library loading (runtime)
+						- ✅ Type-safe FFI boundaries
+					</textarea>
+				</section>
+
+				<!-- Slide: Compile-Time Execution -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## ⚡ Compile-Time Execution
+
+						**Comptime evaluation during compilation:**
+
+						Not macros or templates-actual code execution in the compiler.
+
+						**Comptime Use Cases**
+
+						- 🎯 **Build-time configuration**: Different builds from same source
+						- 📊 **Lookup tables**: Compute once at compile-time, use at runtime
+						- 🚩 **Feature flags**: Conditional compilation based on environment
+						- 📦 **Resource embedding**: Templates, shaders, assets in binary
+						- 🏷️ **Version information**: Embed git commit hash, build date
+						- 🌐 **Platform-specific code**: Single codebase for multiple targets
+
+						---
+
+						## Comptime Basics
+
+						```etch [1-3|6-7|9-11]
+						fn square(x: int) -> int {
+						    return x * x;
+						}
+
+						fn main() -> void {
+							// Prints 64 during compilation
+						    comptime{ print(square(8)); }
+
+							// Evaluates to constant at compile-time
+							let sq: int = comptime(square(8));
+							print(sq);
+						}
+						```
+
+						**Zero runtime overhead**
+						- Function calls happen during compilation
+						- Results embedded as constants in bytecode
+						- No function call overhead at runtime
+
+						---
+
+						## Comptime Blocks
+
+						```etch [1-14]
+						fn main() -> void {
+						    comptime {
+						        print("Hello from the compiler!");
+
+						        var i: int = 0;
+						        while i < 5 {
+						            i = i + 1;
+						        }
+
+								print(i);
+						    }
+
+						    print("Hello from runtime!");
+						}
+						```
+
+						**Compile-time output:**
+						```txt
+						Hello from the compiler!
+						5
+						```
+
+						**Runtime output:**
+						```txt
+						Hello from runtime!
+						```
+
+						---
+
+						## File Embedding
+
+						```etch [2-4]
+						fn main() -> void {
+						    // File read at COMPILE-TIME
+						    let config: string = comptime(readFile("config.txt"));
+						    print(config);  // File embedded in binary!
+						}
+						```
+
+						**Embed files directly into your binary**
+						- No runtime I/O
+						- No missing file errors
+						- Single executable deployment
+
+						---
+
+						## Code Injection
+
+						```etch [2|3|5-11|14-16]
+						fn main() -> void {
+						    comptime {
+						        let env: string = readFile(".env");
+
+						        if env == "production" {
+						            inject("LOG_LEVEL", "int", 0);
+						            inject("DEBUG", "bool", false);
+						        } else {
+						            inject("LOG_LEVEL", "int", 2);
+						            inject("DEBUG", "bool", true);
+						        }
+						    }
+
+						    if DEBUG { // Variable was injected!
+						        print("Debug mode enabled");
+						    }
+						}
+						```
+
+						**Metaprogramming without macros**, generate code based on compile-time conditions
+					</textarea>
+				</section>
+
+				<!-- Slide: Register-Based VM Architecture -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## 🔀 Two Execution Modes
+
+						**Single source, dual execution paths:**
+
+						```txt
+													Etch Compiler
+														↓
+													Bytecode ──────→ C Backend
+														↓                ↓
+													Bytecode VM      C Compiler
+														↓                ↓
+													Execution        Execution
+						```
+
+						🔧 **Bytecode VM:** Fast iteration, debugger support, portable caching
+
+						🚀 **C Backend:** Native performance, compiler optimizations, standalone binary
+
+						**Development workflow:** 🧪 VM for rapid → 📦 C for deployment
+
+						---
+
+						## 🔧 Bytecode VM - Fast Development
+
+						**Perfect for development iteration:**
+
+						- ⚡ Instant execution (cached)
+						- 🐛 Full debugger support
+						- 📦 Portable bytecode
+						- 🚫 No C compiler needed
+						- 🔗 FFI to C libraries (runtime)
+						- 📝 Rich runtime errors
+
+						---
+
+						## 🚀 C Backend - Maximum Performance
+
+						**Compiles to clean, readable C code:**
+
+						- 🎯 Native machine code via gcc/clang
+						- ⚡ Platform optimizations (-O3)
+						- 🔧 System calling conventions
+						- 🔗 FFI to C libraries (linktime)
+						- 📦 Standalone executable
+
+						---
+
+						## 🎛️ Register-Based VM Architecture
+
+						⚡ **RegVM: Lua-inspired register machine** ⚡
+
+						| Stack VM | Register VM |
+						|----------|-------------|
+						| PUSH 5<br>PUSH 3<br>ADD<br>POP r0 | LoadK r0, 5<br>LoadK r1, 3<br>Add r2, r0, r1 |
+
+						**Architecture Details:**
+
+						- 📟 256 registers per function frame (8-bit addressing)
+						- 💾 65536 constants per function (16-bit index)
+						- 🎯 3-address instruction format (A = B op C)
+						- 🔧 Multiple instruction encodings: ABC, ABx, AsBx, Ax
+						- ⚡ Fused instructions for common patterns
+
+						---
+
+						## 💾 Bytecode Instructions
+
+						**Instruction Categories:**
+
+						| Category | Instructions |
+						|----------|--------------|
+						| 📦 **Load/Store** | LoadK, Move, GetGlobal, SetGlobal |
+						| 🧮 **Arithmetic** | Add, Sub, Mul, Div, Mod, Neg |
+						| 🔢 **Comparison** | Eq, Lt, Le, Gt, Ge, Ne |
+						| 🎯 **Control Flow** | Jump, JumpIf, JumpIfNot, TestJump |
+						| 📞 **Function Calls** | Call, Return |
+						| ⚡ **Fused Instructions** | AddAdd, MulAdd, LoadAddStore, EqStore |
+
+						---
+
+						## 💾 Bytecode Caching
+
+						**Performance improvement:** 🚀 faster subsequent runs
+
+						**First run:**<br>
+						`Source → Parse → Typecheck → Prove → Compile → Cache`
+
+						**Subsequent runs:**<br>
+						`Source Hash Check → Load Cached Bytecode → Run`
+
+						**Cache invalidation:**
+						- ✅ Source file changed → recompile
+						- ✅ Source hash mismatch → recompile
+						- ✅ Bytecode version changed → recompile
+						- ✅ Compiler binary changed → recompile
+						- ✅ Compiler flags changed → recompile
+					</textarea>
+				</section>
+
+				<!-- Slide: Implementation Language: Nim -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## 👑 Etch compiler is written in Nim 🎯
+
+						**Why Nim for compiler development:**
+						- ✨ Compiles to C → Portable, fast execution
+						- ✨ Python-like syntax → Readable codebase
+						- ✨ Zero-cost abstractions → Efficient compilation
+						- ✨ Memory safe with no GC → No crashes and leaks
+						- ✨ Strong standard library → Less boilerplate
+						- ✨ Metaprogramming → DSL capabilities
+
+						**Benefits for Etch:**
+						- 🌳 Clean AST representation with algebraic types
+						- 🔄 Pattern matching for compiler passes
+						- 🔗 Easy C FFI for library integration
+						- ⏱️ Fast compilation of the compiler itself (< 6 seconds)
+					</textarea>
+				</section>
+
+				<!-- Slide: Benchmark Results -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## 📊 Benchmark Results
+
+						**Real benchmark data from `hyperfine` on an M3 (generated 2025-11-14)**
+
+						---
+
+						## 📊 Benchmark Results
+
+						**Real benchmark data from `hyperfine` on an M3 (generated 2025-11-14)**
+
+						| Benchmark | Python3 | VM | VM vs Py | C Backend | C vs Py |
+						|-----------|---------|----|--------------|-----------|-------------|
+						| arithmetic_operations | 98.9ms | <span style="color:green">60.0ms</span> | 1.65× | <span style="color:lightgreen">4.9ms</span> | 20.21× |
+						| array_operations | 44.8ms | <span style="color:green">26.2ms</span> | 1.71× | <span style="color:lightgreen">3.3ms</span> | 13.37× |
+						| for_loop_print | 43.6ms | <span style="color:green">17.7ms</span> | 2.46× | <span style="color:lightgreen">9.4ms</span> | 4.65× |
+						| function_calls | 38.0ms | <span style="color:green">27.3ms</span> | 1.39× | <span style="color:lightgreen">3.1ms</span> | 12.41× |
+						| math_intensive | 30.1ms | <span style="color:green">15.5ms</span> | 1.94× | <span style="color:lightgreen">3.1ms</span> | 9.75× |
+						| memory_allocation | 26.4ms | <span style="color:green">5.9ms</span> | 4.51× | <span style="color:lightgreen">3.5ms</span> | 7.51× |
+
+						---
+
+						## 📊 Benchmark Results
+
+						**Real benchmark data from `hyperfine` on an M3 (generated 2025-11-14)**
+
+						| Benchmark | Python3 | VM | VM vs Py | C Backend | C vs Py |
+						|-----------|---------|----|--------------|-----------|-------------|
+						| nested_loops | 44.5ms | <span style="color:green">44.2ms</span> | 1.01× | <span style="color:lightgreen">3.9ms</span> | 11.50× |
+						| option_operations | 43.5ms | <span style="color:green">15.3ms</span> | 2.85× | <span style="color:lightgreen">3.0ms</span> | 14.37× |
+						| ref_operations | 31.4ms | <span style="color:green">25.9ms</span> | 1.21× | <span style="color:lightgreen">4.1ms</span> | 7.69× |
+						| result_operations | 56.5ms | <span style="color:green">47.1ms</span> | 1.20× | <span style="color:lightgreen">4.3ms</span> | 13.22× |
+						| string_operations | 28.6ms | <span style="color:lightgreen">7.1ms</span> | 4.02× | <span style="color:green">12.7ms</span> | 2.26× |
+						| tuple_operations | 27.8ms | <span style="color:yellow">29.9ms</span> | 1.08× slower | <span style="color:lightgreen">5.3ms</span> | 5.24× |
+
+						**Key Takeaway:** C backend ~2-16x faster than Python, VM competitive for most workloads
+
+						---
+
+						## 🚀 More Optimization Opportunities
+
+						**Current Optimizations:**
+						- ✅ Bytecode caching
+						- ✅ Constant folding (complete - integers, floats, bools, strings)
+						- ✅ Dead code/No side effects elimination
+						- ✅ Function inlining
+						- ✅ Range-based check elimination
+						- ✅ Fused instructions
+						- ✅ Pure function compile-time evaluation
+
+						---
+
+						## 🚀 More Optimization Opportunities
+
+						**Future Optimizations:**
+						- 🔄 Loop hoisting optimizations
+						- 🧮 Common subexpression elimination
+						- 🎨 Type-specialized instructions
+						- 🎯 Register coalescing
+
+						**The compiler keeps getting faster!**
+					</textarea>
+				</section>
+
+				<!-- Slide: VSCode Debugger Integration -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## 🐛 VSCode Debugger Integration
+
+						**Full DAP (Debug Adapter Protocol) Support** ✨
+
+						**Features:**
+						- 🔴 Set breakpoints in .etch files
+						- ⏯️ Step through execution (step in/out/over)
+						- 📊 View call stack
+						- 🔍 Inspect variables
+						- 👁️ Watch expressions (in progress)
+						- 📌 Conditional breakpoints (in progress)
+
+						**Debug Server:**
+						- 🔌 DAP protocol implementation (console based)
+						- 🌐 TCP/IP communication (in progress)
+						- 🎛️ Integrated with RegVM
+					</textarea>
+				</section>
+
+				<!-- Slide: Who Is Etch For? -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## 🎯 Who Is Etch For?
+
+						**Perfect for:**
+						- 🔬 Compiler enthusiasts exploring PL design
+						- 🎮 Game developers needing a fun scripting runtime
+						- 📚 Discovering program verification
+					</textarea>
+				</section>
+
+				<!-- Slide 36: Current Status -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## 🎯 Current Status: Active Development 🚧
+
+						**Production ready?** Not yet! ⚠️
+
+						**Great for:**
+						- 🧪 Experiments
+						- 📚 Learning
+						- 🔬 Research
+
+						**But maybe one day...**
+					</textarea>
+				</section>
+
+				<!-- Slide : Roadmap -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## 🗺️ Roadmap
+
+						**Phase 1: Bytecode optimization** 💾
+						- 🔧 Re-enable optimizer
+						- ✅ Enhanced constant folding (COMPLETED!)
+						- 🛡️ Integrate prover data into compiler
+
+						**Phase 2: Instruction improvements** 🎯
+						- 🔖 Jump target tables
+						- 📝 ARG instructions
+						- 🔄 Reversed operations
+
+						---
+
+						## 🗺️ Roadmap
+
+						**Phase 3: Advanced optimizations** 🚀
+						- 🔬 Peephole optimization
+						- 🧮 Common subexpression elimination
+						- 🔄 Loop optimizations
+
+						**Phase 4: Type-aware optimization** 🎨
+						- 🎯 Static type specialization
+						- 📦 Function inlining
+
+						Note: There's a detailed improvement plan in the repo
+					</textarea>
+				</section>
+
+				<!-- Slide: Live Demo Setup -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## Let's see Etch in action! 🎬
+
+						**Demos:**
+						1. 🛡️ Safety proofs catching bugs
+						2. ⚡ Comptime execution
+						3. 🐛 Debugger in VSCode
+						4. 📊 Performance comparison
+						5. 🔧 C backend code generation
+					</textarea>
+				</section>
+
+				<!-- Slide: Questions? -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						# Questions?
+
+						---
+
+						## **"Define once, Etch forever."**
+
+						<img src="assets/matches.jpg" alt="Etch Matches" style="max-width: 40%; border-radius: 10px; margin: 20px auto;">
+
+						### Thank you! 🚀
+					</textarea>
+				</section>
+
+			</div>
+		</div>
+
+		<script src="dist/reveal.js"></script>
+		<script src="plugin/notes/notes.js"></script>
+		<script src="plugin/markdown/markdown.js"></script>
+		<script src="plugin/highlight/highlight.js"></script>
+		<script src="plugin/highlight/etch.js"></script>
+		<script>
+			// More info about initialization & config:
+			// - https://revealjs.com/initialization/
+			// - https://revealjs.com/config/
+			Reveal.initialize({
+				hash: true,
+				slideNumber: true,
+				showNotes: false,
+				center: false,
+				transition: 'slide',
+
+				highlight: {
+					beforeHighlight: (hljs) => {
+						hljs.registerLanguage('etch', etchLang);
+						hljs.registerLanguage('etchlang', etchLang);
+					}
+				},
+
+				// Learn about plugins: https://revealjs.com/plugins/
+				plugins: [ RevealMarkdown, RevealHighlight, RevealNotes ]
+			});
+		</script>
+	</body>
+</html>

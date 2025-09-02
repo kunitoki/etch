@@ -1,0 +1,5 @@
+examples/coroutine_resume_non_coroutine_test.etch:4:20: error: resume requires a coroutine[T] value, got int
+  3 |     let x = 42;
+  4 |     let val: int = resume x;  // Error: x is not a coroutine
+                         ^
+  5 |     print(val);

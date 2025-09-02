@@ -1,0 +1,18 @@
+// Test that weak references prevent cycles
+type Node = object {
+    value: int;
+    next: ref[Node];
+    prev: weak[Node];  // Weak reference prevents cycle
+};
+
+fn main() -> void {
+    let a = new[Node]( value: 1, next: nil, prev: nil );
+    let b = new[Node]( value: 2, next: nil, prev: nil );
+
+    // Link: a <-weak-> b (no cycle because prev is weak)
+    a.next = b;
+    b.prev = a;
+
+    print("No cycle with weak refs");
+    // No cycle should be detected
+}

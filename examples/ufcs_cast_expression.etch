@@ -1,0 +1,7 @@
+fn main() {
+    let x: int = 2;
+    print(x.string());
+
+    let y: float = 2.0;
+    print(y.int().string());
+}

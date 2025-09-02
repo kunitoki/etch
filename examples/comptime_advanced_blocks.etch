@@ -1,0 +1,41 @@
+let build_mode: int = 1;
+let version_major: int = 2;
+let version_minor: int = 1;
+
+fn main() -> void {
+    comptime {
+        print(version_major);
+        print(version_minor);
+        let version_code: int = version_major * 100 + version_minor;
+        print(version_code);
+        
+        if build_mode == 1 {
+            print(9000);
+        } else {
+            print(9001);
+        }
+    }
+    
+    let runtime_value: int = 42;
+    print(runtime_value);
+    
+    comptime {
+        let buffer_size: int = 1024;
+        let num_buffers: int = 8;
+        let total_memory: int = buffer_size * num_buffers;
+        print(total_memory);
+        
+        let max_users: int = 100;
+        let bytes_per_user: int = 64;
+        let user_memory: int = max_users * bytes_per_user;
+        print(user_memory);
+        
+        if total_memory > user_memory {
+            print(7777);
+        } else {
+            print(8888);
+        }
+    }
+    
+    print(999);
+}

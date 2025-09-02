@@ -1,0 +1,12 @@
+// Lambda test with manual tracing
+fn test() {
+  let x = 5;
+  let f1 = |y: int| y;
+  let f2 = [x] |y: int| x * y;
+  print("trace-f1 = " + string(f1(11)));
+  print("trace-f2 = " + string(f2(4)));
+}
+
+fn main() {
+  test();
+}

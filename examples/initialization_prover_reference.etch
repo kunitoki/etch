@@ -1,0 +1,7 @@
+// Test: Using uninitialized reference (should FAIL)
+
+fn main() {
+  var x: ref[int];
+  let y: int = @x; // Error: x is not initialized (null reference)
+  print(y);
+}

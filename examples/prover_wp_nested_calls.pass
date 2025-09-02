@@ -1,0 +1,7 @@
+Test nested calls:
+Result: 1
+
+Test computed index:
+Result: 4
+
+✅ WP nested calls tests passed!

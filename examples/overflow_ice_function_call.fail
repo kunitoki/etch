@@ -1,0 +1,5 @@
+examples/overflow_ice_function_call.etch:5:30: error: addition overflow
+  4 | fn addToMax(x: int) -> int {
+  5 |   return 9223372036854775000 + x;
+                                   ^
+  6 | }

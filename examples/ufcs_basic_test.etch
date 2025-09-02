@@ -1,0 +1,30 @@
+fn print_value(x: int) -> void {
+    print(x);
+}
+
+fn print_value(x: float) -> void {
+    print(x);
+}
+
+fn add_ten(x: int) -> int {
+    return x + 10;
+}
+
+fn add_ten(x: float) -> float {
+    return x + 10.0;
+}
+
+fn main() -> void {
+    let x: int = 42;
+
+    // Test basic UFCS syntax - should be equivalent to print_value(x)
+    x.print_value();
+
+    // Test UFCS chaining - should be equivalent to print_value(add_ten(x))
+    x.add_ten().print_value();
+
+    // Test UFCS with multiple args - equivalent to some_func(x, y, z)
+    // let y: int = 5;
+    // let z: int = 3;
+    // x.some_func(y, z);
+}

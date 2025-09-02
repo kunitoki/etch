@@ -1,0 +1,13 @@
+fn main() {
+    let a: int = 10;
+    let b: int = 0;
+    let c: int = 20;
+
+    b = a + c;  // This uses reg 3 temporarily
+
+    let arr: array[int] = [1, 2, 3];  // This should be in reg 3
+
+    // Print to verify values
+    print(b);
+    print(arr[0]);
+}

@@ -1,0 +1,24 @@
+=== Basic Enum Creation ===
+Created enum variables: red, green, blue
+=== Explicit Casting to Int ===
+int(Color.Red):
+0
+int(Color.Green):
+10
+=== Explicit Casting to String ===
+string(Color.Red):
+Color.Red
+string(Color.Green):
+Color.Green
+string(Color.Blue):
+BlueColor
+=== Advanced Enum Operations ===
+int(Direction.North):
+0
+int(Direction.East):
+5
+int(Direction.South):
+6
+int(Direction.West):
+100
+=== All enum operations completed successfully ===

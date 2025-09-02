@@ -1,0 +1,37 @@
+// Test various lambda syntax variations
+
+fn main() {
+    // Simple lambda without parameters
+    let simple_lambda = || { 42 };
+    print("simple = " + string(simple_lambda()));
+
+    // Lambda with one parameter
+    let add_one = |x: int| x + 1;
+    print("add-one = " + string(add_one(5)));
+
+    // Lambda with multiple parameters
+    let add: fn(int, int) -> int = |a, b| a + b;
+    print("add(3,7) = " + string(add(3, 7)));
+
+    // Lambda with explicit parameter types
+    let multiply = |x: int, y: int| x * y;
+    print("mul(6,9) = " + string(multiply(6, 9)));
+
+    // Lambda with return type annotation
+    let to_string = |x: int| -> string { return string(x); };
+    print("string(15) = " + to_string(15));
+
+    // Lambda with captures
+    let outer_var = 10;
+    let with_capture = [outer_var] |x: int| outer_var + x;
+    print("capture = " + string(with_capture(5)));
+
+    // Nested lambda
+    let nested = |x: int| {
+        let inner = [x] |y: int| { return x + y; };
+        return inner(3);
+    };
+    print("nested = " + string(nested(4)));
+
+    print("Lambda syntax test completed");
+}

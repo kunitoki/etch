@@ -1,0 +1,5 @@
+examples/enum_undefined_member.etch:12:24: error: enum type 'Color' has no member 'Purple'
+  11 |   // This should fail: accessing undefined member through type
+  12 |   let undefined = Color.Purple;
+                              ^
+  13 |   print("Should not reach here");

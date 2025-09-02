@@ -1,0 +1,30 @@
+// Simple enum pattern matching test
+type Direction = enum {
+  North = 0;
+  South = 1;
+  East = 2;
+  West = 3;
+};
+
+fn main() {
+  let dir = Direction.North;
+  print("Testing basic enum access: ");
+
+  // Test basic enum member access
+  print("dir = Direction.North");
+
+  // Test simple pattern matching
+  match dir {
+    Direction.North => {
+      print("Matched North!");
+    },
+    Direction.South => {
+      print("Matched South!");
+    },
+    _ => {
+      print("Matched other direction!");
+    }
+  };
+
+  print("Test completed successfully!");
+}

@@ -1,0 +1,27 @@
+// Test: Disjunctive OR where one interval extends beyond bounds
+// This should FAIL because [20, IMax] is out of bounds for array size 15
+
+fn testUnsafeDisjunction() -> int {
+  let x = match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => 5;
+    };
+    error(_) => 5;
+  };
+
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+
+  // x in [0, 9] OR [20, IMax]
+  // Array has 15 elements [0..14]
+  // [0, 9] is safe, but [20, IMax] extends beyond bounds
+  if (x >= 0 and x < 10) or x >= 20 {
+    return arr[x];  // ❌ Should fail!
+  }
+
+  return -1;
+}
+
+fn main() -> void {
+  print(testUnsafeDisjunction());
+}

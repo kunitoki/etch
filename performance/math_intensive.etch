@@ -1,0 +1,55 @@
+fn is_prime(n: int) -> int {
+    if n <= 1 {
+        return 0;
+    }
+    if n <= 3 {
+        return 1;
+    }
+    if n % 2 == 0 or n % 3 == 0 {
+        return 0;
+    }
+
+    var i = 5;
+    while i * i <= n {
+        if n % i == 0 or n % (i + 2) == 0 {
+            return 0;
+        }
+        i = i + 6;
+    }
+    return 1;
+}
+
+fn gcd(a: int, b: int) -> int {
+    while b != 0 {
+        var temp = b;
+        b = a % b;
+        a = temp;
+    }
+    return a;
+}
+
+fn main() {
+    seed(42);
+    var prime_count = 0;
+    var gcd_sum = 0;
+
+    // Mathematical computation benchmark
+    for i in 1..<5000 {
+        // Prime checking
+        if is_prime(i) == 1 {
+            prime_count = prime_count + 1;
+        }
+
+        // GCD computation
+        var a = rand(1, 1000);
+        var b = rand(1, 1000);
+        gcd_sum = gcd_sum + gcd(a, b);
+
+        // Some modular arithmetic
+        var mod_result = (i * i + a * b) % 1000;
+        gcd_sum = gcd_sum + mod_result;
+    }
+
+    print(prime_count);
+    print(gcd_sum);
+}

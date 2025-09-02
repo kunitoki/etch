@@ -1,0 +1,50 @@
+fn fibonacci(n: int) -> int {
+    if n <= 1 {
+        return n;
+    }
+    // Bound the computation to prevent overflow (fib(46) is max safe value)
+    if n > 46 {
+        return 0;
+    }
+    var fib1 = fibonacci(n - 1);
+    var fib2 = fibonacci(n - 2);
+    // Use modulo to help prover prove no overflow
+    return (fib1 % 1000000) + (fib2 % 1000000);
+}
+
+fn simple_math(a: int, b: int) -> int {
+    return a * b + a - b;
+}
+
+fn array_sum(arr: array[int]) -> int {
+    var sum = 0;
+    for i in 0 ..< #arr {
+        sum = sum + arr[i];
+    }
+    return sum;
+}
+
+fn main() {
+    seed(42);
+    var res = 0;
+
+    // Function call overhead benchmark
+    for i in 0 ..< 10000 {
+        var a = rand(1, 100);
+        var b = rand(1, 100);
+
+        // Test simple function calls
+        res = res + simple_math(a, b);
+
+        // Test array function calls
+        var arr = [a, b, a + b, a - b, a * 2];
+        res = res + array_sum(arr) % 10;
+
+        // Test recursive calls (small numbers to avoid stack overflow)
+        if i % 1000 == 0 {
+            res = res + fibonacci(a % 10);
+        }
+    }
+
+    print(res);
+}

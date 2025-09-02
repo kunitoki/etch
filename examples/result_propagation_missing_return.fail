@@ -1,0 +1,5 @@
+examples/result_propagation_missing_return.etch:11:40: error: function 'requirePositiveNoReturn' must return a value of type result[int] (add 'return ok(...)' on the success path when using '?')
+  10 | fn requirePositiveNoReturn(label: string, value: int) {
+  11 |   let x = requirePositive(label, value)?;
+                                              ^
+  12 |   print(x);

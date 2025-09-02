@@ -1,0 +1,5 @@
+examples/var_redeclaration.etch:5:9: error: variable 'x' is already declared in this scope
+  4 |     var x: X = 1;
+  5 |     var x: X = "hello";
+              ^
+  6 |     discard x;

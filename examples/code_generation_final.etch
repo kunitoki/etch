@@ -1,0 +1,15 @@
+fn main() -> void {
+    comptime {
+        let config_content: string = readFile("examples/data/config.txt");
+        inject("embedded_config", "string", config_content);
+        inject("magic_number", "int", 42);
+        inject("is_debug", "bool", true);
+    }
+
+    print("Config content:");
+    print(embedded_config);
+    print("Magic number:");
+    print(magic_number);
+    print("Debug mode:");
+    print(is_debug);
+}

@@ -1,0 +1,14 @@
+// Expect compiler error: coroutine yields int but never returns an int value
+fn bad_counter(limit: int) {
+    var i = 0;
+    while i < limit {
+        yield i;
+        i = i + 1;
+    }
+    // Missing final return value should be rejected
+}
+
+fn main() {
+    let coro = spawn bad_counter(2);
+    discard resume coro;
+}

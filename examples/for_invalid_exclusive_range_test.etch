@@ -1,0 +1,10 @@
+fn main() -> void {
+    // Test invalid exclusive range - should be caught by prover
+    print("Testing invalid exclusive range:");
+
+    for x in 5..<5 {
+        print("This should never execute");
+    }
+
+    print("End test");
+}

@@ -1,0 +1,5 @@
+examples/enum_invalid_comparison.etch:13:22: error: comparison type mismatch: Color vs int
+  12 |   // This should fail: comparing enum with int
+  13 |   let result = color == number;
+                            ^
+  14 |   print("Should not reach here");

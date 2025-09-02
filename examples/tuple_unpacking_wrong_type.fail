@@ -1,0 +1,5 @@
+examples/tuple_unpacking_wrong_type.etch:4:9: error: tuple unpacking requires a tuple expression, got int
+  3 |     let x = 42;
+  4 |     let [a, b] = x;  // Error: can't unpack int as tuple
+              ^
+  5 |     discard a, b;

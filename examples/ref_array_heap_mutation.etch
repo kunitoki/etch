@@ -1,0 +1,15 @@
+// Test creating array ref on heap, dereferencing, and mutating elements
+fn main() {
+    var arr = new[array[int]]([10, 20, 30]);
+
+    print(@arr[0]);
+    print(@arr[1]);
+    print(@arr[2]);
+
+    // Mutate through deref
+    @arr[1] = 99;
+
+    print(@arr[0]);
+    print(@arr[1]);
+    print(@arr[2]);
+}

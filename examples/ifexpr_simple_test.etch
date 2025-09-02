@@ -1,0 +1,23 @@
+// Test simple if-expressions
+
+fn main() {
+  let x: int = 10;
+  let y: int = 5;
+
+  // Simple if-else expression
+  let max: int = if x > y { x } else { y };
+  print("max = ");
+  print(max);
+
+  // With different values
+  let min: int = if x < y { x } else { y };
+  print("min = ");
+  print(min);
+
+  // Nested in expressions
+  let result: int = 2 * (if x > y { x } else { y });
+  print("result = ");
+  print(result);
+
+  print("Test passed!");
+}

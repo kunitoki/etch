@@ -1,0 +1,12 @@
+// Test that void functions can be called without discard
+
+fn doSomething() {
+  print("Doing something");
+}
+
+fn main() {
+  // This should work fine - void functions don't need discard
+  doSomething();
+
+  print("Test passed!");
+}

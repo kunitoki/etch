@@ -1,0 +1,11 @@
+// Object unpacking with wrong field name
+type Point = object {
+    x: int;
+    y: int;
+};
+
+fn main() {
+    let p = new[Point](x: 10, y: 20);
+    let {x, z} = p;  // Error: Point has no field 'z'
+    discard x, z;
+}

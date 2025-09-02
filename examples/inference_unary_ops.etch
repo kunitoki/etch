@@ -1,0 +1,15 @@
+// Test unary operation type inference
+fn main() {
+    // Unary negation
+    let neg_int = -42;         // int
+    let neg_float = -3.14;     // float
+
+    // Logical not
+    let not_true = not true;      // bool
+    let not_false = not false;    // bool
+
+    print(neg_int);
+    print(neg_float);
+    print(not_true);
+    print(not_false);
+}

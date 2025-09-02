@@ -1,0 +1,8 @@
+fn divide(x: int, y: int) -> int {
+    return x / y;
+}
+
+fn main() -> void {
+    let result: int = divide(10, rand(3));  // rand(3) can return 0 - should be rejected
+    print(result);
+}

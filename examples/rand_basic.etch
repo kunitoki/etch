@@ -1,0 +1,22 @@
+// Basic rand() functionality test with deterministic seed
+// Tests: rand(max) and rand(max, min) syntax
+
+fn main() -> void {
+  seed(42);  // Set deterministic seed
+  print(999);  // Start marker
+
+  // Test rand(max) - from 0 to max
+  let dice: int = rand(6);
+  print(dice);  // Should be 0-6
+
+  // Test rand(max, min) - from min to max
+  let score: int = rand(50, 100);
+  print(score);  // Should be 50-100
+
+  // Multiple calls to show variability
+  print(rand(3));
+  print(rand(3));
+  print(rand(5, 10));
+
+  print(888);  // End marker
+}

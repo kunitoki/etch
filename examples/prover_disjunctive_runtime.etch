@@ -1,0 +1,60 @@
+// Test disjunctive OR with runtime values
+// Force the prover to use disjunctive intervals
+
+fn testSimpleDisjunctive() -> int {
+  // Read a runtime value
+  let x = match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => 5;
+    };
+    error(_) => 5;
+  };
+
+  // Now x is a runtime value, not a compile-time constant
+  let arr: array[int] = [0, 1, 2, 3, 4, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115];
+
+  // Test: x < 5 or x >= 11
+  // This creates disjunctive intervals: [IMin, 4] ∪ [11, IMax]
+  // For array size 21 (indices [0, 20]), we need to constrain to [0, 4] ∪ [11, 20]
+  if (x >= 0 and x < 5) or (x >= 11 and x < 21) {
+    // This should be proven safe because:
+    // - [0, 4] is within [0, 20]
+    // - [11, 20] is within [0, 20]
+    return arr[x];  // ✅ Should work!
+  }
+
+  return -1;
+}
+
+fn testOrWithoutBounds() -> int {
+  let x = match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => 5;
+    };
+    error(_) => 5;
+  };
+
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+  // This should FAIL because the disjunctive interval [11, IMax] extends beyond [0, 9]
+  // Add lower bound check to eliminate negative values
+  if (x >= 0 and x < 5) or x >= 11 {
+    return arr[x];  // ❌ Should fail - [11, IMax] extends beyond [0, 9]
+  }
+
+  return -1;
+}
+
+fn main() -> void {
+  print("✅ Test 1 (disjunctive OR with safe bounds): " + string(testSimpleDisjunctive()));
+
+  // This test would fail at compile time with:
+  // "index interval [11, 9223372036854775807] extends beyond array bounds [0, 9]"
+  // Uncomment to verify:
+  // print("❌ Test 2 (disjunctive OR with unsafe bounds): " + string(testOrWithoutBounds()));
+
+  print("");
+  print("Disjunctive OR constraints working! ✨");
+}

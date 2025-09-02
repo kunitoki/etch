@@ -1,0 +1,15 @@
+// Test function call type inference for builtins
+fn main() {
+    // Known builtin functions
+    let random_num = rand(100);     // int
+
+    // Functions that return void (can't infer from these)
+    seed(42);                      // void - can't infer from this
+
+    // Array length
+    let nums = [1, 2, 3];
+    let len = #nums;               // int
+
+    print(random_num);
+    print(len);
+}

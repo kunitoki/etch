@@ -1,0 +1,77 @@
+// Test that defer statements are called when coroutine is destroyed without completing
+var cleanup_counter: int = 0;
+
+fn increment_cleanup() {
+    cleanup_counter = cleanup_counter + 1;
+}
+
+fn coroutine_with_defer(should_complete: bool) {
+    defer { increment_cleanup(); }
+
+    print("Coroutine started");
+    yield 1;
+
+    if should_complete {
+        print("Coroutine completing normally");
+        yield 2;
+        return 2;
+    } else {
+        print("Coroutine stopping early");
+        // Don't yield again, just return
+        return 1;
+    }
+}
+
+fn main() {
+    print("Test 1: Coroutine that completes normally");
+    cleanup_counter = 0;
+    {
+        let c1 = spawn coroutine_with_defer(true);
+        match resume c1 {
+            ok(v1) => print(v1);
+            error(msg) => {
+                print("resume error: ");
+                print(msg);
+                return;
+            }
+        };
+        match resume c1 {
+            ok(v2) => print(v2);
+            error(msg) => {
+                print("resume error: ");
+                print(msg);
+                return;
+            }
+        };
+        match resume c1 {
+            ok(_) => {}
+            error(msg) => {
+                print("resume error: ");
+                print(msg);
+                return;
+            }
+        };
+    }
+    print("Cleanup counter after normal completion: ");
+    print(cleanup_counter);
+
+    print("");
+    print("Test 2: Coroutine destroyed without completing");
+    cleanup_counter = 0;
+    {
+        let c2 = spawn coroutine_with_defer(false);
+        match resume c2 {
+            ok(v4) => print(v4);
+            error(msg) => {
+                print("resume error: ");
+                print(msg);
+                return;
+            }
+        };
+        // Now c2 goes out of scope without being fully consumed
+        // Defer should still run when coroutine is destroyed
+    }
+    print("Cleanup counter after early destruction: ");
+    print(cleanup_counter);
+    print("Done!");
+}

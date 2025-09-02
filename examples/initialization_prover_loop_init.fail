@@ -1,0 +1,5 @@
+examples/initialization_prover_loop_init.etch:13:16: error: use of uninitialized variable 'x' - variable may not be initialized in all control flow paths
+  12 |   // Loop might never execute, x might be uninitialized
+  13 |   let y: int = x; // Error: loop might not run, x uninitialized
+                      ^
+  14 |   print(y);

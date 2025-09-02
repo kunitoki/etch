@@ -1,0 +1,9 @@
+fn main() -> void {
+    // Test invalid casts that should fail
+    let x: int = 42;
+    let y: string = "hello";
+    
+    // These should fail - invalid cast types
+    let bad_cast1: bool = bool(x);  // int to bool not allowed
+    let bad_cast2: int = int(y);    // string to int not allowed
+}

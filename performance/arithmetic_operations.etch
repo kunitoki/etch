@@ -1,0 +1,23 @@
+fn main() {
+    seed(42);
+    var res = 0;
+
+    // Arithmetic operations benchmark
+    for i in 0..<100000 {
+        var a = rand(1, 100);
+        var b = rand(1, 100);
+
+        // Mix of operations to test different arithmetic paths
+        var sum = a + b;
+        var diff = a - b;
+        var prod = a * b;
+        var quotient = a / (b % 10 + 1);  // Avoid division by zero
+
+        res = res + sum;
+        res = res + diff;
+        res = res + prod;
+        res = res + quotient;
+    }
+
+    print(res);
+}

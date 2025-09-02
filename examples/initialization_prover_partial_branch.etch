@@ -1,0 +1,14 @@
+// Test: Variable only initialized in one branch (should FAIL)
+
+fn main() -> void {
+  var x: int;
+  var cond: bool = rand(1) == 0;
+
+  if cond {
+    x = 42;
+  }
+  // Missing else branch - x not initialized when cond is false
+
+  let y: int = x; // Error: x not initialized in else path
+  print(y);
+}

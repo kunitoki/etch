@@ -1,0 +1,6 @@
+// Zero budget test - adaptive mode (no budget enforcement)
+
+fn main() -> int {
+  print("Frame executed");
+  return 0;
+}

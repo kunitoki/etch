@@ -1,0 +1,34 @@
+fn main() -> void {
+    // Array literal creation
+    let numbers: array[int] = [1, 2, 3, 4, 5];
+
+    // Array indexing
+    let first: int = numbers[0];
+    var last: int = numbers[4];  // Use deterministic index instead of rand
+    print(first);
+    print(last);
+
+    // Array slicing variations - demonstrate different slice syntaxes
+    let slice1: array[int] = numbers[1:4];    // [2, 3, 4]
+    let slice2: array[int] = numbers[2:];     // [3, 4, 5]
+    let slice3: array[int] = numbers[:3];     // [1, 2, 3]
+    let slice4: array[int] = numbers[:];      // [1, 2, 3, 4, 5] (full copy)
+
+    // Use slices to verify they work correctly
+    print(slice1[0]);  // Should be 2
+    print(slice2[1]);  // Should be 4
+    print(slice3[2]);  // Should be 3
+    print(slice4[0]);  // Should be 1
+
+    // Nested arrays
+    let matrix: array[array[int]] = [[1, 2], [3, 4]];
+    let row: array[int] = matrix[0];
+    let element: int = matrix[1][0];  // Should be 3
+    print(row[1]);  // Should be 2
+    print(element);
+
+    // String arrays - use the greeting
+    let words: array[string] = ["hello", "world", "etch"];
+    let greeting: string = words[0];
+    print(greeting);
+}

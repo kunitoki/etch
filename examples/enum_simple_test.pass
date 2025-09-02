@@ -1,0 +1,4 @@
+Testing basic enum access:
+dir = Direction.North
+Matched North!
+Test completed successfully!

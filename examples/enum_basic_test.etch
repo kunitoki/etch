@@ -1,0 +1,16 @@
+// Basic enum declaration and usage test
+type Color = enum {
+  Red;
+  Green;
+  Blue;
+};
+
+fn main() {
+  let x = Color.Red;
+  let y = Color.Green;
+  let z = Color.Blue;
+  print("x = Color.Red: " + string(x));
+  print("y = Color.Green: " + string(y));
+  print("z = Color.Blue: " + string(z));
+  print("All basic enum operations passed!");
+}

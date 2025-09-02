@@ -1,0 +1,25 @@
+// Test destructor with weak references
+// Validates that weak references don't prevent destruction
+
+type Resource = object {
+  id: int;
+};
+
+fn ~(r: Resource) -> void {
+  print("Destructor called for Resource #" + string(r.id));
+}
+
+fn main() -> void {
+  print("Creating resource...");
+  let res = new[Resource]( id: 42 );
+
+  print("Creating weak reference...");
+  let weakRef: weak[Resource] = res;
+  discard weakRef;
+
+  print("Destroying strong reference...");
+  // This should trigger destructor even though weak ref exists
+  discard res;
+
+  print("Main exiting...");
+}

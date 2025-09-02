@@ -1,0 +1,20 @@
+// Test: Different enum types cannot be compared
+type Color = enum {
+  Red;
+  Green;
+};
+
+type Direction = enum {
+  North = 0;
+  South = 1;
+};
+
+fn main() {
+  let color = Color.Red;
+  let direction = Direction.North;
+
+  // This should fail: comparing different enum types
+  let res = if color == direction { true; } else { false; };
+
+  print("Should not reach here: " + string(res));
+}

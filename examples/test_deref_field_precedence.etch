@@ -1,0 +1,17 @@
+type Inner = object {
+    value: int;
+};
+
+type Outer = ref[Inner];
+
+type Container = object {
+    data: Outer;
+};
+
+fn main() {
+    let container = Container(data: new[Inner](value: 42));
+
+    // Test: @container.data.value
+    // Is this (@container).data.value or @(container.data.value)?
+    print(@container.data.value);
+}

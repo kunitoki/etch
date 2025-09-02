@@ -1,0 +1,5 @@
+examples/return_type_conflict_test.etch:3:9: error: conflicting return types: string and int
+  2 |     if x > 5 {
+  3 |         return "string value";
+              ^
+  4 |     } else {

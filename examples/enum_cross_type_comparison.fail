@@ -1,0 +1,5 @@
+examples/enum_cross_type_comparison.etch:17:22: error: enum comparison requires identical enum types
+  16 |   // This should fail: comparing different enum types
+  17 |   let res = if color == direction { true; } else { false; };
+                            ^
+  18 |

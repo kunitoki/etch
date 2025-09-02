@@ -1,0 +1,11 @@
+// Test DivAdd fusion: a / b + c -> opDivAdd
+fn main() {
+  let a = 100;
+  let b = 4;
+  let c = 10;
+
+  // This should fuse into a single opDivAdd instruction
+  let result = a / b + c;
+
+  print(result);  // Should print 35 (25 + 10)
+}

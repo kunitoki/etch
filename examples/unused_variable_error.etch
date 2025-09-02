@@ -1,0 +1,5 @@
+fn main() -> void {
+  let unused_var: int = 42;
+  let used_var: int = 10;
+  print(used_var);
+}

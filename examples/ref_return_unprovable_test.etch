@@ -1,0 +1,20 @@
+// Test ref return with unprovable condition - should fail
+// The prover cannot determine if rand(1) == 0, so result may be nil
+type Node = object {
+    value: int;
+};
+
+fn maybe_nil(cond: bool) -> ref[Node] {
+    if cond {
+        return new[Node](value: 42);
+    } else {
+        return nil;
+    }
+}
+
+fn main() {
+    let result = maybe_nil(rand(1) == 0);
+
+    // The prover cannot prove that result is non-nil
+    print(result.value);
+}

@@ -1,0 +1,27 @@
+fn tryGetElement(arr: array[int], index: int) -> option[int] {
+  if index >= 0 and index < #arr {
+    return some(arr[index]);
+  } else {
+    return none;
+  }
+}
+
+fn main() -> void {
+  let numbers: array[int] = [10, 20, 30];
+
+  let index = match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => 0;
+    };
+    error(_) => 0;
+  };
+
+  let maybeValue: option[int] = tryGetElement(numbers, index);
+
+  let res: string = match maybeValue {
+    some(value) => "Found: " + string(value);
+    none => "Not found";
+  };
+  print(res);  // "Found: 10"
+}

@@ -1,0 +1,15 @@
+fn main() -> void {
+    // While loop with break statement
+    print("Testing while loop with break:");
+
+    var i: int = 0;
+    while i < 10 {
+        if i == 3 {
+            break;
+        }
+        print(i);
+        i = i + 1;
+    }
+
+    print("While loop exited at 3");
+}

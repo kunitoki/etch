@@ -1,0 +1,10 @@
+// Test that if-expressions require else branch
+
+fn main() {
+  let x: int = 10;
+
+  // This should error - if-expression requires else
+  let y: int = if x > 5 { 1 };
+
+  print(y);
+}

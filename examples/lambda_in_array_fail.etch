@@ -1,0 +1,6 @@
+fn main() -> void {
+    // Failing: array of lambdas with different signatures should fail
+    let funcs = [ (|x: int| x + 1), (|x: int, y: int| x + y) ];
+    let f0 = funcs[0];
+    discard f0(5);
+}

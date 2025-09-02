@@ -1,0 +1,5 @@
+examples/prover_stress_fail3.etch:8:16: error: index range [0, 9] extends beyond array bounds [0, 4]
+  7 |   for i in 0..<10 {
+  8 |     return arr[i];  // ❌ Should fail! i ranges [0,9] but array is [0,4]
+                     ^
+  9 |   }

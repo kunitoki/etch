@@ -1,0 +1,13 @@
+C1 yielded:
+0
+C2 yielded:
+10
+C3 yielded:
+20
+C1 yielded:
+1
+C2 yielded:
+11
+C3 yielded:
+21
+All coroutines completed!

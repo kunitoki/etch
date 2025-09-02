@@ -1,0 +1,9 @@
+fn main() -> void {
+	// Lambdas inside arrays
+	let funcs = [ (|x: int| -> int { return x + 1; }), (|x: int| -> int { return x * 2; }) ];
+	let f0 = funcs[0];
+	let f1 = funcs[1];
+	let a = f0(10);
+	let b = f1(10);
+	print(string(a) + "," + string(b));
+}

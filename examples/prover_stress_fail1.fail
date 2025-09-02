@@ -1,0 +1,5 @@
+examples/prover_stress_fail1.etch:11:18: error: index range [0, 24] extends beyond array bounds [0, 9]
+  10 |       let idx = i * 5 + j;
+  11 |       return arr[idx];  // ❌ Should fail! idx can be up to 24, array is [0, 9]
+                        ^
+  12 |     }

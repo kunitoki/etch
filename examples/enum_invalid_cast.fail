@@ -1,0 +1,5 @@
+examples/enum_invalid_cast.etch:12:22: error: unknown function: color
+  11 |   // This should fail: invalid casting operations
+  12 |   let invalid: int = color(42);  // Trying to call enum as function
+                            ^
+  13 |   print("Should not reach here");

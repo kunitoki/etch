@@ -1,0 +1,37 @@
+fn func(w: weak[string]) {
+    yield 1;
+    let x: ref[string] = w;
+    print(@x); // this mayb be nil ?
+    yield 2;
+    return 3;
+}
+
+fn main() {
+    var x = new[string]("boot");
+    print(@x);
+    @x = "hello";
+    print(@x);
+    let coro = spawn func(x);
+
+    match resume coro {
+        ok(v1) => print(v1),
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    x = nil;
+
+    match resume coro {
+        ok(v1) => print(v1),
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    print("Done!");
+}

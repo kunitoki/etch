@@ -1,0 +1,7 @@
+// Test cleanup pass - redundant assignment
+fn main() {
+  let x = 10;
+  let y = x;  // Not redundant - different variable
+  // y = y;     // This would be redundant
+  print(y);
+}

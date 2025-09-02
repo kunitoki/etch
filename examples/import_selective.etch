@@ -1,0 +1,15 @@
+// Test selective imports from a module
+
+import lib/math {
+  fn add(a: int, b: int) -> int;
+  fn square(x: int) -> int;
+}
+
+fn main() {
+  // These functions are imported
+  print(add(10, 5));    // 15
+  print(square(3));     // 9
+
+  // sub and mul are not imported, so they would cause errors if used
+  // print(sub(10, 5));  // Would error: undefined function
+}

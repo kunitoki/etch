@@ -1,0 +1,11 @@
+fn add(a: int, b: int) -> int {
+  var sum: int = a + b;
+  return sum;
+}
+
+fn main() -> void {
+  var x: int = 10;
+  var y: int = 20;
+  var result: int = x.add(y);
+  print(result);
+}

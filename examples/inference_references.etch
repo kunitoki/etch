@@ -1,0 +1,15 @@
+// Test reference type inference
+fn main() {
+    // Reference creation and dereferencing
+    let x = 42;
+    let ref_x = new(x);            // ref[int]
+    let deref_val = @ref_x;        // int
+
+    // String references
+    let s = "hello";
+    let ref_s = new(s);            // ref[string]
+    let deref_s = @ref_s;          // string
+
+    print(deref_val);
+    print(deref_s);
+}

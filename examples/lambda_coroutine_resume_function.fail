@@ -1,0 +1,5 @@
+examples/lambda_coroutine_resume_function.etch:12:15: error: resume requires a coroutine[T] value, got fn() -> coroutine[int]
+  11 |
+  12 |   let value = resume makeCoro;
+                     ^
+  13 |   match value {

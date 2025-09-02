@@ -1,0 +1,5 @@
+examples/ref_return_unprovable_test.etch:19:17: error: potential null dereference: field access on variable 'result' that may be nil
+  18 |     // The prover cannot prove that result is non-nil
+  19 |     print(result.value);
+                       ^
+  20 | }

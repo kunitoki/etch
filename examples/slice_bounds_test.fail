@@ -1,0 +1,5 @@
+examples/slice_bounds_test.etch:9:31: error: slice start 5 beyond array size 3
+  8 |     // Invalid slice - start > array size
+  9 |     let bad: array[int] = arr[5:10];
+                                    ^
+  10 | }

@@ -1,0 +1,13 @@
+// Test case: Bounded accumulation in a loop
+// This should pass if the prover can prove the total stays within bounds
+
+fn main() {
+    var sum = 0;
+
+    // Add small values 10 times: max value is 10 * 5 = 50
+    for i in 0 ..< 10 {
+        sum = sum + 5;
+    }
+
+    print(sum);
+}

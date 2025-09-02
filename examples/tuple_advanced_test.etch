@@ -1,0 +1,38 @@
+// Test advanced tuple functionality
+
+fn test_tuple_bounds_check() {
+    let t: tuple[int, string, bool] = tuple(42, "hello", true);
+
+    // These should work
+    let v0 = t[0];
+    let v1 = t[1];
+    let v2 = t[2];
+
+    discard v0, v1, v2;
+}
+
+fn test_nested_tuples() {
+    let t1: tuple[int, tuple[string, bool]] = tuple(10, tuple("nested", false));
+    let outer_val = t1[0];
+    let inner_tuple = t1[1];
+    let inner_val = inner_tuple[0];
+
+    discard outer_val, inner_val;
+}
+
+fn test_tuple_with_expressions() {
+    let x = 5;
+    let y = 10;
+    let coord: tuple[int, int] = tuple(x + y, x * y);
+
+    let sum = coord[0];
+    let product = coord[1];
+
+    discard sum, product;
+}
+
+fn main() {
+    test_tuple_bounds_check();
+    test_nested_tuples();
+    test_tuple_with_expressions();
+}

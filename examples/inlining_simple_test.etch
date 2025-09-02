@@ -1,0 +1,13 @@
+fn add(a: int, b: int) -> int {
+    return a + b;
+}
+
+fn multiply(a: int, b: int) -> int {
+    return a * b;
+}
+
+fn main() {
+    var x = add(3, 4);
+    var y = multiply(x, 2);
+    print(y);
+}

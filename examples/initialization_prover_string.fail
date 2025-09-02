@@ -1,0 +1,5 @@
+examples/initialization_prover_string.etch:5:19: error: unknown function: length
+  4 |   var s: string;
+  5 |   let len: int = s.length(); // Error: s is not initialized
+                        ^
+  6 |   print(len);

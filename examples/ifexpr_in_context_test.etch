@@ -1,0 +1,31 @@
+// Test if-expressions in various contexts
+
+fn double(x: int) -> int {
+  return x * 2;
+}
+
+fn getSign(x: int) -> string {
+  return if x > 0 { "positive" } else if x < 0 { "negative" } else { "zero" };
+}
+
+fn main() {
+  // In function argument
+  print(double(if true { 5 } else { 10 }));
+
+  // In return via function call
+  print(getSign(42));
+  print(getSign(-7));
+  print(getSign(0));
+
+  // In array literal
+  let arr: array[int] = [
+    if true { 1 } else { 0 },
+    if false { 2 } else { 3 },
+    if true { 4 } else { 5 }
+  ];
+  print(arr[0]);
+  print(arr[1]);
+  print(arr[2]);
+
+  print("Test passed!");
+}

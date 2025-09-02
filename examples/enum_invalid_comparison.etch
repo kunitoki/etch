@@ -1,0 +1,15 @@
+// Test: Comparing enum with incompatible type
+type Color = enum {
+  Red;
+  Green;
+  Blue;
+};
+
+fn main() {
+  let color = Color.Red;
+  let number = 0;
+
+  // This should fail: comparing enum with int
+  let result = color == number;
+  print("Should not reach here");
+}

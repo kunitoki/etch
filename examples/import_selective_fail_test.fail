@@ -1,0 +1,5 @@
+examples/import_selective_fail_test.etch:13:9: error: unknown function: mul
+  12 |   // This should fail - mul is not imported even though it's exported from math.etch
+  13 |   print(mul(3, 4));  // Error: undefined function
+               ^
+  14 | }

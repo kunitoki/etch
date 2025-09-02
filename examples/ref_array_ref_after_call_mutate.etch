@@ -1,0 +1,31 @@
+// Test array element access after array passed to function
+
+type Node = object {
+    value: int;
+};
+
+type ArrayRef = ref[array[ref[Node]]];
+
+fn process_array(arr: ArrayRef) {
+    for i in 0 ..< #@arr {
+        @arr[i] = nil;
+    }
+}
+
+fn ~(n: Node) {
+    print("Destroying: " + string(n.value));
+}
+
+fn print_node(n: ref[Node]) {
+    if n != nil {
+        print(@n.value);
+    }
+}
+
+fn main() {
+    var arr = new[array[ref[Node]]]([new[Node](value: 1), new[Node](value: 2)]);
+
+    process_array(arr);
+
+    print_node(@arr[0]);
+}

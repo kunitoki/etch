@@ -1,0 +1,40 @@
+// Test weak ref in array - promotion after call should work
+// as long as the strong references are still alive
+type Node = object {
+    value: int;
+};
+
+fn process(nodes: array[weak[Node]]) {
+    // Just iterate
+    for i in 0 ..< #nodes {
+        let promoted: ref[Node] = nodes[i];
+        if promoted != nil {
+            print(promoted.value);
+        }
+    }
+}
+
+fn main() {
+    let node1 = new[Node](value: 1);
+    let node2 = new[Node](value: 2);
+
+    // Directly promote to check they work
+    let weak1: weak[Node] = node1;
+    let weak2: weak[Node] = node2;
+
+    let promoted1: ref[Node] = weak1;
+    if promoted1 != nil {
+        print(promoted1.value);
+    }
+
+    let promoted2: ref[Node] = weak2;
+    if promoted2 != nil {
+        print(promoted2.value);
+    }
+
+    // Check again
+    let promoted3: ref[Node] = weak1;
+    if promoted3 != nil {
+        print(promoted3.value);
+    }
+}

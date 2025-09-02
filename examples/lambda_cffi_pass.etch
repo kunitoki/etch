@@ -1,0 +1,19 @@
+// Lambda CFFI test: assign CFFI functions to function variables and lambda wrappers
+import ffi cmath {
+  fn sin(x: float) -> float;
+  fn cos(x: float) -> float;
+}
+
+fn main() -> void {
+  var pi: float = 3.14159;
+
+  // Wrap the C function in a lambda and assign it
+  let f = |x: float| -> float { return sin(x); };
+  let s: float = f(pi / 2.0);
+  print(s);
+
+  // Another lambda wrapper for cos
+  let g = |x: float| -> float { return cos(x); };
+  let c: float = g(0.0);
+  print(c);
+}

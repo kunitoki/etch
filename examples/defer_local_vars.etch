@@ -1,0 +1,14 @@
+fn test_defer() -> void {
+    var x = 1;
+
+    defer {
+        x = x + 1;
+    }
+
+    print(string(x));
+}
+
+fn main() -> int {
+    test_defer();
+    return 0;
+}

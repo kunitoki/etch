@@ -1,0 +1,24 @@
+// Test opCmpJmp fusion
+// if a < b should fuse to opCmpJmp
+
+fn main() {
+  let a = 10;
+  let b = 20;
+  if a < b {
+    print("a < b");
+  } else {
+    print("a >= b");
+  }
+
+  if a > b {
+    print("a > b");
+  } else {
+    print("a <= b");
+  }
+
+  if a == b {
+    print("a == b");
+  } else {
+    print("a != b");
+  }
+}

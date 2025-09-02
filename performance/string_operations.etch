@@ -1,0 +1,20 @@
+fn main() {
+    var res = "";
+    var count = 0;
+
+    // String operations benchmark
+    for i in 0 ..< 5000 {
+        var num = rand(9);
+        var str_num = string(num);
+
+        // String concatenation
+        res = res + str_num + ",";
+
+        // String length operations
+        count = count + #res;
+    }
+
+    print(count);
+    print(res);
+    print(#res);
+}

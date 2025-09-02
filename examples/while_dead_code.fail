@@ -1,0 +1,5 @@
+examples/while_dead_code.etch:11:3: error: unreachable code (while condition is always false)
+  10 |   // Test 1: while condition always false - should warn about dead code
+  11 |   while x > 100 {
+         ^
+  12 |     print(10 / 0);  // Dead loop body - should not cause division error

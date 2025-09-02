@@ -1,0 +1,14 @@
+// Debug lambda captures - step by step
+fn test() {
+  let x = 5;
+  // First try without captures
+  let f1 = |y: int| y + 1;
+  // Then try with captures
+  let f2 = [x] |y: int| x + y;
+  print("debug-f1 = " + string(f1(2)));
+  print("debug-f2 = " + string(f2(3)));
+}
+
+fn main() {
+  test();
+}

@@ -1,0 +1,36 @@
+// Test tuple unpacking
+
+fn test_basic_unpacking() {
+    // Basic unpacking
+    let [a, b, c] = tuple(1, 2, 3);
+    discard a, b, c;
+}
+
+fn test_heterogeneous_unpacking() {
+    // Heterogeneous types
+    let [num, text, flag] = tuple(42, "hello", true);
+    discard num, text, flag;
+}
+
+fn test_nested_tuple_unpacking() {
+    // Unpack with nested tuples
+    let inner = tuple(10, 20);
+    let [x, nested] = tuple(5, inner);
+    let a = nested[0];
+    let b = nested[1];
+    discard x, a, b;
+}
+
+fn test_unpacking_with_expressions() {
+    let x = 5;
+    let y = 10;
+    let [sum, product] = tuple(x + y, x * y);
+    discard sum, product;
+}
+
+fn main() {
+    test_basic_unpacking();
+    test_heterogeneous_unpacking();
+    test_nested_tuple_unpacking();
+    test_unpacking_with_expressions();
+}

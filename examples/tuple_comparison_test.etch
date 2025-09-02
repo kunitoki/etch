@@ -1,0 +1,26 @@
+// Test tuple comparison operators
+
+fn test_tuple_equality() {
+    let t1 = tuple(1, 2, 3);
+    let t2 = tuple(1, 2, 3);
+    let t3 = tuple(1, 2, 4);
+
+    // These should work
+    discard t1 == t2;
+    discard t1 != t3;
+    discard t2 != t3;
+}
+
+fn test_heterogeneous_tuple_equality() {
+    let t1: tuple[int, string, bool] = tuple(42, "hello", true);
+    let t2: tuple[int, string, bool] = tuple(42, "hello", true);
+    let t3: tuple[int, string, bool] = tuple(43, "hello", true);
+
+    discard t1 == t2;
+    discard t1 != t3;
+}
+
+fn main() {
+    test_tuple_equality();
+    test_heterogeneous_tuple_equality();
+}

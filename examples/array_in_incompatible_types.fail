@@ -1,0 +1,5 @@
+examples/array_in_incompatible_types.etch:3:19: error: 'in' operator: cannot check if 'string' is in array[int] - types must match
+  2 |     var x = [1, 2, 3, 4, 5, 6, 7];
+  3 |     print("Hello" not in x);
+                        ^
+  4 | }

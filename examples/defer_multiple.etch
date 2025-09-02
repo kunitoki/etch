@@ -1,0 +1,25 @@
+// Test multiple defer statements
+// Defers should execute in LIFO order (last deferred, first executed)
+
+fn test_multiple_defer() -> void {
+    print("Start");
+
+    defer {
+        print("First defer");
+    }
+
+    defer {
+        print("Second defer");
+    }
+
+    defer {
+        print("Third defer");
+    }
+
+    print("End");
+}
+
+fn main() -> int {
+    test_multiple_defer();
+    return 0;
+}

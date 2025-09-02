@@ -1,0 +1,29 @@
+fn factorial(n: int) -> int {
+    if n <= 1 {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+
+fn main() -> int {
+    print("Computing factorials and storing results:\n");
+
+    let f0 = factorial(0);
+    let f1 = factorial(1);
+    let f2 = factorial(2);
+    let f3 = factorial(3);
+    let f4 = factorial(4);
+    let f5 = factorial(5);
+
+    print("f0 = "); print(f0); print("\n");
+    print("f1 = "); print(f1); print("\n");
+    print("f2 = "); print(f2); print("\n");
+    print("f3 = "); print(f3); print("\n");
+    print("f4 = "); print(f4); print("\n");
+    print("f5 = "); print(f5); print("\n");
+
+    let sum = f0 + f1 + f2 + f3 + f4 + f5;
+    print("sum = "); print(sum); print("\n");
+
+    return 0;
+}

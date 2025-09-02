@@ -1,0 +1,7 @@
+Test 1 (while with bounds): 0
+Test 2 (while compound): -1
+Test 3 (while narrowing): -1
+Test 4 (for loop): 0
+Test 5 (for over array): 10
+
+✅ All loop invariant tests passed!

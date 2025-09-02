@@ -1,0 +1,5 @@
+examples/ref_weak_scope_unchecked_test.etch:19:19: error: potential null dereference: field access on variable 'promoted' that may be nil
+  18 |     // Unsafe: we dereference without checking if promoted is nil
+  19 |     print(promoted.value);
+                         ^
+  20 | }

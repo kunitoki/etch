@@ -1,0 +1,26 @@
+// Test: Array bounds checking with file-based indices
+// Shows safe array access with compile-time bounds verification
+
+fn main() -> void {
+    // Create array with known size
+    let data: array[int] = [10, 20, 30, 40, 50];
+
+    // Read a safe number from file to potentially use as index
+    let content = readFile("examples/data/file_safe_numbers.txt"); // Contains "10"
+    let file_number: int = match content {
+        ok(data) => {
+            match parseInt(data) {
+                ok(num) => num;
+                error(_) => 0;
+            };
+        }
+        error(_) => 0;
+    };
+
+    // Use file data in safe arithmetic, not as index
+    var safe_calc: int = file_number;
+    if safe_calc < 1000 {
+        safe_calc = safe_calc + data[0];  // Safe: using file data in arithmetic
+    }
+    print(safe_calc);
+}

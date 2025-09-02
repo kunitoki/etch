@@ -1,0 +1,7 @@
+fn main() -> void {
+	// Assignment of lambdas to variables
+	let f = |x: int| -> int { return x + 1; };
+	let g = f;
+	let v = g(5);
+	print("v = " + string(v));
+}

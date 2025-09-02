@@ -1,0 +1,8 @@
+fn main() -> void {
+  // Dead while loop with constant false condition
+  while false {
+    print(777);  // This should cause compilation error
+  }
+  
+  print(555);
+}

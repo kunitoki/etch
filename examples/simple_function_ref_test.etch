@@ -1,0 +1,13 @@
+// Simple function reference test
+fn addOne(x: int) -> int {
+  return x + 1;
+}
+
+fn applyFunc(x: int, f: fn(int) -> int) -> int {
+  return f(x);
+}
+
+fn main() {
+    let result = applyFunc(5, addOne);
+    print("Result: " + string(result));
+}

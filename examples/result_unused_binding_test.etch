@@ -1,0 +1,16 @@
+fn ensurePositive(value: int) -> result[int] {
+  if value < 0 {
+    return error("value must be positive");
+  }
+  return ok(value);
+}
+
+fn result_unused_binding() -> result[int] {
+  let used = ensurePositive(1)?;
+  let unused = ensurePositive(2)?;
+  return ok(used);
+}
+
+fn main() {
+  discard result_unused_binding();
+}

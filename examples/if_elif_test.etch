@@ -1,0 +1,35 @@
+// Test elif chains and boolean logic with and/or
+// Shows proper elif behavior and parentheses support
+
+fn main() -> void {
+  let x: int = rand(10);  // 0-10
+  print(x);
+  
+  // Test elif chain
+  if x < 3 {
+    print(100);  // 0, 1, 2
+  } elif x < 6 {
+    print(200);  // 3, 4, 5
+  } elif x < 9 {
+    print(300);  // 6, 7, 8
+  } else {
+    print(400);  // 9, 10
+  }
+  
+  // Test boolean logic with and/or
+  let a: bool = x > 5;
+  let b: bool = x < 8;
+  
+  if a and b {
+    print(500);  // x is 6 or 7
+  }
+  
+  if x == 0 or x == 10 {
+    print(600);  // edge cases
+  }
+  
+  // Test parentheses
+  if (x > 3 and x < 7) or x == 0 {
+    print(700);  // x in {0, 4, 5, 6}
+  }
+}

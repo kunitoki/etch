@@ -1,0 +1,13 @@
+=== Array of Refs Test ===
+Created array of 3 refs
+arr[0] = 1
+arr[1] = 2
+arr[2] = 3
+Destroying: 2
+Nullified arr[1]
+arr[0] = 1
+arr[1] = nil
+arr[2] = 3
+=== Test Complete ===
+Destroying: 3
+Destroying: 1

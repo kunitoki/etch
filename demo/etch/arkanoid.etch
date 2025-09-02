@@ -1,0 +1,393 @@
+// Arkanoid - Complete game in Etch using Raylib API
+// Both game logic AND rendering happen in this script!
+
+// Key codes (from raylib)
+let KEY_LEFT: int = 263;
+let KEY_RIGHT: int = 262;
+let KEY_A: int = 65;
+let KEY_D: int = 68;
+let KEY_SPACE: int = 32;
+let KEY_P: int = 80;
+
+// Import raylib host functions
+import host
+{
+    // Window & timing
+    fn getScreenWidth() -> int;
+    fn getScreenHeight() -> int;
+    fn getFrameTime() -> float;
+    fn targetFPS(fps: int);
+
+    // Input
+    fn isKeyDown(key: int) -> bool;
+    fn isKeyPressed(key: int) -> bool;
+
+    // Drawing
+    fn beginDrawing();
+    fn endDrawing();
+    fn clearBackground(color: int);
+    fn drawRectangle(x: int, y: int, width: int, height: int, color: int);
+    fn drawCircle(x: int, y: int, radius: float, color: int);
+    fn drawText(text: string, x: int, y: int, fontSize: int, color: int);
+
+    // Color helper
+    fn rgb(r: int, g: int, b: int) -> int;
+}
+
+// Color constants
+let COLOR_WHITE: int = rgb(255, 255, 255);
+let COLOR_DARKGRAY: int = rgb(15, 26, 26);
+let COLOR_RED: int = rgb(255, 0, 0);
+let COLOR_ORANGE: int = rgb(255, 165, 0);
+let COLOR_YELLOW: int = rgb(255, 255, 0);
+let COLOR_GREEN: int = rgb(0, 255, 0);
+let COLOR_BLUE: int = rgb(0, 0, 255);
+
+// Game constants
+let PADDLE_WIDTH: float = 100.0;
+let PADDLE_HEIGHT: float = 20.0;
+let PADDLE_SPEED: float = 480.0;  // pixels per second
+
+let BALL_RADIUS: float = 8.0;
+let BALL_SPEED: float = 290.0;  // pixels per second
+let PADDLE_HIT_SKEW_FACTOR: float = 8.0;  // how much horizontal speed is added based on hit position
+
+let BRICK_ROWS: int = 5;
+let BRICK_COLS: int = 10;
+let BRICK_WIDTH: float = 78.0;
+let BRICK_HEIGHT: float = 25.0;
+let BRICK_PADDING: float = 2.0;
+
+// Game state (global variables maintained across frames)
+var paddleX: float = 400.0;
+var paddleY: float = 550.0;
+
+var ballX: float = 400.0;
+var ballY: float = 300.0;
+var ballVelX: float = 4.0;
+var ballVelY: float = -4.0;
+
+var bricks: array[bool] = [];
+var score: int = 0;
+var gameOver: bool = false;
+var won: bool = false;
+var paused: bool = false;
+
+// Physics accumulator for fixed timestep
+var accumulator: float = 0.0;
+
+// Helper functions
+fn absFloat(x: float) -> float
+{
+    if x < 0.0 { return 0.0 - x; }
+    return x;
+}
+
+fn minFloat(a: float, b: float) -> float
+{
+    if a < b { return a; }
+    return b;
+}
+
+fn maxFloat(a: float, b: float) -> float
+{
+    if a > b { return a; }
+    return b;
+}
+
+// Initialize game
+fn initGame()
+{
+    let screenWidth: int = getScreenWidth();
+
+    paddleX = float(screenWidth) / 2.0;
+    paddleY = 550.0;
+
+    ballX = float(screenWidth) / 2.0;
+    ballY = 300.0;
+    ballVelX = BALL_SPEED;
+    ballVelY = -BALL_SPEED;
+
+    // Initialize bricks
+    bricks = [];
+    var i: int = 0;
+    while i < BRICK_ROWS * BRICK_COLS
+    {
+        bricks = bricks + [true];
+        i = i + 1;
+    }
+
+    score = 0;
+    gameOver = false;
+    won = false;
+    accumulator = 0.0;
+    paused = false;
+
+    print("Game initialized!");
+}
+
+// Check collision between ball and rectangle
+fn checkBallRectCollision(bx: float, by: float, br: float,
+                          rx: float, ry: float, rw: float, rh: float) -> bool
+{
+    // Find closest point on rectangle to ball center
+    let closestX: float = maxFloat(rx, minFloat(bx, rx + rw));
+    let closestY: float = maxFloat(ry, minFloat(by, ry + rh));
+
+    // Calculate distance
+    let distX: float = bx - closestX;
+    let distY: float = by - closestY;
+    let distSq: float = distX * distX + distY * distY;
+
+    return distSq <= br * br;
+}
+
+// Update paddle
+fn updatePaddle(dt: float)
+{
+    let screenWidth: int = getScreenWidth();
+
+    // Move paddle
+    if isKeyDown(KEY_LEFT) or isKeyDown(KEY_A)
+    {
+        paddleX = paddleX - PADDLE_SPEED * dt;
+    }
+
+    if isKeyDown(KEY_RIGHT) or isKeyDown(KEY_D)
+    {
+        paddleX = paddleX + PADDLE_SPEED * dt;
+    }
+
+    // Clamp to screen
+    let halfWidth: float = PADDLE_WIDTH / 2.0;
+    if paddleX < halfWidth
+    {
+        paddleX = halfWidth;
+    }
+
+    if paddleX > float(screenWidth) - halfWidth
+    {
+        paddleX = float(screenWidth) - halfWidth;
+    }
+}
+
+// Update ball and physics
+fn updateBall(dt: float)
+{
+    let screenWidth: int = getScreenWidth();
+    let screenHeight: int = getScreenHeight();
+
+    // Move ball
+    ballX = ballX + ballVelX * dt;
+    ballY = ballY + ballVelY * dt;
+
+    // Wall collisions
+    if ballX - BALL_RADIUS <= 0.0 or ballX + BALL_RADIUS >= float(screenWidth)
+    {
+        ballVelX = 0.0 - ballVelX;
+    }
+
+    // Ceiling collision
+    if ballY - BALL_RADIUS <= 0.0
+    {
+        ballVelY = 0.0 - ballVelY;
+    }
+
+    // Check if ball fell (game over)
+    if ballY > float(screenHeight)
+    {
+        gameOver = true;
+    }
+
+    // Paddle collision
+    let paddleLeft: float = paddleX - PADDLE_WIDTH / 2.0;
+    if checkBallRectCollision(ballX, ballY, BALL_RADIUS,
+                              paddleLeft, paddleY, PADDLE_WIDTH, PADDLE_HEIGHT)
+    {
+        ballVelY = 0.0 - absFloat(ballVelY);
+
+        // Add spin based on where it hit
+        let hitOffset: float = ballX - paddleX;
+        ballVelX = hitOffset * PADDLE_HIT_SKEW_FACTOR;
+    }
+
+    // Brick collisions
+    var row: int = 0;
+    while row < BRICK_ROWS
+    {
+        var col: int = 0;
+        while col < BRICK_COLS
+        {
+            let index: int = row * BRICK_COLS + col;
+
+            if bricks[index]
+            {
+                let brickX: float = float(col) * (BRICK_WIDTH + BRICK_PADDING) + BRICK_PADDING;
+                let brickY: float = float(row) * (BRICK_HEIGHT + BRICK_PADDING) + BRICK_PADDING + 40.0;
+
+                if checkBallRectCollision(ballX, ballY, BALL_RADIUS,
+                                          brickX, brickY, BRICK_WIDTH, BRICK_HEIGHT)
+                {
+                    bricks[index] = false;
+                    score = score + 10;
+
+                    // Bounce direction based on hit side
+                    let brickCenterX: float = brickX + BRICK_WIDTH / 2.0;
+                    let brickCenterY: float = brickY + BRICK_HEIGHT / 2.0;
+
+                    let dx: float = absFloat(ballX - brickCenterX);
+                    let dy: float = absFloat(ballY - brickCenterY);
+
+                    if dx > dy {
+                        ballVelX = 0.0 - ballVelX;
+                    } else {
+                        ballVelY = 0.0 - ballVelY;
+                    }
+                }
+            }
+
+            col = col + 1;
+        }
+
+        row = row + 1;
+    }
+
+    // Check win condition
+    var activeBricks: int = 0;
+    var i: int = 0;
+    for i in 0 ..< BRICK_ROWS * BRICK_COLS
+    {
+        if bricks[i]
+        {
+            activeBricks = activeBricks + 1;
+        }
+    }
+
+    if activeBricks == 0
+    {
+        won = true;
+    }
+}
+
+// Render game
+fn render()
+{
+    let screenWidth: int = getScreenWidth();
+    let screenHeight: int = getScreenHeight();
+
+    // beginDrawing();
+    clearBackground(COLOR_DARKGRAY);
+
+    // Draw paddle
+    let paddleLeft: int = int(paddleX - PADDLE_WIDTH / 2.0);
+    let paddleY_int: int = int(paddleY);
+    drawRectangle(paddleLeft, paddleY_int, int(PADDLE_WIDTH), int(PADDLE_HEIGHT), COLOR_WHITE);
+
+    // Draw ball
+    let ballX_int: int = int(ballX);
+    let ballY_int: int = int(ballY);
+    drawCircle(ballX_int, ballY_int, BALL_RADIUS, COLOR_WHITE);
+
+    // Draw bricks
+    var row: int = 0;
+    while row < BRICK_ROWS
+    {
+        let color = match row {
+            0 => COLOR_RED,
+            1 => COLOR_ORANGE,
+            2 => COLOR_YELLOW,
+            3 => COLOR_GREEN,
+            _ => COLOR_BLUE
+        };
+
+        var col: int = 0;
+        while col < BRICK_COLS
+        {
+            let index: int = row * BRICK_COLS + col;
+
+            if bricks[index]
+            {
+                let x: int = int(float(col) * (BRICK_WIDTH + BRICK_PADDING) + BRICK_PADDING);
+                let y: int = int(float(row) * (BRICK_HEIGHT + BRICK_PADDING) + BRICK_PADDING + 40.0);
+                drawRectangle(x, y, int(BRICK_WIDTH), int(BRICK_HEIGHT), color);
+            }
+
+            col = col + 1;
+        }
+
+        row = row + 1;
+    }
+
+    // Draw score
+    drawText("Score: " + string(score), 10, 10, 20, COLOR_WHITE);
+
+    // Draw pause indicator
+    if paused
+    {
+        drawText("PAUSED", screenWidth / 2 - 40, 10, 20, COLOR_YELLOW);
+    }
+
+    // Game over / won messages
+    if gameOver
+    {
+        drawText("GAME OVER!", screenWidth / 2 - 80, screenHeight / 2 - 20, 30, COLOR_RED);
+        drawText("Press SPACE to restart", screenWidth / 2 - 110, screenHeight / 2 + 20, 20, COLOR_WHITE);
+    }
+    elif won
+    {
+        drawText("YOU WIN!", screenWidth / 2 - 60, screenHeight / 2 - 20, 30, COLOR_GREEN);
+        drawText("Press SPACE to restart", screenWidth / 2 - 110, screenHeight / 2 + 20, 20, COLOR_WHITE);
+    }
+    else
+    {
+        drawText("P: Pause", screenWidth - 100, 10, 15, COLOR_WHITE);
+    }
+
+    // endDrawing();
+}
+
+// Main update function called from C++ every frame
+fn update()
+{
+    let dt_fixed: float = 1.0 / 60.0;  // 60 FPS physics
+
+    // Check for pause toggle (P key)
+    if isKeyPressed(KEY_P)
+    {
+        paused = not paused;
+    }
+
+    // Check for restart (Space key)
+    if isKeyPressed(KEY_SPACE)
+    {
+        if gameOver or won
+        {
+            initGame();
+        }
+    }
+
+    // Accumulate frame time
+    let frameTime: float = getFrameTime();
+    // Clamp to prevent spiral of death
+    let clampedFrameTime: float = if frameTime > 0.25 { 0.25 } else { frameTime };
+    accumulator = accumulator + clampedFrameTime;
+
+    // Update game logic in fixed steps
+    while accumulator >= dt_fixed
+    {
+        if not paused and not gameOver and not won
+        {
+            updatePaddle(dt_fixed);
+            updateBall(dt_fixed);
+        }
+        accumulator = accumulator - dt_fixed;
+    }
+
+    render();
+}
+
+// Initialize on first load
+fn main()
+{
+    initGame();
+}

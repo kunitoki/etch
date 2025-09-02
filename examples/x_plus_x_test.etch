@@ -1,0 +1,5 @@
+fn main() -> void {
+    let x: int = 5;
+    let r: int = x + x;
+    print(r);
+}

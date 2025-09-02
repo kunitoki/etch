@@ -1,0 +1,20 @@
+// Test: Match with different return types (should be same)
+fn processData(data: result[int]) -> string {
+  return match data {
+    ok(value) => {
+      if value > 0 {
+        "positive"  // string
+      } else {
+        0  // int - should fail here
+      }
+    }
+    error(err) => {
+      "error: " + err  // string
+    }
+  };
+}
+
+fn main() {
+  let result = processData(ok(42));
+  print(result);
+}

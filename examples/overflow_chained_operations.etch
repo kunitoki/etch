@@ -1,0 +1,63 @@
+// Test: Chained operations that might accumulate overflow risk
+// Tests if the prover properly tracks ranges through multiple operations
+
+fn testChainedAddition() -> int {
+  let a = rand(1000000000);  // [0, 1B]
+  let b = rand(1000000000);  // [0, 1B]
+  let c = rand(1000000000);  // [0, 1B]
+
+  // First addition: [0, 2B] - safe
+  let sum1 = a + b;
+
+  // Second addition: [0, 3B] - safe
+  let sum2 = sum1 + c;
+
+  return sum2;
+}
+
+fn testMixedOperations() -> int {
+  let x = rand(1000000);  // [0, 1M]
+  let y = rand(1000);     // [0, 1K]
+
+  // Multiply: [0, 1B] - safe
+  let product = x * y;
+
+  // Add large value: might overflow if not careful
+  let z = rand(9000000000000000000);  // [0, 9E18]
+  let result = product + z;
+
+  return result;
+}
+
+fn testAccumulation() -> int {
+  var acc = 0;
+  let large = rand(2000000000);  // [0, 2B]
+
+  // Accumulate 5 times: could reach 10B, which is safe
+  acc = acc + large;
+  acc = acc + large;
+  acc = acc + large;
+  acc = acc + large;
+  acc = acc + large;  // acc could be [0, 10B] - safe
+
+  return acc;
+}
+
+fn main() -> void {
+  print("Test chained addition:");
+  let r1 = testChainedAddition();
+  print("Result: " + string(r1));
+  print("");
+
+  print("Test mixed operations:");
+  let r2 = testMixedOperations();
+  print("Result: " + string(r2));
+  print("");
+
+  print("Test accumulation:");
+  let r3 = testAccumulation();
+  print("Result: " + string(r3));
+  print("");
+
+  print("✅ Chained operations tests passed!");
+}

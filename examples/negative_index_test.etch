@@ -1,0 +1,7 @@
+fn main() -> void {
+    // Test negative index detection
+    let arr: array[int] = [10, 20, 30];
+    
+    // This should be caught as negative index
+    let bad: int = arr[-1];
+}

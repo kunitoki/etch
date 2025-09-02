@@ -1,0 +1,16 @@
+fn conditionalReturn(x: int) {
+    if x > 10 {
+        return 20;
+    } elif x > 5 {
+        return 10;
+    } else {
+        return 0;
+    }
+}
+
+fn main() -> void {
+    seed(42);
+    let x: int = rand(0, 20);  // [0, 20]
+    let result: int = conditionalReturn(x);
+    print(result);
+}

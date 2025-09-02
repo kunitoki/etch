@@ -1,0 +1,50 @@
+fn counter(n: int) {
+    var i = 0;
+    while i < n {
+        yield i;
+        i = i + 1;
+    }
+    return i;
+}
+
+fn main() {
+    let c = spawn counter(3);
+
+    match resume c {
+        ok(v1) => {
+            print("First value: ");
+            print(v1);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume c {
+        ok(v2) => {
+            print("Second value: ");
+            print(v2);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume c {
+        ok(v3) => {
+            print("Third value: ");
+            print(v3);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    print("All values retrieved!");
+}

@@ -1,0 +1,41 @@
+// Basic union type test
+
+// Type alias for union
+type Number = int | float;
+
+// Variables with union types
+let x: int | float = 10;
+let y: Number = 3.14;
+
+// Function taking union type
+fn processNumber(n: int | float) -> string {
+    return match n {
+        i: int => {
+            "Integer: " + string(i);
+        }
+        f: float => {
+            "Float: " + string(f);
+        }
+    };
+}
+
+// Function returning union type
+fn getNumber(isInt: bool) -> int | float {
+    if isInt {
+        return 42;
+    } else {
+        return 3.14159;
+    }
+}
+
+fn main() {
+    // Test the functions
+    print(processNumber(x));
+    print(processNumber(y));
+
+    let z = getNumber(true);
+    print(processNumber(z));
+
+    let w = getNumber(false);
+    print(processNumber(w));
+}

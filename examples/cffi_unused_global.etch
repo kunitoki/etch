@@ -1,0 +1,14 @@
+let pi = 3.14159;
+
+import ffi cmath {
+  fn sin(x: float) -> float;
+}
+
+fn xyz() -> void {
+  var sine: float = sin(pi / 2.0);
+  print(sine);  // Should print ~1.0
+}
+
+fn main() -> void {
+  xyz();
+}

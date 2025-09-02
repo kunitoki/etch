@@ -1,0 +1,17 @@
+// Attempting to resume a lambda that creates a coroutine rather than the coroutine itself
+fn numbers() {
+  yield 1;
+  return 2;
+}
+
+fn main() {
+  let makeCoro = || -> coroutine[int] {
+    return spawn numbers();
+  };
+
+  let value = resume makeCoro;
+  match value {
+    ok(v) => print("Got " + string(v) + " from coroutine");
+    error(e) => print("Got unexpected value: " + e);
+  }
+}

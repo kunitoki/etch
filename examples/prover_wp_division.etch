@@ -1,0 +1,57 @@
+// Test: Weakest precondition - division by zero checking
+// The prover should infer that divisor must be non-zero
+
+fn divide(numerator: int, divisor: int) -> int {
+  // The WP calculator should infer: requires divisor != 0
+  return numerator / divisor;  // This requires divisor to be non-zero
+}
+
+fn modulo(value: int, divisor: int) -> int {
+  // The WP calculator should infer: requires divisor != 0
+  return value % divisor;  // This requires divisor to be non-zero
+}
+
+fn testSafeDivision() -> int {
+  // Calling with non-zero divisor
+  return divide(100, 5);
+}
+
+fn testSafeModulo() -> int {
+  // Calling with non-zero divisor
+  return modulo(17, 5);
+}
+
+fn testWithCheck() -> int {
+  let divisor = match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => 1;
+    };
+    error(_) => 1;
+  };
+
+  // Check precondition before calling
+  if divisor != 0 {
+    return divide(50, divisor);
+  }
+  return -1;
+}
+
+fn main() -> void {
+  print("Test safe division:");
+  let result1 = testSafeDivision();
+  print("Result: " + string(result1));
+  print("");
+
+  print("Test safe modulo:");
+  let result2 = testSafeModulo();
+  print("Result: " + string(result2));
+  print("");
+
+  print("Test with check:");
+  let result3 = testWithCheck();
+  print("Result: " + string(result3));
+  print("");
+
+  print("✅ WP division tests passed!");
+}

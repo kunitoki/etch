@@ -1,0 +1,20 @@
+fn sum_with_condition(n: int) -> int {
+  var acc: int = 0;
+  var i: int = 0;
+
+  while i < n {
+    if i % 2 == 0 {
+      acc = acc + 3;
+    } else {
+      acc = acc + 1;
+    }
+    i = i + 1;
+  }
+
+  return acc;
+}
+
+fn main() -> void {
+  print(sum_with_condition(4));
+  print(sum_with_condition(7));
+}

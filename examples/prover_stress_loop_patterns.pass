@@ -1,0 +1,12 @@
+Test 1 (multiple exits): 5
+Test 2 (guarded access): 0
+Test 3 (while with increment): 0
+Test 4 (conditional access): 5
+Test 5 (multiple arrays): 5
+Test 6 (reverse loop): 9
+Test 7 (stride loop): 0
+Test 8 (complex bounds): -1
+Test 9 (nested different ranges): 0
+Test 10 (while multiple conditions): -1
+
+✅ All loop pattern stress tests passed!

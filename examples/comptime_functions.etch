@@ -1,0 +1,28 @@
+fn add(a: int, b: int) -> int {
+    return a + b;
+}
+
+fn multiply(a: int, b: int) -> int {
+    return a * b;
+}
+
+fn square(x: int) -> int {
+    return x * x;
+}
+
+fn main() -> void {
+    let sum: int = comptime(add(10, 20));
+    print(sum);
+    
+    let product: int = comptime(multiply(6, 7));
+    print(product);
+    
+    let squared: int = comptime(square(8));
+    print(squared);
+    
+    let combined: int = comptime(add(square(3), multiply(4, 5)));
+    print(combined);
+    
+    let expression: int = comptime(add(10, multiply(3, 4)) + square(2));
+    print(expression);
+}

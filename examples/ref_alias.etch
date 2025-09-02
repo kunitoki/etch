@@ -1,0 +1,13 @@
+type StringRef = ref[string];
+
+fn updateString(s: StringRef) {
+    print("In xyz: " + @s);
+    @s = "modified in xyz";
+}
+
+fn main() {
+    let greet = new[string]("hi");
+    print("initial: " + @greet);
+    updateString(greet);
+    print("updated: " + @greet);
+}

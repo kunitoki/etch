@@ -1,0 +1,14 @@
+// Test: WP should catch out of bounds array access
+// This test should FAIL at compile time
+
+fn unsafeAccess(idx: int) -> int {
+  // WP should infer: requires idx >= 0 and idx < 5
+  let arr: array[int] = [1, 2, 3, 4, 5];
+  return arr[idx];
+}
+
+fn main() -> void {
+  // This should fail: idx = 10 is out of bounds
+  let result = unsafeAccess(10);
+  print("Result: " + string(result));
+}

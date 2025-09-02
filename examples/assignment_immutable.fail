@@ -1,0 +1,5 @@
+examples/assignment_immutable.etch:3:5: error: cannot assign to immutable variable 'x'
+  2 |     let x: int = 42;  // immutable variable
+  3 |     x = 100;          // error: cannot assign to immutable variable
+          ^
+  4 | }

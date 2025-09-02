@@ -1,0 +1,38 @@
+=== Array Concatenation Tests ===
+Basic concat: a + b
+Expected length: 6
+Actual length:
+6
+First element should be 1:
+1
+Last element should be 6:
+6
+String concat result:
+hello world
+String length should be 11:
+11
+Single + single length should be 2:
+2
+Nums + single length should be 3:
+3
+First result elements:
+10
+20
+Second result elements:
+1
+2
+10
+Triple concat length should be 3:
+3
+Elements should be 1, 2, 3:
+1
+2
+3
+Slice and rejoin length should be 4:
+4
+Should skip element 3, first few elements:
+1
+2
+4
+5
+=== All Array Concatenation Tests Complete ===

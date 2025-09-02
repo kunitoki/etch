@@ -1,0 +1,19 @@
+// Test: Variable not initialized in nested branch (should FAIL)
+
+fn main() -> void {
+  var x: int;
+  var cond1: bool = true;
+  var cond2: bool = false;
+
+  if cond1 {
+    if cond2 {
+      x = 100;
+    }
+    // Missing else - x not initialized when cond2 is false
+  } else {
+    x = 200;
+  }
+
+  let y: int = x; // Error: x not initialized in inner else path
+  print(y);
+}

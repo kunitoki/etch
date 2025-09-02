@@ -1,0 +1,44 @@
+// Test: Weakest precondition - array bounds checking
+// The prover should infer that idx must be in [0, 9] from the array access
+
+fn getElement(idx: int) -> int {
+  // The WP calculator should infer: requires idx >= 0 and idx < 10
+  let arr: array[int] = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+  return arr[idx];  // This requires idx to be valid
+}
+
+fn testSafe() -> int {
+  // Calling with safe index
+  let i = 5;
+  return getElement(i);
+}
+
+fn testWithCheck() -> int {
+  let idx = match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => 0;
+    };
+    error(_) => 0;
+  };
+
+  // Check precondition before calling
+  if idx >= 0 and idx < 10 {
+    return getElement(idx);
+  }
+  return -1;
+}
+
+fn main() -> void {
+  print("Test safe call:");
+  let result1 = testSafe();
+  print("Result: " + string(result1));
+  print("");
+
+  print("Test with check:");
+  let result2 = testWithCheck();
+  print("Result: " + string(result2));
+  print("");
+
+  print("✅ WP array bounds tests passed!");
+}

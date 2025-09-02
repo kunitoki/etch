@@ -1,0 +1,12 @@
+fn main() -> void {
+    var x: option[int] = some(42);
+    match x {
+        some(num) => print(num),
+        none => print(0);
+    }
+    x = none;
+    match x {
+        some(num) => print(num),
+        none => print(0);
+    }
+}

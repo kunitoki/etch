@@ -1,0 +1,36 @@
+fn main() -> void {
+    let embedded_config = match comptime(readFile("examples/data/config.txt")) {
+        ok(content) => content;
+        error(_) => "";
+    };
+    print(embedded_config);
+
+    comptime {
+        let config_content: result[string] = readFile("examples/data/config.txt");
+        print(config_content);
+
+        let debug_flag: int = 1;
+        if debug_flag == 1 {
+            print(999);
+        }
+
+        let i: int = 1;
+        while i <= 3 {
+            print(i);
+            i = i + 1;
+        }
+
+        match config_content {
+            ok(content) => inject("injected_var", "string", content);
+            error(reason) => inject("injected_var", "string", "");
+        };
+
+        inject("injected_num", "int", 42);
+        inject("injected_i", "int", i);
+    }
+
+    print(42);
+    print(injected_var);
+    print(injected_num);
+    print(injected_i);
+}

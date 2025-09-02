@@ -1,0 +1,32 @@
+// While loop dead code detection test
+// Shows range-based analysis catching impossible while conditions
+
+fn main() -> void {
+  var x: int = rand(10, 50);   // Range: [10, 50]
+  let y: int = rand(5);        // Range: [0, 5]
+
+  print(111);  // Execution marker
+
+  // Test 1: while condition always false - should warn about dead code
+  while x > 100 {
+    print(10 / 0);  // Dead loop body - should not cause division error
+  }
+
+  // Test 2: Another impossible while condition
+  while y >= 20 {
+    print(20 / 0);  // Dead loop body
+  }
+
+  // Test 3: While condition with < operator
+  while x < 5 {
+    print(30 / 0);  // Dead loop body (min(x) = 10 >= 5)
+  }
+
+  // Test 4: This should work (possible condition, though might not execute)
+  while x > 25 {
+    print(400);  // Possible: some values in [10,50] are > 25
+    x = x - 1;   // Would need to break somehow in real usage
+  }
+
+  print(222);  // End marker
+}

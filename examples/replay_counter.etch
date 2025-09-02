@@ -1,0 +1,13 @@
+fn main() -> int {
+    print("Counting to 10:");
+
+    var counter = 0;
+    while counter < 10 {
+        print("  counter = " + string(counter));
+        counter = counter + 1;
+    }
+
+    print("Final: " + string(counter));
+
+    return 0;
+}

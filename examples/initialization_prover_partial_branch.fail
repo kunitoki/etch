@@ -1,0 +1,5 @@
+examples/initialization_prover_partial_branch.etch:12:16: error: use of uninitialized variable 'x' - variable may not be initialized in all control flow paths
+  11 |
+  12 |   let y: int = x; // Error: x not initialized in else path
+                      ^
+  13 |   print(y);

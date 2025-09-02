@@ -1,0 +1,40 @@
+// Game-like usage of rand()
+// Tests: Practical usage patterns, multiple random calls
+
+fn roll_dice() -> int {
+  return rand(1, 6);  // Standard die: 1-6
+}
+
+fn random_damage(base: int) -> int {
+  let variance: int = rand(5);  // 0 to +5
+  return base + variance;
+}
+
+fn main() -> void {
+  print(777);  // Start marker
+
+  // Simulate dice rolls
+  let roll1: int = roll_dice();
+  let roll2: int = roll_dice();
+  print(roll1);
+  print(roll2);
+
+  // Simulate damage calculation
+  let base_damage: int = 20;
+  let actual_damage: int = random_damage(base_damage);
+  print(actual_damage);  // Should be 15-30
+
+  // Random choice simulation
+  let choice: int = rand(3);  // 0, 1, or 2
+  if choice == 0 {
+    print(100);
+  } else {
+    if choice == 1 {
+      print(200);
+    } else {
+      print(300);
+    }
+  }
+
+  print(555);  // End marker
+}

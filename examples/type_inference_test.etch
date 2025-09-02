@@ -1,0 +1,49 @@
+// Test type inference for variable declarations
+// Now you can omit ": type" for simple cases!
+
+fn main() -> void {
+  // Type inference from literals - no ": type" needed!
+  let x = 42;           // inferred as int
+  let pi = 3.14159;     // inferred as float
+  let msg = "Hello!";   // inferred as string
+  let flag = true;      // inferred as bool
+
+  // Type inference from arrays
+  let nums = [1, 2, 3]; // inferred as array[int]
+  let words = ["a", "b"]; // inferred as array[string]
+
+  // Type inference from references
+  let ref_val = new(42); // inferred as ref[int]
+
+  // Use the inferred variables to avoid unused variable errors
+  print(x);
+  print(pi);
+  print(msg);
+  print(flag);
+  print(nums[0]);
+  print(words[0]);
+  print(deref(ref_val));
+
+  // You can still use explicit types when you want to
+  let explicit_int: int = 100;
+  let explicit_str: string = "explicit";
+  print(explicit_int);
+  print(explicit_str);
+
+  // Variables without initializers still need explicit types
+  var counter: int = 0;
+  var name: string = "test";
+  print(counter);
+  print(name);
+
+  // Both styles work together seamlessly:
+  let inferred_count = 0;        // inferred as int
+  let explicit_limit: int = 100; // explicitly typed
+  print(inferred_count);
+  print(explicit_limit);
+
+  // Was failing
+  seed(42);
+  var xxx = rand(10) % 2;
+  print(xxx);
+}

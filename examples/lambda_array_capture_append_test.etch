@@ -1,0 +1,14 @@
+// Lambda captures an array and returns a new array with an appended value
+fn makeAppender(base: array[int]) -> (fn(int) -> array[int]) {
+  return [base] |value: int| -> array[int] {
+    return base + [value];
+  };
+}
+
+fn main() {
+  let append = makeAppender([3, 4]);
+  let updated = append(9);
+  print("len=" + string(#updated));
+  // array length is known (base 2 + appended element)
+  print("last=" + string(updated[2]));
+}

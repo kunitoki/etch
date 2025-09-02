@@ -1,0 +1,20 @@
+fn main() {
+    var data: array[int] = [100, 50, 20];
+    var idx: int = 1;
+
+    data[idx] += 3;
+    data[0] += 2;
+    data[idx] *= 4;
+    data[2] /= 2;
+    data[2] %= 6;
+
+    data[idx] += 13;
+    data[0] -= 120;
+    data[idx] *= 140;
+    data[2] /= 2;
+    data[2] %= 3;
+
+    print(data[0]);
+    print(data[1]);
+    print(data[2]);
+}

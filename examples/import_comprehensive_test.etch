@@ -1,0 +1,27 @@
+// Comprehensive test for module import functionality
+// Tests: exported functions, multiple imports, using imported functions
+
+import lib/math
+
+fn main() {
+  // Test basic exported functions
+  print(add(10, 20));      // 30
+  print(sub(100, 42));     // 58
+  print(mul(6, 7));        // 42
+  print(square(5));        // 25
+
+  // Test that we can use imported functions in expressions
+  let result: int = add(mul(3, 4), square(2));
+  print(result);           // 16 (3*4 + 2*2)
+
+  // Test chaining imported functions
+  let chain: int = square(add(2, 3));
+  print(chain);            // 25 (square(5))
+
+  // Test imported functions with variables
+  let x = 10;
+  let y = 5;
+  print(add(x, y));        // 15
+  print(sub(x, y));        // 5
+  print(mul(x, y));        // 50
+}

@@ -1,0 +1,48 @@
+// This program triggers an internal compiler error: "key not found: 2"
+// Saved for debugging purposes
+
+type Node = object {
+  value: int;
+  next: ref[Node];
+  prev: ref[Node];
+};
+
+// Dummy sentinel node (creates a self-loop)
+let sentinel = new[Node](value: -1, next: nil, prev: nil);
+
+// Global to keep nodes alive and create cycles
+var global_head: ref[Node] = sentinel;
+
+fn create_cycle_chain(count: int) -> ref[Node] {
+  // Create first node
+  let first = new[Node](value: 0, next: sentinel, prev: sentinel);
+  var current = first;
+
+  // Create chain with forward references
+  for i in 1..<count {
+    let node = new[Node](value: i, next: sentinel, prev: current);
+    current.next = node;  // This creates references that need tracking
+    current = node;
+  }
+
+  // Create cycle: last node points back to first
+  current.next = first;
+  first.prev = current;
+
+  return first;
+}
+
+fn main() -> int {
+  // Each call creates reference cycles
+  // Old cycles will be orphaned and need GC
+  global_head = create_cycle_chain(50);
+
+  // Compute sum using just the first node
+  let sum = global_head.value;
+
+  print("Created cycle chain with 50 nodes");
+
+  discard sum;
+
+  return 0;
+}

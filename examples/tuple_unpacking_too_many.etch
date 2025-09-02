@@ -1,0 +1,6 @@
+// Tuple unpacking with too many variables
+fn main() {
+    let t = (1, 2);
+    let [a, b, c, d] = t;  // Error: tuple has 2 elements but 4 variables
+    discard a, b, c, d;
+}

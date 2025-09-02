@@ -1,0 +1,34 @@
+type X = int;
+type Y = distinct int;
+type Z = object {
+    a: int;
+    b: string;
+};
+
+fn main() {
+    let x: int = 42;
+    let xx: X = 42;
+    let y: Y = 42;
+    let z: Z = { a:42, b:"hello" };
+
+    print(typeof x == typeof x); // true
+    print(typeof x != typeof x); // false
+
+    print(typeof x == typeof xx); // true
+    print(typeof x != typeof xx); // false
+
+    print(typeof xx == typeof x); // true
+    print(typeof xx != typeof x); // false
+
+    print(typeof y == typeof x); // false
+    print(typeof y != typeof x); // true
+
+    print(typeof y == typeof x); // false
+    print(typeof y != typeof x); // true
+
+    print(typeof x == typeof z); // false
+    print(typeof x != typeof z); // true
+
+    print(typeof z == typeof x); // false
+    print(typeof z != typeof x); // true
+}

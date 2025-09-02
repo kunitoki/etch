@@ -1,0 +1,5 @@
+examples/length_error_test.etch:5:20: error: length operator # requires array or string type, got int
+  4 |     // This should be caught by type checker - using # on non-array
+  5 |     let bad: int = #x;
+                         ^
+  6 | }

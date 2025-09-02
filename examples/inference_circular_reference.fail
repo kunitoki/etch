@@ -1,0 +1,5 @@
+examples/inference_circular_reference.etch:3:11: error: use of undeclared variable 'y'
+  2 | fn main() {
+  3 |   let x = y + 1;  // y is not defined yet
+                ^
+  4 |   let y = x + 2;  // x depends on y - circular dependency

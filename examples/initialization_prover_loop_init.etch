@@ -1,0 +1,15 @@
+// Test: Variable only initialized inside a loop (should FAIL)
+
+fn main() -> void {
+  var x: int;
+  var count: int = rand(10);
+
+  while count > 5 {
+    x = 100; // Initialization inside loop
+    count = count - 1;
+  }
+
+  // Loop might never execute, x might be uninitialized
+  let y: int = x; // Error: loop might not run, x uninitialized
+  print(y);
+}

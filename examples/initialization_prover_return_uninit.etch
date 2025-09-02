@@ -1,0 +1,11 @@
+// Test: Returning uninitialized value (should FAIL)
+
+fn getValue() -> int {
+  var x: int;
+  return x; // Error: returning uninitialized variable
+}
+
+fn main() -> void {
+  let val: int = getValue();
+  print(val);
+}

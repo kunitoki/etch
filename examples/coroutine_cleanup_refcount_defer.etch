@@ -1,0 +1,58 @@
+// Test that refcounted objects in coroutines are properly cleaned up
+type Node = object {
+    value: int;
+    next: ref[Node];
+};
+
+fn ~(self: Node) {
+    print("Destructor called for Node with value:");
+    print(self.value);
+}
+
+fn create_list() -> ref[Node] {
+    let head = new[Node](value: 1, next: nil);
+    let second = new[Node](value: 2, next: nil);
+    head.next = second;
+    return head;
+}
+
+fn coroutine_with_refs() {
+    let list = create_list();
+    print("Created list");
+    yield 1;
+
+    print("Coroutine continuing");
+    yield 2;
+
+    print("Coroutine finishing");
+    // list should be cleaned up here
+    return 2;
+}
+
+fn main() {
+    print("Starting test");
+
+    {
+        // Create coroutine with refcounted objects
+        let coro = spawn coroutine_with_refs();
+
+        // Resume once at end of block
+        defer
+        {
+            match resume coro {
+                ok(v1) => {
+                    print("Got value: ");
+                    print(v1);
+                }
+                error(msg) => {
+                    print("resume error: ");
+                    print(msg);
+                }
+            };
+        }
+
+        print("Coroutine going out of scope");
+    }
+
+    print("Done!");
+}

@@ -1,0 +1,14 @@
+Test 1: Coroutine that completes normally
+Coroutine started
+1
+Coroutine completing normally
+2
+Cleanup counter after normal completion:
+1
+
+Test 2: Coroutine destroyed without completing
+Coroutine started
+1
+Cleanup counter after early destruction:
+1
+Done!

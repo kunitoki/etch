@@ -1,0 +1,41 @@
+// Comprehensive dead code detection test
+// Shows range-based analysis catching impossible conditions
+
+fn main() -> void {
+  let x: int = rand(50, 100);  // Range: [50, 100]
+  let y: int = rand(10);       // Range: [0, 10]
+
+  print(999);  // Execution marker
+
+  // Test 1: x > 200 is impossible (max(x) = 100 <= 200 is false)
+  if x > 200 {
+    print(10 / 0);  // Dead code - should not cause error
+  }
+
+  // Test 2: y >= 20 is impossible (max(y) = 10 < 20)
+  if y >= 20 {
+    print(20 / 0);  // Dead code
+  }
+
+  // Test 3: x < 30 is impossible (min(x) = 50 >= 30)
+  if x < 30 {
+    print(30 / 0);  // Dead code
+  }
+
+  // Test 4: y <= -5 is impossible (min(y) = 0 > -5)
+  if y <= -5 {
+    print(40 / 0);  // Dead code
+  }
+
+  // Test 5: This should work (possible condition)
+  if x > 75 {
+    print(500);  // Possible: some values in [50,100] are > 75
+  }
+
+  // Test 6: This should always be true
+  if x >= 25 {
+    print(600);  // Always true: min(x) = 50 >= 25
+  }
+
+  print(888);  // End marker
+}

@@ -1,0 +1,11 @@
+// Test MulSub fusion: a * b - c -> opMulSub
+fn main() {
+  let a = 5;
+  let b = 10;
+  let c = 15;
+
+  // This should fuse into a single opMulSub instruction
+  let result = a * b - c;
+
+  print(result);  // Should print 35 (50 - 15)
+}

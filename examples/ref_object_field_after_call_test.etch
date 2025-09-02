@@ -1,0 +1,26 @@
+// Test that ref field in object remains valid after call to function
+// Prover should track that ref members are not modified inside the function
+type Inner = object {
+    value: int;
+};
+
+type Container = object {
+    data: ref[Inner];
+};
+
+fn modify_container(c: Container) {
+    // Just access it, no modification
+    if c.data != nil {
+        print(c.data.value);
+    }
+}
+
+fn main() {
+    var container: Container = Container(data: new[Inner](value: 42));
+
+    modify_container(container);
+
+    // container.data is not invalidated in any branch of modify_container
+    // so it should still be safe to use
+    print(container.data.value);
+}

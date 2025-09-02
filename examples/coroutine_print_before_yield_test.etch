@@ -1,0 +1,40 @@
+// Test that code before first yield executes
+fn simple_coro() {
+    print("Before first yield");
+    yield 1;
+    print("After first yield");
+    yield 2;
+    return 2;
+}
+
+fn main() {
+    print("Starting");
+    let c = spawn simple_coro();
+    print("Spawned");
+
+    match resume c {
+        ok(v1) => {
+            print("Got:");
+            print(v1);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume c {
+        ok(v2) => {
+            print("Got:");
+            print(v2);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    print("Done");
+}

@@ -1,0 +1,16 @@
+fn main() {
+  var abc = 111;
+  let abc_compiles: bool = compiles {
+    abc = "222";  // Type error: can't assign string to int variable
+  };
+
+  var xyz = 111;
+  let xyz_compiles: bool = compiles {
+    xyz = 222;  // This WOULD compile (xyz is visible), but doesn't actually execute
+  };
+
+  print(abc_compiles);  // Should print false (assignment is not valid code)
+  print(abc);  // Should print 111 (mutation didn't actually happen)
+  print(xyz_compiles);  // Should print true (assignment is valid code)
+  print(xyz);  // Should print 111 (mutation didn't actually happen)
+}

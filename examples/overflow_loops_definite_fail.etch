@@ -1,0 +1,20 @@
+// Test: Definite overflow in loop
+// This should be caught by the prover
+
+fn testLoopOverflow() -> int {
+  var acc = 0;
+  var i = 0;
+
+  // Add IMax/2 twice = definite overflow
+  while i < 2 {
+    acc = acc + 4611686018427387904;  // IMax / 2
+    i = i + 1;
+  }
+
+  return acc;
+}
+
+fn main() -> void {
+  let result = testLoopOverflow();
+  print("Result: " + string(result));
+}

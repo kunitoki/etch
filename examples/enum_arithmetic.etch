@@ -1,0 +1,15 @@
+// Test: Enum arithmetic operations are not allowed
+type Color = enum {
+  Red;
+  Green;
+  Blue;
+};
+
+fn main() {
+  let color1 = Color.Red;
+  let color2 = Color.Green;
+
+  // This should fail: enum addition
+  let res: int = color1 + color2;
+  print("Should not reach here: " + string(res));
+}

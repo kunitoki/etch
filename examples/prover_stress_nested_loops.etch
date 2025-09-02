@@ -1,0 +1,120 @@
+// Stress test: Nested loops with complex invariants
+
+fn testNestedSimple() -> int {
+  let matrix: array[array[int]] = [
+    [1, 2, 3, 4, 5],
+    [6, 7, 8, 9, 10],
+    [11, 12, 13, 14, 15]
+  ];
+
+  // Nested loop: i in [0, 2], j in [0, 4]
+  for i in 0..<3 {
+    for j in 0..<5 {
+      // Both indices should be proven safe
+      let row = matrix[i];
+      return row[j];  // ✅ Should be proven safe!
+    }
+  }
+
+  return -1;
+}
+
+fn testNestedWithConditions() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+
+  // Nested loops with inner conditions
+  for i in 0..<4 {
+    for j in 0..<4 {
+      // Compute index: i*4 + j ranges from 0 to 15
+      let idx = i * 4 + j;
+
+      // This should be safe: idx in [0, 15]
+      if idx >= 0 and idx < 16 {
+        return arr[idx];  // ✅ Should be proven safe!
+      }
+    }
+  }
+
+  return -1;
+}
+
+fn testNestedWhileLoops() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  let i = match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => 0;
+    };
+    error(_) => 0;
+  };
+
+  let j = match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => 0;
+    };
+    error(_) => 0;
+  };
+
+  // Nested while loops with invariants
+  while i < 5 {
+    while j < 2 {
+      if i >= 0 and j >= 0 {
+        // Compute index: i*2 + j, ranges from 0 to 9
+        let idx = i * 2 + j;
+        if idx < 10 {
+          return arr[idx];  // ✅ Should be proven safe!
+        }
+      }
+    }
+  }
+
+  return -1;
+}
+
+fn testTripleNested() -> int {
+  let cube: array[array[array[int]]] = [
+    [[1, 2], [3, 4]],
+    [[5, 6], [7, 8]]
+  ];
+
+  // Triple nested loop
+  for i in 0..<2 {
+    for j in 0..<2 {
+      for k in 0..<2 {
+        let plane = cube[i];
+        let row = plane[j];
+        return row[k];  // ✅ Should be proven safe!
+      }
+    }
+  }
+
+  return -1;
+}
+
+fn testNestedWithBreak() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+  // Nested loop with early return
+  for i in 0..<5 {
+    for j in 0..<2 {
+      let idx = i * 2 + j;
+      // idx ranges from 0 to 9
+      if idx < 10 {
+        return arr[idx];  // ✅ Should be proven safe!
+      }
+    }
+  }
+
+  return -1;
+}
+
+fn main() -> void {
+  print("Test 1 (nested simple): " + string(testNestedSimple()));
+  print("Test 2 (nested with conditions): " + string(testNestedWithConditions()));
+  print("Test 3 (nested while): " + string(testNestedWhileLoops()));
+  print("Test 4 (triple nested): " + string(testTripleNested()));
+  print("Test 5 (nested with break): " + string(testNestedWithBreak()));
+  print("");
+  print("✅ All nested loop stress tests passed!");
+}

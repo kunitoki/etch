@@ -1,0 +1,15 @@
+// While loop test - only live loops
+fn main() -> void {
+  seed(42);  // Set deterministic seed
+  let x: int = rand(20, 100);  // Range: [20, 100]
+  print(x);
+
+  // Live while loop
+  var counter: int = 0;
+  while counter < 3 {
+    print(counter);
+    counter = counter + 1;
+  }
+
+  print(555);  // End marker
+}

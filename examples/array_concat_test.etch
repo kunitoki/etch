@@ -1,0 +1,70 @@
+fn main() -> void {
+    print("=== Array Concatenation Tests ===");
+
+    // Basic array concatenation
+    let a: array[int] = [1, 2, 3];
+    let b: array[int] = [4, 5, 6];
+    let c: array[int] = a + b;  // Should result in [1, 2, 3, 4, 5, 6]
+    print("Basic concat: a + b");
+    print("Expected length: 6");
+    print("Actual length:");
+    print(#c);
+    print("First element should be 1:");
+    print(c[0]);
+    print("Last element should be 6:");
+    print(c[5]);
+
+    // String concatenation (strings are array[char])
+    let s1: string = "hello";
+    let s2: string = " world";
+    let greeting: string = s1 + s2;  // Should result in "hello world"
+    print("String concat result:");
+    print(greeting);
+    print("String length should be 11:");
+    print(#greeting);
+
+    // Single element array concatenation
+    let single1: array[int] = [10];
+    let single2: array[int] = [20];
+    let nums: array[int] = [1, 2];
+    let result1: array[int] = single1 + single2;  // [10, 20]
+    let result2: array[int] = nums + single1;  // [1, 2, 10]
+    print("Single + single length should be 2:");
+    print(#result1);
+    print("Nums + single length should be 3:");
+    print(#result2);
+    print("First result elements:");
+    print(result1[0]);  // 10
+    print(result1[1]);  // 20
+    print("Second result elements:");
+    print(result2[0]);  // 1
+    print(result2[1]);  // 2
+    print(result2[2]);  // 10
+
+    // Multiple concatenations
+    let x: array[int] = [1];
+    let y: array[int] = [2];
+    let z: array[int] = [3];
+    let xyz: array[int] = x + y + z;  // [1, 2, 3]
+    print("Triple concat length should be 3:");
+    print(#xyz);
+    print("Elements should be 1, 2, 3:");
+    print(xyz[0]);
+    print(xyz[1]);
+    print(xyz[2]);
+
+    // Mixed with slicing
+    let original: array[int] = [1, 2, 3, 4, 5];
+    let head: array[int] = original[:2];    // [1, 2]
+    let tail: array[int] = original[3:];    // [4, 5]
+    let rejoined: array[int] = head + tail; // [1, 2, 4, 5]
+    print("Slice and rejoin length should be 4:");
+    print(#rejoined);
+    print("Should skip element 3, first few elements:");
+    print(rejoined[0]);  // 1
+    print(rejoined[1]);  // 2
+    print(rejoined[2]);  // 4 (not 3!)
+    print(rejoined[3]);  // 5
+
+    print("=== All Array Concatenation Tests Complete ===");
+}

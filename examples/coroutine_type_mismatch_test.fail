@@ -1,0 +1,5 @@
+examples/coroutine_type_mismatch_test.etch:11:9: error: initialization type mismatch: result[int] vs string
+  10 |     let gen = spawn int_generator();
+  11 |     let val: string = resume gen;  // Error: resume now returns result[int]
+               ^
+  12 |     print(val);

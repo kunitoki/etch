@@ -1,0 +1,7 @@
+// Test: Using uninitialized string (should FAIL)
+
+fn main() -> void {
+  var s: string;
+  let len: int = s.length(); // Error: s is not initialized
+  print(len);
+}

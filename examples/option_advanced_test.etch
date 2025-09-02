@@ -1,0 +1,26 @@
+fn processValue(x: option[int]) -> string {
+    // In the future, this would use pattern matching
+    // For now, just return a placeholder showing we can handle option types
+    discard x;
+    return "Processed option value";
+}
+
+fn main() -> void {
+    // Test option handling with function parameters
+    let validInt: option[int] = match parseInt("42") {
+        ok(value) => some(value);
+        error(_) => none;
+    };
+    let invalidInt: option[int] = match parseInt("not a number") {
+        ok(value) => some(value);
+        error(_) => none;
+    };
+
+    let result1: string = processValue(validInt);
+    let result2: string = processValue(invalidInt);
+
+    print(result1); // Expected: "Processed option value"
+    print(result2); // Expected: "Processed option value"
+
+    print("Option function parameter test passed");
+}

@@ -1,0 +1,14 @@
+// Test: Cannot access members on enum values
+type Color = enum {
+  Red;
+  Green;
+  Blue;
+};
+
+fn main() {
+  let color = Color.Red;
+
+  // This should fail: member access on enum value
+  let res = color.Green;
+  print("Should not reach here: " + string(res));
+}

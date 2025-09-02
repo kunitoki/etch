@@ -1,0 +1,5 @@
+examples/overflow_match_expression_neg.etch:15:15: error: multiplication range would overflow
+  14 |       let squared = if value < 10000 {
+  15 |         value * value
+                     ^
+  16 |       } else {

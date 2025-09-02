@@ -1,0 +1,58 @@
+// Test complex and nested conditions in the prover
+
+fn testReversedComparison(x: int) -> string {
+  // Test: 5 > x (reversed comparison)
+  if 5 > x {
+    return "x is less than 5";
+  } else {
+    return "x is >= 5";
+  }
+}
+
+fn testExpressionConstraint(arr: array[int], index: int) -> string {
+  // Test: index < #arr (expression on RHS)
+  if index >= 0 and index < #arr {
+    let value = arr[index];  // Should be proven safe!
+    return string(value);
+  } else {
+    return "out of bounds";
+  }
+}
+
+fn testNestedConditions(a: int, b: int, c: int) -> string {
+  // Test: nested AND conditions
+  if a > 0 and b < 10 and c >= 5 {
+    // All three constraints should be applied:
+    // a in [1, max], b in [min, 9], c in [5, max]
+    return "all conditions met";
+  } else {
+    return "some condition failed";
+  }
+}
+
+fn testComplexNesting(x: int, y: int) -> string {
+  // Test: deeply nested with AND
+  if x >= 0 and x < 10 {
+    if y >= x and y < 20 {
+      // x in [0, 9], y in [x, 19]
+      // This should be safe
+      return "both in range";
+    }
+  }
+  return "out of range";
+}
+
+fn main() -> void {
+  // Test 1: Reversed comparison
+  print(testReversedComparison(3));
+
+  // Test 2: Expression constraint
+  let numbers: array[int] = [100, 200, 300];
+  print(testExpressionConstraint(numbers, 1));
+
+  // Test 3: Nested conditions
+  print(testNestedConditions(5, 8, 7));
+
+  // Test 4: Complex nesting
+  print(testComplexNesting(5, 15));
+}

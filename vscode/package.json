@@ -1,0 +1,205 @@
+{
+  "name": "etchlang",
+  "displayName": "Etch Language Support",
+  "description": "Syntax highlighting and debugging support for the Etch language",
+  "version": "0.1.0",
+  "publisher": "kunitoki",
+  "engines": {
+    "vscode": "^1.66.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Debuggers"
+  ],
+  "activationEvents": [
+    "onDebug",
+    "onDebugResolve:etch",
+    "onDebugDynamicConfigurations:etch",
+    "onDebugInitialConfigurations",
+    "onCommand:extension.etch-debug.getProgramName"
+  ],
+  "main": "./dist/extension.js",
+  "workspaceTrust": {
+    "request": "never"
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "lint": "eslint src --ext ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "esbuild-base": "esbuild ./src/extension.ts --bundle --tsconfig=./tsconfig.json --external:vscode --format=cjs --platform=node --outfile=dist/extension.js",
+    "watch": "npm run -S esbuild-base -- --sourcemap --sources-content=false --watch",
+    "build": "npm run -S esbuild-base -- --sourcemap --sources-content=false",
+    "package": "vsce package",
+    "publish": "vsce publish",
+    "publish-pre-release": "vsce publish --pre-release",
+    "vscode:prepublish": "rimraf dist && npm run -S esbuild-base -- --minify",
+    "test": "npm run typecheck"
+  },
+  "devDependencies": {
+    "@types/glob": "^7.2.0",
+    "@types/mocha": "^9.1.0",
+    "@types/node": "^14.14.37",
+    "@types/vscode": "^1.66.0",
+    "@typescript-eslint/eslint-plugin": "^5.17.0",
+    "@typescript-eslint/parser": "^5.17.0",
+    "@vscode/debugadapter": "^1.66.0",
+    "@vscode/debugadapter-testsupport": "^1.66.0",
+    "@vscode/vsce": "^2.15.0",
+    "await-notify": "^1.0.1",
+    "base64-js": "^1.5.1",
+    "esbuild": "^0.25.0",
+    "eslint": "^8.12.0",
+    "events": "^3.3.0",
+    "glob": "^7.2.0",
+    "mocha": "^11.7.2",
+    "path-browserify": "^1.0.1",
+    "rimraf": "^3.0.2",
+    "typescript": "^4.6.3",
+    "url": "^0.11.0"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "etchlang",
+        "aliases": [
+          "EtchLang",
+          "etchlang",
+          "etch"
+        ],
+        "extensions": [
+          ".etch"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "etchlang",
+        "scopeName": "source.etchlang",
+        "path": "./syntaxes/etchlang.tmLanguage.json"
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "etchlang"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "etch",
+        "label": "Etch Debug",
+        "runtime": "node",
+        "program": "./out/debugAdapter.js",
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Absolute path to the Etch program.",
+                "default": "${workspaceFolder}/${command:AskForProgramName}"
+              },
+              "debugExecutable": {
+                "type": "string",
+                "description": "Optional: Path to custom debug executable (C binary embedding Etch). If not specified, uses the Etch compiler.",
+                "default": ""
+              },
+              "stopAtEntry": {
+                "type": "boolean",
+                "description": "Automatically stop after launch.",
+                "default": true
+              },
+              "trace": {
+                "type": "boolean",
+                "description": "Enable logging of the Debug Adapter Protocol.",
+                "default": true
+              }
+            }
+          },
+          "attach": {
+            "required": [],
+            "properties": {
+              "host": {
+                "type": "string",
+                "description": "Host to connect to for remote debugging.",
+                "default": "127.0.0.1"
+              },
+              "port": {
+                "type": "number",
+                "description": "Port to connect to for remote debugging.",
+                "default": 9823
+              },
+              "timeout": {
+                "type": "number",
+                "description": "Connection timeout in milliseconds.",
+                "default": 30000
+              },
+              "stopAtEntry": {
+                "type": "boolean",
+                "description": "Automatically stop after attach.",
+                "default": true
+              },
+              "trace": {
+                "type": "boolean",
+                "description": "Enable logging of the Debug Adapter Protocol.",
+                "default": true
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "etch",
+            "request": "launch",
+            "name": "Launch Etch Program",
+            "program": "${workspaceFolder}/${command:AskForProgramName}",
+            "stopAtEntry": true
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "Etch Debug: Launch",
+            "description": "A new configuration for 'debugging' a user selected Etch file.",
+            "body": {
+              "type": "etch",
+              "request": "launch",
+              "name": "Launch Etch Program",
+              "program": "^\"\\${workspaceFolder}/\\${command:AskForProgramName}\"",
+              "stopAtEntry": true
+            }
+          },
+          {
+            "label": "Etch Debug: Launch C Binary",
+            "description": "Debug Etch scripts running inside a C/C++ application.",
+            "body": {
+              "type": "etch",
+              "request": "launch",
+              "name": "Debug C Binary with Etch",
+              "program": "^\"\\${workspaceFolder}/script.etch\"",
+              "debugExecutable": "^\"\\${workspaceFolder}/my_app\"",
+              "stopAtEntry": true
+            }
+          },
+          {
+            "label": "Etch Debug: Attach to Remote",
+            "description": "Attach to an Etch VM running with ETCH_DEBUG_PORT environment variable.",
+            "body": {
+              "type": "etch",
+              "request": "attach",
+              "name": "Attach to Etch Remote Debugger",
+              "host": "127.0.0.1",
+              "port": 9823,
+              "timeout": 30000,
+              "stopAtEntry": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "dependencies": {
+    "@vscode/debugprotocol": "^1.68.0"
+  }
+}

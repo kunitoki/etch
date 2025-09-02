@@ -1,0 +1,19 @@
+// Test function inlining optimization
+
+fn add(a: int, b: int) -> int {
+    return a + b;
+}
+
+fn multiply(x: int, y: int) -> int {
+    return x * y;
+}
+
+fn main() -> void {
+    let result1: int = add(5, 10);
+    let result2: int = multiply(3, 4);
+    let result3: int = add(result1, result2);
+
+    print(result1);
+    print(result2);
+    print(result3);
+}

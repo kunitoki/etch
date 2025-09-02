@@ -1,0 +1,5 @@
+examples/coroutine_yield_in_regular_function_test.etch:4:5: error: function compute contains 'yield' but has non-coroutine return type int. Use '-> coroutine[int]' instead.
+  3 |     let res = x * 2;
+  4 |     yield res;  // Error: should not be able to yield in non-coroutine function
+          ^
+  5 |     return res;

@@ -1,0 +1,15 @@
+// Test: Invalid pattern syntax
+type Result = int | string;
+
+fn processResult(r: Result) -> string {
+  return match r {
+    // This should fail: invalid pattern syntax
+    invalid_pattern: => { "Invalid pattern"; }
+    _ => { "Other"; }
+  };
+}
+
+fn main() {
+  let result = processResult(42);
+  print(result);
+}

@@ -1,0 +1,22 @@
+// replay_simple.etch
+// Simple test to demonstrate replay/scrubbing functionality
+
+fn main() -> int {
+    let x = 10;
+    let y = 20;
+    let z = x + y;
+
+    print("x = ");
+    print(x);
+    print("\n");
+
+    print("y = ");
+    print(y);
+    print("\n");
+
+    print("z = ");
+    print(z);
+    print("\n");
+
+    return 0;
+}

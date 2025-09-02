@@ -1,0 +1,5 @@
+examples/test_deref_field_precedence.etch:16:11: error: deref expects ref[...]
+  15 |     // Is this (@container).data.value or @(container.data.value)?
+  16 |     print(@container.data.value);
+                 ^
+  17 | }

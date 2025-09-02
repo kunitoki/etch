@@ -1,0 +1,5 @@
+examples/inference_function_return_ambiguous.etch:4:5: error: conflicting return types: int and string
+  3 |   if x > 0 {
+  4 |     return x + y;    // Could be int
+          ^
+  5 |   } else {

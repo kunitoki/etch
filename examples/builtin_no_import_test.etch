@@ -1,0 +1,16 @@
+// Test that builtin functions work without imports
+
+fn main() {
+  // All builtins should work without any imports
+  print(42);
+
+  seed(123);
+  let r = rand(10);
+  print(r);
+
+  let s: string = string(100);
+  let opt: result[int] = parseInt(s);
+  if isOk(opt) {
+    print(100);
+  }
+}

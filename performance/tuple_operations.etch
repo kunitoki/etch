@@ -1,0 +1,69 @@
+// Performance test for tuple operations in Etch
+// Tests: creation, access, slicing, and concatenation
+
+fn main() {
+    let iterations = 10000;
+
+    // Test 1: Tuple creation
+    var sum1 = 0;
+    for i in 0..<iterations {
+        let t = (1, 2, 3, 4, 5);
+        sum1 = sum1 + t[0];
+    }
+    print(sum1);
+
+    // Test 2: Tuple access
+    var sum2 = 0;
+    let base = (10, 20, 30, 40, 50, 60, 70, 80, 90, 100);
+    for i in 0..<iterations {
+        let a = base[0];
+        let b = base[3];
+        let c = base[7];
+        let d = base[9];
+        sum2 = sum2 + a + b + c + d;
+    }
+    print(sum2);
+
+    // Test 3: Tuple slicing
+    var sum3 = 0;
+    let source = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+    for i in 0..<iterations {
+        let s1 = source[2:5];
+        let s2 = source[:3];
+        let s3 = source[7:];
+        let a = s1[0];
+        let b = s2[0];
+        let c = s3[0];
+        sum3 = sum3 + a + b + c;
+    }
+    print(sum3);
+
+    // Test 4: Tuple concatenation
+    var sum4 = 0;
+    let left = (1, 2, 3, 4, 5);
+    let right = (6, 7, 8, 9, 10);
+    for i in 0..<iterations {
+        let combined = left + right;
+        let a: int = combined[0];
+        let b: int = combined[9];
+        sum4 = sum4 + a + b;
+    }
+    print(sum4);
+
+    // Test 5: Complex operations (mixed)
+    var sum5 = 0;
+    let t1 = (1, 2, 3);
+    let t2 = (4, 5, 6);
+    for i in 0..<iterations {
+        let joined = t1 + t2;
+        let slice_result = joined[1:5];
+        let a: int = slice_result[0];
+        let b: int = slice_result[3];
+        sum5 = sum5 + a + b;
+    }
+    print(sum5);
+
+    // Final checksum to prevent optimization
+    let total = sum1 + sum2 + sum3 + sum4 + sum5;
+    print("Total checksum: " + string(total));
+}

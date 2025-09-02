@@ -1,0 +1,21 @@
+fn main() -> void {
+    print("=== Type Error Concatenation Tests ===");
+    print("The following should cause compilation errors:");
+
+    // This should cause a type error - different array types
+    print("Attempting to concat array[int] + array[string]...");
+    let nums: array[int] = [1, 2, 3];
+    let strs: array[string] = ["a", "b", "c"];
+
+    print("nums array:");
+    print(nums[0]);
+    print("strs array:");
+    print(strs[0]);
+
+    // This line should fail at compile time with a type error
+    let mixed: array[int] = nums + strs;  // Type error: cannot concat array[int] + array[string]
+
+    print("If you see this, the type checker failed!");
+    print("mixed should not exist:");
+    print(#mixed);
+}

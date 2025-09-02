@@ -1,0 +1,70 @@
+// Demonstrate postfix ? result propagation for functions and coroutines
+
+fn requirePositive(label: string, value: int) -> result[int] {
+  if value < 0 {
+    return error(label + " must be positive: " + string(value));
+  }
+  return ok(value);
+}
+
+fn sumThree(a: int, b: int, c: int) -> result[int] {
+  let first = requirePositive("a", a)?;
+  let second = requirePositive("b", b)?;
+  let third = requirePositive("c", c)?;
+  return ok(first + second + third);
+}
+
+fn showResult(label: string, value: result[int]) {
+  match value {
+    ok(v) => print(label + ": ok(" + string(v) + ")"),
+    error(msg) => print(label + ": error(" + msg + ")"),
+  };
+}
+
+fn runStandardCases() {
+  print("result propagation operator demo");
+  let okSum = sumThree(2, 4, 6);
+  showResult("standard_ok", okSum);
+
+  let errSum = sumThree(2, -1, 6);
+  showResult("standard_err", errSum);
+}
+
+fn countdown(from: int) -> coroutine[int] {
+  var current = from;
+  while current > 0 {
+    yield current;
+    current = current - 1;
+  }
+  return 0;
+}
+
+fn consumeCountdown() -> result[int] {
+  let coro = spawn countdown(2);
+  let first = resume? coro;
+  let second = resume? coro;
+  let finalValue = resume? coro;
+  return ok(first + second + finalValue);
+}
+
+fn resumeAfterCompletion() -> result[int] {
+  let coro = spawn countdown(1);
+  discard resume? coro; // yield value 1
+  discard resume? coro; // coroutine returns 0
+  let unexpected = resume? coro; // propagates the runtime error
+  return ok(unexpected);
+}
+
+fn runCoroutineCases() {
+  print("resume? propagation demo");
+  let okFlow = consumeCountdown();
+  showResult("coroutine_ok", okFlow);
+
+  let errFlow = resumeAfterCompletion();
+  showResult("coroutine_err", errFlow);
+}
+
+fn main() {
+  runStandardCases();
+  runCoroutineCases();
+}

@@ -1,0 +1,78 @@
+// Test coroutine that yields some values then returns a final value
+fn process(limit: int) {
+    var i = 0;
+    while i < limit {
+        yield i;
+        i = i + 1;
+    }
+    // After loop, return final value
+    return 999;
+}
+
+fn main() {
+    let coro = spawn process(3);
+
+    // Get yielded values
+    match resume coro {
+        ok(v1) => {
+            print("Yielded: ");
+            print(v1);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume coro {
+        ok(v2) => {
+            print("Yielded: ");
+            print(v2);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume coro {
+        ok(v3) => {
+            print("Yielded: ");
+            print(v3);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    // Next resume should get the return value
+    match resume coro {
+        ok(final) => {
+            print("Final value: ");
+            print(final);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    // Subsequent resumes now report an error
+    match resume coro {
+        ok(after) => {
+            print("Unexpected value after completion: ");
+            print(after);
+        }
+        error(msg) => {
+            print("After completion error: ");
+            print(msg);
+        }
+    };
+
+    print("Done!");
+}

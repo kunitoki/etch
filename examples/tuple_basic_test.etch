@@ -1,0 +1,44 @@
+// Test basic tuple functionality
+
+fn test_tuple_construction() {
+    // Test basic tuple creation
+    let t1 = tuple(1, 2, 3);
+    let t2: tuple[int, string, bool] = tuple(42, "hello", true);
+
+    // Test tuple indexing
+    let a = t1[0];
+    let b = t1[1];
+    let c = t1[2];
+
+    // Test heterogeneous tuple
+    let name = t2[1];
+    let flag = t2[2];
+
+    discard a, b, c, name, flag;
+}
+
+fn test_tuple_types() {
+    // Test different type combinations
+    let t1 = tuple(10, 3.14);
+    let t2: tuple[string, char] = tuple("test", 'x');
+    let t3: tuple[bool, int, string] = tuple(true, 100, "done");
+
+    let x = t1[0];
+    let y = t1[1];
+
+    discard x, y, t2, t3;
+}
+
+fn test_tuple_in_variables() {
+    let coord: tuple[int, int] = tuple(10, 20);
+    let x = coord[0];
+    let y = coord[1];
+
+    discard x, y;
+}
+
+fn main() {
+    test_tuple_construction();
+    test_tuple_types();
+    test_tuple_in_variables();
+}

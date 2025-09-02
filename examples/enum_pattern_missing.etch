@@ -1,0 +1,15 @@
+// Enum pattern matching test
+type Direction = enum {
+  North = 0;
+  South = 1;
+  East = 2;
+  West = 3;
+};
+
+fn main() {
+  let d = Direction.North;
+  match d {
+    Direction.North => { print("Going North"); },
+    Direction.East => { print("Going East"); }
+  };
+}

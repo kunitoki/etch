@@ -1,0 +1,22 @@
+// Test: Mixed-sign range multiplication
+// Tests the general range multiplication with positive, negative, and mixed ranges
+
+fn main() -> void {
+    // Test with small negative ranges
+    let neg_small: int = -3;  // [-3, -3]
+    let pos_small: int = 4;   // [4, 4]
+    let neg_mult: int = neg_small * pos_small; // -3 * 4 = -12
+    print(neg_mult);
+
+    // Test positive with negative
+    let pos_val: int = 7;
+    let neg_val: int = -2;
+    let pos_neg_mult: int = pos_val * neg_val; // 7 * -2 = -14
+    print(pos_neg_mult);
+
+    // Test both negative
+    let neg_a: int = -5;
+    let neg_b: int = -6;
+    let both_neg_mult: int = neg_a * neg_b; // -5 * -6 = 30
+    print(both_neg_mult);
+}

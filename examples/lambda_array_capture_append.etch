@@ -1,0 +1,12 @@
+fn makeAppender(base: array[int]) -> (fn(int) -> array[int]) {
+  return [base] |value: int| -> array[int] {
+    return base + [value];
+  };
+}
+
+fn main() {
+  let append = makeAppender([3, 4]);
+  let updated = append(9);
+  let lastIndex = #updated - 1;
+  print("last=" + string(updated[lastIndex]));
+}

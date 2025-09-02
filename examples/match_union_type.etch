@@ -1,0 +1,15 @@
+type X = int | string;
+
+fn main() -> void {
+    var x: X = 1;
+    match x {
+        num: int => print(num),
+        _ => print("integer not found")
+    }
+
+    var y: X = "hello";
+    match y {
+        num: int => print(num),
+        _ => print("integer not found")
+    }
+}

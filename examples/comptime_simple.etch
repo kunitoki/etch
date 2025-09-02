@@ -1,0 +1,27 @@
+fn main() -> void {
+    let basic: int = comptime(5 + 3 * 2);
+    print(basic);
+
+    let arithmetic: int = comptime(100 - 25 + 10);
+    print(arithmetic);
+
+    let complex: int = comptime((4 + 6) * (3 - 1) / 2);
+    print(complex);
+
+    let boolean_true: bool = comptime(5 > 3);
+    print(boolean_true);
+
+    let boolean_false: bool = comptime(2 > 5);
+    print(boolean_false);
+
+    let comparison: bool = comptime(10 == 10);
+    print(comparison);
+
+    let modulo: int = comptime(17 % 5);
+    print(modulo);
+
+    let math_expr: int = comptime(2 + 3);
+    let another_expr: int = comptime(4 + 1);
+    let nested: int = comptime(math_expr * another_expr);
+    print(nested);
+}

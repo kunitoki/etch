@@ -1,0 +1,6 @@
+result propagation operator demo
+standard_ok: ok(12)
+standard_err: error(b must be positive: -1)
+resume? propagation demo
+coroutine_ok: ok(3)
+coroutine_err: error(cannot resume completed coroutine)

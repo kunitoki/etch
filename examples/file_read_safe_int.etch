@@ -1,0 +1,25 @@
+// Test: Safe file reading and integer casting
+// Shows how file reading with parseInt provides safe integer conversion
+
+fn main() -> void {
+    // Read a file with a safe number
+    match readFile("examples/data/file_safe_numbers.txt") {
+        ok(content) => {
+            // Parse the content to int using pattern matching for safety
+            match parseInt(content) {
+                ok(number) => {
+                    print(number);
+                    print(number);  // Just print it twice instead of doubling
+                    let as_string: string = string(number);
+                    print(as_string);
+                }
+                error(msg) => {
+                    print("Failed to parse number: " + msg);
+                }
+            };
+        }
+        error(msg) => {
+            print("Failed to read file: " + msg);
+        }
+    };
+}

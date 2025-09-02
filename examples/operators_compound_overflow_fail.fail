@@ -1,0 +1,5 @@
+examples/operators_compound_overflow_fail.etch:4:7: error: addition overflow
+  3 |   var acc: int = 9223372036854775800;
+  4 |   acc += 10;
+            ^
+  5 | }

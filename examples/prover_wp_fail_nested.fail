@@ -1,0 +1,5 @@
+examples/prover_wp_fail_nested.etch:7:14: error: index 5 out of bounds [0, 2]
+  6 |   let arr: array[int] = [100, 200, 300];
+  7 |   return arr[x];
+                   ^
+  8 | }

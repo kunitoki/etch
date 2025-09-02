@@ -1,0 +1,7 @@
+Test range widening:
+Result: 165000000000
+
+Test range narrowing:
+Result: 0
+
+✅ Range tracking tests passed!

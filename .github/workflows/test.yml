@@ -1,0 +1,102 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+        - '!.github/workflows/test.yml'
+        - '!docs/**'
+        - '!vscode/**'
+        - '!performance/**'
+        - '!slides/**'
+        - '!**/.gitignore'
+        - '!**/*.md'
+        - '!justfile'
+        - '!LICENSE'
+  pull_request:
+    branches: [ main ]
+    paths:
+        - '!.github/workflows/test.yml'
+        - '!docs/**'
+        - '!vscode/**'
+        - '!performance/**'
+        - '!slides/**'
+        - '!**/.gitignore'
+        - '!**/*.md'
+        - '!justfile'
+        - '!LICENSE'
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Nim
+      uses: jiro4989/setup-nim-action@v2
+      with:
+        nim-version: '2.2.4'
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Install dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install coreutils
+
+    - name: Install dependencies (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        choco install make
+
+    - name: Verify installations
+      run: |
+        nim --version
+        nimble --version
+
+    - name: Build C libraries
+      working-directory: "examples/clib"
+      run: make
+
+    - name: Build release binary
+      run: nim c -d:danger -o:etch src/etch.nim
+
+    - name: Run example tests VM
+      run: nim r src/etch.nim --test examples/
+
+    - name: Run example tests C
+      if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
+      run: nim r src/etch.nim --test-c examples/
+
+    - name: Run debugger tests
+      run: nimble test
+
+    - name: Upload build artifacts (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: etch-linux-binary
+        path: etch
+        retention-days: 7
+
+    - name: Upload build artifacts (macOS)
+      if: matrix.os == 'macos-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: etch-macos-binary
+        path: etch
+        retention-days: 7
+
+    - name: Upload build artifacts (Windows)
+      if: matrix.os == 'windows-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: etch-windows-binary.exe
+        path: etch.exe
+        retention-days: 7

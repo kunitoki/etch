@@ -1,0 +1,6 @@
+// Tuple unpacking with wrong number of variables
+fn main() {
+    let t = (1, 2, 3);
+    let [a, b] = t;  // Error: tuple has 3 elements but only 2 variables
+    discard a, b;
+}

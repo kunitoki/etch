@@ -1,0 +1,5 @@
+examples/ref_scalar_assign_test_nil.etch:16:33: error: potential null dereference: dereferencing variable 'inner2' that may be nil
+  15 |     let inner2 = @nested2;
+  16 |     print("nested2 initial: " + @inner2); // provable to be nil
+                                       ^
+  17 | }

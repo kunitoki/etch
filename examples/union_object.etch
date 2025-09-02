@@ -1,0 +1,52 @@
+// Test union with object literals (anonymous objects)
+
+type MyObj = object {
+  x: int;
+  y: int;
+};
+
+type MyObj2 = object {
+  name: string;
+  value: int;
+};
+
+fn testIntOrObject(b: bool) -> int | MyObj {
+  if b {
+    return { x: 10, y: 20 };
+  } else {
+    return 99;
+  }
+}
+
+fn testStringOrObject() -> string | MyObj2 {
+  return { name: "test", value: 42 };
+}
+
+fn main() {
+  var val1 = testIntOrObject(true);
+  match val1 {
+    i: int => print(i),
+    o: MyObj => {
+      print(o.x);
+      print(o.y);
+    }
+  };
+
+  val1 = testIntOrObject(false);
+  match val1 {
+    i: int => print(i),
+    o: MyObj => {
+      print(o.x);
+      print(o.y);
+    }
+  };
+
+  let val2 = testStringOrObject();
+  match val2 {
+    s: string => print(s),
+    o: MyObj2 => {
+      print(o.name);
+      print(o.value);
+    }
+  };
+}

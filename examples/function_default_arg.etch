@@ -1,0 +1,8 @@
+fn test(x: int, y: int = 42) -> void {
+    print(x);
+    print(y);
+}
+
+fn main() -> void {
+    test(100);
+}

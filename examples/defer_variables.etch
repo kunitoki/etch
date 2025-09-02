@@ -1,0 +1,26 @@
+// Test defer with variable access
+// Defer should be able to access variables from the enclosing scope
+
+fn test_defer_variables() -> void {
+    let x = 10;
+    let y = 20;
+
+    print("Start");
+    print(string(x));
+    print(string(y));
+
+    defer {
+        print("Defer x");
+        print(string(x));
+        print("Defer y");
+        print(string(y));
+    }
+
+    print("End");
+}
+
+fn main() -> int {
+    test_defer_variables();
+    defer{ print("Main Defer"); }
+    return 0;
+}

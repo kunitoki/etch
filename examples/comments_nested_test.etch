@@ -1,0 +1,8 @@
+fn main() -> void {
+    let x: int = 42;
+    /* This is the outer comment
+       /* This is a nested comment that should cause an error */
+       and this continues the outer comment
+    */
+    print(x);
+}

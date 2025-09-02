@@ -1,0 +1,5 @@
+examples/export_private_test.etch:10:9: error: unknown function: double
+  9 |   // This should fail - double is not exported
+  10 |   print(double(5));  // Error: undefined function
+               ^
+  11 | }

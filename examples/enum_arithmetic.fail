@@ -1,0 +1,5 @@
+examples/enum_arithmetic.etch:13:25: error: + operator requires matching types, got Color and Color. Use explicit casts like int(x) or float(x)
+  12 |   // This should fail: enum addition
+  13 |   let res: int = color1 + color2;
+                               ^
+  14 |   print("Should not reach here: " + string(res));

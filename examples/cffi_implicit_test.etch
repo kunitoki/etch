@@ -1,0 +1,5 @@
+import ffi cmath { sin, cos }
+
+fn main() {
+  print(sin(1));
+}

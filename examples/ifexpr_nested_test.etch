@@ -1,0 +1,37 @@
+// Test nested if-expressions
+
+fn main() {
+  let x: int = 15;
+  let y: int = 20;
+
+  // Nested if-expression
+  let result: string = if x > 10 {
+    if y > 10 {
+      "both large"
+    } else {
+      "only x large"
+    }
+  } else {
+    if y > 10 {
+      "only y large"
+    } else {
+      "both small"
+    }
+  };
+
+  print(result);
+
+  // Another test
+  let a: int = 5;
+  let b: int = 3;
+
+  let compare: string = if a > b {
+    if a > 10 { "a is big" } else { "a is small but bigger" }
+  } else {
+    if b > 10 { "b is big" } else { "b is small but bigger" }
+  };
+
+  print(compare);
+
+  print("Test passed!");
+}

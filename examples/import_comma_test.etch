@@ -1,0 +1,9 @@
+// Test comma-separated import syntax
+
+import lib/math { add, square, mul }
+
+fn main() {
+  print(add(5, 3));    // 8
+  print(square(4));    // 16
+  print(mul(2, 3));    // 6
+}

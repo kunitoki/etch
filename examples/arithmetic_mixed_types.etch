@@ -1,0 +1,8 @@
+fn main() -> void {
+    let x: int = 42;
+    let y: float = 3.14;
+
+    // This should fail - mixed types without explicit cast
+    let res: float = x + y;
+    discard res;
+}

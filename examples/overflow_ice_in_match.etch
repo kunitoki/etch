@@ -1,0 +1,26 @@
+// Test: ICE when overflow happens in match branch
+// Should give proper prover error with source location
+
+fn testMatchOverflow() -> int {
+  let maybeN: result[int] = match readFile("examples/data/input.txt") {
+    ok(content) => parseInt(content);
+    error(reason) => error(reason);
+  };
+
+  let result = match maybeN {
+    ok(value) => {
+      // This branch has constant overflow
+      let huge = 9223372036854775000;
+      let overflowed = huge + 2000;  // Overflow!
+      overflowed;
+    };
+    error(_) => 0;
+  };
+
+  return result;
+}
+
+fn main() -> void {
+  let r = testMatchOverflow();
+  print("Result: " + string(r));
+}

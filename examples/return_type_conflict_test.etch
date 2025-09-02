@@ -1,0 +1,12 @@
+fn conflicted(x: int) {
+    if x > 5 {
+        return "string value";
+    } else {
+        return 42;
+    }
+}
+
+fn main() -> void {
+    let res: int = conflicted(10);
+    discard res;
+}

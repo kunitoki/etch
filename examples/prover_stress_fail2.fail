@@ -1,0 +1,5 @@
+examples/prover_stress_fail2.etch:17:16: error: index interval [15, 19] extends beyond array bounds [0, 9]
+  16 |   if (x >= 0 and x < 5) or (x >= 15 and x < 20) {
+  17 |     return arr[x];  // ❌ Should fail! x could be [15,19]
+                      ^
+  18 |   }

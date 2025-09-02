@@ -1,0 +1,12 @@
+type Node = object {
+    value: int;
+};
+
+fn main() {
+    // Direct array (not wrapped in ref)
+    var arr = [new[Node](value: 1), new[Node](value: 2)];
+
+    // Test: arr[0] gives ref[Node], then @ dereferences it
+    // So @arr[0] should mean @(arr[0]), not (@arr)[0]
+    print(@arr[0].value);
+}

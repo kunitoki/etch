@@ -1,0 +1,23 @@
+fn my_coro() {
+    print("Inside coroutine");
+    yield 1;
+    return 1;
+}
+
+fn main() {
+    print("Main starts");
+    let c = spawn my_coro();
+    print("After spawn");
+    match resume c {
+        ok(v) => {
+            print("After resume");
+            print(v);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+    print("Done");
+}

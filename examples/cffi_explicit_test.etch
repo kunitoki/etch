@@ -1,0 +1,26 @@
+// Test C math library FFI with explicit type signatures
+// This is the proper way to import C functions
+
+import ffi cmath {
+  fn sin(x: float) -> float;
+  fn cos(x: float) -> float;
+  fn sqrt(x: float) -> float;
+  fn pow(x: float, y: float) -> float;
+}
+
+fn main() {
+  print(1);
+
+  // Test with type inference - types already known from signatures
+  let s = sin(0.0);
+  let c = cos(3.14159);
+  let sq = sqrt(16.0);
+  let p = pow(2.0, 3.0);
+
+  print(s);
+  print(c);
+  print(sq);
+  print(p);
+
+  print(2);
+}

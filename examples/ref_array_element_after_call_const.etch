@@ -1,0 +1,24 @@
+// Test array element access after array passed to function
+
+type Node = object {
+    value: int;
+};
+
+fn process_array(arr: array[ref[Node]]) {
+    for i in 0 ..< #arr {
+        if arr[i] != nil {
+            print(arr[i].value);
+        }
+    }
+}
+
+fn main() {
+    var arr: array[ref[Node]] = [new[Node](value: 1), new[Node](value: 2)];
+    let elem = arr[0];
+
+    process_array(arr);
+
+    // process_array doesn't mutate the array
+    // elem was provably non-nil before the call and still holds a strong ref
+    print(elem.value);
+}

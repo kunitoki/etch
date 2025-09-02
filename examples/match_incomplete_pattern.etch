@@ -1,0 +1,18 @@
+// Test: Incomplete pattern matching - missing cases
+type Color = enum {
+  Red;
+  Green;
+  Blue;
+  Yellow;
+};
+
+fn main() {
+  let color = Color.Red;
+
+  // This should fail: incomplete pattern matching (missing Green, Blue, Yellow)
+  match color {
+    Color.Red => { print("Found Red"); }
+    Color.Yellow => { print("Found Yellow"); }
+    // Missing Color.Green and Color.Blue cases
+  };
+}

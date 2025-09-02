@@ -1,0 +1,15 @@
+// Test: Initializing an object with default values should work
+
+type Point = object {
+  x: int;
+  y: int;
+};
+
+fn main() -> void {
+  // This should work - object initialized with all fields
+  var p: Point = { x: 0, y: 0 };
+  p.x = 10;  // Should be OK - object is initialized
+  p.y = 20;
+  let sum: int = p.x + p.y;
+  print(sum);
+}

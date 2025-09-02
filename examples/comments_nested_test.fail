@@ -1,0 +1,5 @@
+examples/comments_nested_test.etch:4:8: error: Nested multiline comments are not supported
+  3 |     /* This is the outer comment
+  4 |        /* This is a nested comment that should cause an error */
+             ^
+  5 |        and this continues the outer comment

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vscode/main/extensions/json/syntaxes/json.tmLanguage.schema.json",
+  "name": "EtchLang",
+  "scopeName": "source.etchlang",
+  "patterns": [
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#functions" },
+    { "include": "#numbers" },
+    { "include": "#strings" },
+    { "include": "#comments" }
+  ],
+  "repository": {
+    "keywords": {
+      "patterns": [
+        {
+          "match": "\\b(true|false|and|or|not|fn|let|var|while|for|in|break|if|elif|else|match|as|return|defer|discard|comptime|compiles|type|distinct|object|new|import|export|ffi|yield|spawn|resume|typeof)\\b",
+          "name": "keyword.control.etchlang"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "match": "\\b(typedesc|nil|void|bool|char|int|float|string|enum|array|ref|weak|option|result|coroutine|channel)\\b",
+          "name": "storage.type.etchlang"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "match": "\\b(print|inject|some|isSome|none|isNone|ok|isOk|error|isError|arrayNew|parseBool|parseInt|parseFloat|seed|rand|readFile)\\b",
+          "name": "storage.type.etchlang"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "match": "\\b\\d+\\b",
+          "name": "constant.numeric.etchlang"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "match": "(')(?:[^'\\\\]|\\\\.)(')",
+          "name": "constant.character.etchlang",
+          "captures": {
+            "1": { "name": "punctuation.definition.char.begin.etchlang" },
+            "2": { "name": "punctuation.definition.char.end.etchlang" }
+          }
+        },
+        {
+          "begin": "\"",
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.etchlang" } },
+          "end": "\"",
+          "endCaptures": { "0": { "name": "punctuation.definition.string.end.etchlang" } },
+          "name": "string.quoted.double.etchlang",
+          "patterns": [
+            {
+              "match": "\\\\.",
+              "name": "constant.character.escape.etchlang"
+            }
+          ]
+        }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        {
+          "begin": "/\\*",
+          "end": "\\*/",
+          "name": "comment.block.etchlang"
+        },
+        {
+          "match": "//.*$",
+          "name": "comment.line.double-slash.etchlang"
+        }
+      ]
+    }
+  }
+}

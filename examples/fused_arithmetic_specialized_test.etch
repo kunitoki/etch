@@ -1,0 +1,54 @@
+fn emitIntFusedOps() -> void {
+  let lhs: int = 12;
+  let mid: int = 3;
+  let extra: int = 2;
+
+  let mulAdd: int = lhs * mid + extra;
+  let subSub: int = lhs - mid - extra;
+  let mulSub: int = lhs * mid - extra;
+  let subMul: int = lhs - mid * extra;
+  let divAdd: int = lhs / mid + extra;
+  let addSub: int = lhs + mid - extra;
+  let addMul: int = (lhs + mid) * extra;
+  let subDiv: int = (lhs - mid) / extra;
+
+  print("int fused ops");
+  print(mulAdd);
+  print(subSub);
+  print(mulSub);
+  print(subMul);
+  print(divAdd);
+  print(addSub);
+  print(addMul);
+  print(subDiv);
+}
+
+fn emitFloatFusedOps() -> void {
+  let lhs: float = 6.0;
+  let mid: float = 1.5;
+  let extra: float = 0.5;
+
+  let mulAdd: float = lhs * mid + extra;
+  let subSub: float = lhs - mid - extra;
+  let mulSub: float = lhs * mid - extra;
+  let subMul: float = lhs - mid * extra;
+  let divAdd: float = lhs / mid + extra;
+  let addSub: float = lhs + mid - extra;
+  let addMul: float = (lhs + mid) * extra;
+  let subDiv: float = (lhs - mid) / extra;
+
+  print("float fused ops");
+  print(mulAdd);
+  print(subSub);
+  print(mulSub);
+  print(subMul);
+  print(divAdd);
+  print(addSub);
+  print(addMul);
+  print(subDiv);
+}
+
+fn main() -> void {
+  emitIntFusedOps();
+  emitFloatFusedOps();
+}

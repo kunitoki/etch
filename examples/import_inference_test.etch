@@ -1,0 +1,19 @@
+// Test type inference on imported symbols
+
+import lib/math { add, square, mul }
+
+fn main() {
+  // These should work with type inference
+  let a = add(10, 20);      // Should infer int
+  print(a);                  // 30
+
+  let b = square(5);         // Should infer int
+  print(b);                  // 25
+
+  let c = mul(3, 4);         // Should infer int
+  print(c);                  // 12
+
+  // Test in expressions
+  let d = add(square(2), mul(3, 2));  // Should infer int
+  print(d);                  // 10 (4 + 6)
+}

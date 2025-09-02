@@ -1,0 +1,24 @@
+// Test complex expression type inference
+fn main() {
+    // Complex expressions with multiple operations
+    let complex1 = (1 + 2) * 3;                    // int
+    let complex2 = (5 > 3) and (2 < 4);           // bool
+    let complex3 = [1, 2, 3][0] + [4, 5][1];       // int
+
+    // Array slicing
+    let arr = [1, 2, 3, 4, 5];
+    let slice = arr[1:3];                          // array[int]
+    let slice_elem = slice[0];                     // int
+
+    // String operations
+    let str = "hello";
+    let char_at = str[0];                          // char
+    let substr = str[1:3];                         // string
+
+    print(complex1);
+    print(complex2);
+    print(complex3);
+    print(slice_elem);
+    print(char_at);
+    print(substr);
+}

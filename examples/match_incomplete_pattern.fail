@@ -1,0 +1,5 @@
+examples/match_incomplete_pattern.etch:13:3: error: match expression on enum 'Color' is not exhaustive. Missing cases: Green, Blue. Add these cases or use '_' wildcard
+  12 |   // This should fail: incomplete pattern matching (missing Green, Blue, Yellow)
+  13 |   match color {
+         ^
+  14 |     Color.Red => { print("Found Red"); }

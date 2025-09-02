@@ -1,0 +1,5 @@
+examples/test_deref_index_correct.etch:11:11: error: deref expects ref[...]
+  10 |     // So @arr[0] should mean @(arr[0]), not (@arr)[0]
+  11 |     print(@arr[0].value);
+                 ^
+  12 | }

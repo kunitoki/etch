@@ -1,0 +1,185 @@
+// Stress test: Complex loop patterns and modifications
+
+fn testLoopWithMultipleExits() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+  for i in 0..<10 {
+    if i == 5 {
+      return arr[i];  // ✅ Should be proven safe!
+    }
+
+    if i == 7 {
+      return arr[i];  // ✅ Should be proven safe!
+    }
+  }
+
+  return -1;
+}
+
+fn testLoopWithGuardedAccess() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+  for i in 0..<15 {
+    // Guard ensures we don't access out of bounds
+    if i < 10 {
+      return arr[i];  // ✅ Should be proven safe!
+    }
+  }
+
+  return -1;
+}
+
+fn testWhileWithIncrement() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  let x = match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => 0;
+    };
+    error(_) => 0;
+  };
+
+  // While loop with condition on variable
+  while x < 5 {
+    if x >= 0 {
+      return arr[x];  // ✅ Should be proven safe!
+    }
+  }
+
+  return -1;
+}
+
+fn testLoopWithConditionalAccess() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+
+  for i in 0..<20 {
+    // Only access in valid range
+    if i >= 5 and i < 15 {
+      return arr[i];  // ✅ Should be proven safe!
+    }
+  }
+
+  return -1;
+}
+
+fn testLoopWithMultipleArrays() -> int {
+  let arr1: array[int] = [0, 1, 2, 3, 4];
+  let arr2: array[int] = [5, 6, 7, 8, 9];
+
+  for i in 0..<5 {
+    // Access different arrays with same index
+    let a = arr1[i];  // ✅ Should be proven safe!
+    let b = arr2[i];  // ✅ Should be proven safe!
+    return a + b;
+  }
+
+  return -1;
+}
+
+fn testReverseLoop() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+  // Reverse iteration (9 down to 0)
+  for i in 0..<10 {
+    let reverseIdx = 9 - i;
+    if reverseIdx >= 0 and reverseIdx < 10 {
+      return arr[reverseIdx];  // ✅ Should be proven safe!
+    }
+  }
+
+  return -1;
+}
+
+fn testLoopWithStride() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+  // Simulate stride-2 loop (accessing even indices)
+  for i in 0..<5 {
+    let idx = i * 2;
+    if idx < 10 {
+      return arr[idx];  // ✅ Should be proven safe!
+    }
+  }
+
+  return -1;
+}
+
+fn testLoopWithComplexBounds() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  let len = match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => 5;
+    };
+    error(_) => 5;
+  };
+
+  // Loop up to dynamic length with guard
+  for i in 0..<15 {
+    if i < len and len <= 10 and i < 10 {
+      return arr[i];  // ✅ Should be proven safe!
+    }
+  }
+
+  return -1;
+}
+
+fn testNestedWithDifferentRanges() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+
+  // Outer loop: larger range
+  for i in 0..<4 {
+    // Inner loop: smaller range
+    for j in 0..<2 {
+      let idx = i * 3 + j;
+      if idx < 16 {
+        return arr[idx];  // ✅ Should be proven safe!
+      }
+    }
+  }
+
+  return -1;
+}
+
+fn testWhileWithMultipleConditions() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  let x = match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => 0;
+    };
+    error(_) => 0;
+  };
+
+  let y = match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => 5;
+    };
+    error(_) => 5;
+  };
+
+  // While with compound condition
+  while x < y and y <= 10 {
+    if x >= 0 and x < 10 {
+      return arr[x];  // ✅ Should be proven safe!
+    }
+  }
+
+  return -1;
+}
+
+fn main() -> void {
+  print("Test 1 (multiple exits): " + string(testLoopWithMultipleExits()));
+  print("Test 2 (guarded access): " + string(testLoopWithGuardedAccess()));
+  print("Test 3 (while with increment): " + string(testWhileWithIncrement()));
+  print("Test 4 (conditional access): " + string(testLoopWithConditionalAccess()));
+  print("Test 5 (multiple arrays): " + string(testLoopWithMultipleArrays()));
+  print("Test 6 (reverse loop): " + string(testReverseLoop()));
+  print("Test 7 (stride loop): " + string(testLoopWithStride()));
+  print("Test 8 (complex bounds): " + string(testLoopWithComplexBounds()));
+  print("Test 9 (nested different ranges): " + string(testNestedWithDifferentRanges()));
+  print("Test 10 (while multiple conditions): " + string(testWhileWithMultipleConditions()));
+  print("");
+  print("✅ All loop pattern stress tests passed!");
+}

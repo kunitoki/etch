@@ -1,0 +1,23 @@
+fn main() {
+    var x = ["Hello", "World", "from", "Etch"];
+    print("Hello" in x);
+    print("Hello" not in x);
+    print("Hello" in ["Hello", "World", "from", "Etch"]);
+    print("Hello" not in ["Hello", "World", "from", "Etch"]);
+    print("Hello2" in x);
+    print("Hello2" not in x);
+    print("Hello2" in ["Hello", "World", "from", "Etch"]);
+    print("Hello2" not in ["Hello", "World", "from", "Etch"]);
+
+
+    var y = [1, 2, 3, 4, 5, 6, 7];
+    print(1 in y);
+    print(1 not in y);
+    print(1 in [1, 2, 3, 4, 5, 6, 7]);
+    print(1 not in [1, 2, 3, 4, 5, 6, 7]);
+    print(10 in y);
+    print(10 not in y);
+    print(10 in [1, 2, 3, 4, 5, 6, 7]);
+    print(10 not in [1, 2, 3, 4, 5, 6, 7]);
+
+}

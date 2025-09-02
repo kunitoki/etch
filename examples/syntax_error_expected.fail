@@ -1,0 +1,5 @@
+examples/syntax_error_expected.etch:3:3: error: expected symbol ';', got identifier 'y'
+  2 |   let x: int = print
+  3 |   y
+        ^
+  4 | }

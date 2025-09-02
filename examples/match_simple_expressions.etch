@@ -1,0 +1,46 @@
+// Simple pattern matching test with only expressions in case bodies
+fn divideInts(a: int, b: int) -> result[int] {
+    if b == 0 {
+        return error("Division by zero");
+    } else {
+        return ok(a / b);
+    }
+}
+
+fn tryGetElement(arr: array[int], index: int) -> option[int] {
+    if index >= 0 and index < #arr {
+        return some(arr[index]);
+    } else {
+        return none;
+    }
+}
+
+fn main() -> int {
+    let numbers: array[int] = [10, 20, 30, 40, 50];
+
+    // Test option pattern matching - only expressions in case bodies
+    let maybeValue: option[int] = tryGetElement(numbers, 2);
+    let result1: string = match maybeValue {
+        some(value) => {
+            "Found value: " + string(value);
+        }
+        none => {
+            "No value found";
+        }
+    };
+    print(result1);
+
+    // Test result pattern matching - only expressions in case bodies
+    let divResult: result[int] = divideInts(42, 6);
+    let message: string = match divResult {
+        ok(value) => {
+            "Division successful: " + string(value);
+        }
+        error(err) => {
+            "Division failed: " + err;
+        }
+    };
+    print(message);
+
+    return 0;
+}

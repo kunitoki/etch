@@ -1,0 +1,5 @@
+// Using compound assignment should still participate in overflow analysis.
+fn main() -> void {
+  var acc: int = 9223372036854775800;
+  acc += 10;
+}

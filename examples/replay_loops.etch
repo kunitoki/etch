@@ -1,0 +1,22 @@
+// replay_loops.etch
+// Test replay/scrubbing with loops and function calls
+
+fn fibonacci(n: int) -> int {
+    if n <= 1 {
+        return n;
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+fn main() -> int {
+    print("Computing Fibonacci numbers:\n");
+
+    var i = 0;
+    while i < 8 {
+        let fib = fibonacci(i);
+        print("fib(" + string(i) + ") = " + string(fib));
+        i = i + 1;
+    }
+
+    return 0;
+}

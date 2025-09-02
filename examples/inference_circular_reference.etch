@@ -1,0 +1,6 @@
+// Test: Circular reference in type inference
+fn main() {
+  let x = y + 1;  // y is not defined yet
+  let y = x + 2;  // x depends on y - circular dependency
+  print(x);
+}

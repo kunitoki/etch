@@ -1,0 +1,7 @@
+// Test: Using a completely uninitialized variable (should FAIL)
+
+fn main() -> void {
+  var x: int;
+  let y: int = x; // Error: use of uninitialized variable 'x'
+  print(y);
+}

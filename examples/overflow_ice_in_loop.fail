@@ -1,0 +1,5 @@
+examples/overflow_ice_in_loop.etch:11:16: error: addition overflow
+  10 |     let huge = 9223372036854775000;
+  11 |     sum = huge + huge;  // This will overflow
+                      ^
+  12 |     i = i + 1;

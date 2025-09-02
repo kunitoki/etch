@@ -1,0 +1,20 @@
+fn add(a: int, b: int) -> int {
+    return a + b;
+}
+
+fn square(x: int) -> int {
+    return multiply(x, x);
+}
+
+fn multiply(a: int, b: int) -> int {
+    return a * b;
+}
+
+fn compute(n: int) -> int {
+    return add(square(n), 10);
+}
+
+fn main() {
+    var result = compute(5);
+    print(result);
+}

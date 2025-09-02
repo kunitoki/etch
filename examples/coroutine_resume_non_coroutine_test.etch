@@ -1,0 +1,6 @@
+// Test error: resume on a non-coroutine value
+fn main() {
+    let x = 42;
+    let val: int = resume x;  // Error: x is not a coroutine
+    print(val);
+}

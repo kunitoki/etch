@@ -1,0 +1,5 @@
+examples/lambda_pass_to_function_fail.etch:14:15: error: type mismatch: expected fn(int) -> int, got fn(int, int) -> int
+  13 |     let a = [1, 2, 3];
+  14 |     let res = applyOne(a, |x: int, y: int| x + y);
+                     ^
+  15 |     print(string(#res));

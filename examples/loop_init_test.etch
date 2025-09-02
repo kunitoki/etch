@@ -1,0 +1,13 @@
+fn main() -> void {
+    var x: int;
+    var i: int = 0;
+
+    while i < 5 {
+        x = i * 2;
+        i = i + 1;
+    }
+
+    print(x);  // x is guaranteed to be initialized since loop executes at least once (0 < 5)
+    print(x);
+    print(i);  // i should be 5 after the loop
+}

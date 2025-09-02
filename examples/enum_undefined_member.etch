@@ -1,0 +1,14 @@
+// Test: Accessing undefined enum member through type
+type Color = enum {
+  Red;
+  Green;
+  Blue;
+};
+
+fn main() {
+  let color = Color.Red;
+
+  // This should fail: accessing undefined member through type
+  let undefined = Color.Purple;
+  print("Should not reach here");
+}

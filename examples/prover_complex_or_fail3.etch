@@ -1,0 +1,26 @@
+// Test: Complex AND/OR combination with gap that includes unsafe values
+// Pattern: (A and B) or (C and D) where one branch is unsafe
+
+fn testComplexAndOrUnsafe() -> int {
+  let x = match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => 5;
+    };
+    error(_) => 5;
+  };
+
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+  // First branch: x >= 2 and x < 7 → [2, 6] ✓ safe
+  // Second branch: x >= 10 and x < 20 → [10, 19] ❌ extends beyond [0, 12]
+  if (x >= 2 and x < 7) or (x >= 10 and x < 20) {
+    return arr[x];  // ❌ Should fail!
+  }
+
+  return -1;
+}
+
+fn main() -> void {
+  print(testComplexAndOrUnsafe());
+}

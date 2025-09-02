@@ -1,0 +1,22 @@
+fn main() -> void {
+    // Test basic option[T] creation
+    let someInt: option[int] = some(42);
+
+    // Test basic result[T] creation
+    let okValue: result[int] = ok(100);
+
+    // Use the values in match expressions to demonstrate they work
+    let result1: int = match someInt {
+        some(value) => value,
+        none => 0
+    };
+    print(result1);
+
+    let result2: int = match okValue {
+        ok(value) => value,
+        error(msg) => -1
+    };
+    print(result2);
+
+    print("Basic option/result creation test passed");
+}

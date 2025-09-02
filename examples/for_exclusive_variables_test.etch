@@ -1,0 +1,13 @@
+fn main() -> void {
+    // Test exclusive range with variables
+    var start: int = 2;
+    var end: int = 6;
+
+    print("Testing exclusive range with variables:");
+
+    for x in start..<end {
+        print(x);
+    }
+
+    print("End test");
+}

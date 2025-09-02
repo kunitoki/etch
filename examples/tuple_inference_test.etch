@@ -1,0 +1,8 @@
+// Test type inference for tuple operations
+fn main() {
+    let t = (1, 2, 3);
+    let x = t[0];  // Should infer int
+    let s = t[1:2]; // Should infer tuple[int]
+    print(x);
+    print(s[0]);
+}

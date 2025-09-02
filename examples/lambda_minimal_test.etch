@@ -1,0 +1,9 @@
+// Minimal lambda test - just parsing
+fn test() {
+  let f = |x: int| x + 1;
+  print("minimal = " + string(f(1)));
+}
+
+fn main() {
+  test();
+}

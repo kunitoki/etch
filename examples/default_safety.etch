@@ -1,0 +1,19 @@
+fn safeDivide(numerator: int, divisor: int = 5) -> int {
+    return numerator / divisor;
+}
+
+fn safeMod(value: int, modulus: int = 7) -> int {
+    return value % modulus;
+}
+
+fn unsafeDivide(numerator: int, divisor: int = 0) -> int {
+    return numerator / divisor;
+}
+
+fn main() -> void {
+    let result1: int = safeDivide(20);
+    let result2: int = safeMod(13);
+    
+    print(result1);
+    print(result2);
+}

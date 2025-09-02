@@ -1,0 +1,5 @@
+examples/unreachable_false_test.etch:3:3: error: unreachable code (condition is always false)
+  2 |   // Always false condition
+  3 |   if 0 == 1 {
+        ^
+  4 |     print(10 / 0);  // Should error about dead code, not division error

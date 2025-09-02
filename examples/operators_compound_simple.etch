@@ -1,0 +1,22 @@
+// Demonstrates that compound assignments and detected patterns behave identically.
+fn accumulate() -> int {
+  var total = 10;
+  total += 5;
+  total -= 3;
+  total *= 2;
+  total /= 4;
+  total %= 5;
+  total = total + 9;  // Detects a = a + b pattern
+  return total;
+}
+
+fn main() -> void {
+  let total = accumulate();
+  var mirrored = 8;
+  mirrored = mirrored + 2;  // Detects a = a + b pattern
+  mirrored -= 3;
+  mirrored *= 4;
+
+  print(total);
+  print(mirrored);
+}

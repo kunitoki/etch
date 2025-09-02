@@ -1,0 +1,5 @@
+examples/initialization_prover_reference.etch:5:16: error: potential null dereference: dereferencing variable 'x' that may be nil
+  4 |   var x: ref[int];
+  5 |   let y: int = @x; // Error: x is not initialized (null reference)
+                     ^
+  6 |   print(y);

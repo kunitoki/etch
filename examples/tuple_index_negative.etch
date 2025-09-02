@@ -1,0 +1,6 @@
+// Tuple index negative
+fn main() {
+    let t = (1, 2, 3);
+    let x: int = t[-1];  // Error: negative index
+    discard x;
+}

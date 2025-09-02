@@ -1,0 +1,8 @@
+=== Conditional Weak Test ===
+Created weak ref in if block: 50
+Weak ref still alive: 50
+Created weak2 in else block: 70
+Weak2 is nil after else block
+=== Test Complete ===
+Destroying: 70
+Destroying: 50

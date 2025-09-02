@@ -1,0 +1,5 @@
+examples/object_unpacking_wrong_type.etch:4:9: error: object unpacking requires an object expression, got int
+  3 |     let x = 42;
+  4 |     let {a, b} = x;  // Error: can't unpack int as object
+              ^
+  5 |     discard a, b;

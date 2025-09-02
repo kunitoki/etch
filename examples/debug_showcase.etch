@@ -1,0 +1,26 @@
+// Showcase of debugger improvements:
+// 1. Variables display as nil before initialization
+// 2. Variables appear only after definition
+// 3. Arrays display properly as [1, 2, 3]
+// 4. Variables are sorted alphabetically
+
+fn main() {
+    // At this point, no variables defined yet
+
+    let zebra = 100;  // First variable
+    // Now: zebra = 100
+
+    let apple = 5;    // Second variable
+    // Now: apple = 5, zebra = 100 (sorted)
+
+    let numbers = [10, 20, 30, 40, 50];  // Array variable
+    // Now: apple = 5, numbers = [10, 20, 30, 40, 50], zebra = 100
+
+    let banana = apple * 2;  // Computed variable
+    // Now: apple = 5, banana = 10, numbers = [10, 20, 30, 40, 50], zebra = 100
+
+    print(apple);
+    print(banana);
+    print(numbers[2]);  // Print third element (30)
+    print(zebra);
+}

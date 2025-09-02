@@ -1,0 +1,93 @@
+// Pattern matching test for option[T] and result[T] types
+// This demonstrates safe value extraction using match expressions
+
+fn divideInts(a: int, b: int) -> result[int] {
+    if b == 0 {
+        return error("Division by zero");
+    } else {
+        return ok(a / b);
+    }
+}
+
+fn tryGetElement(arr: array[int], index: int) -> option[int] {
+    if index >= 0 and index < #arr {
+        return some(arr[index]);
+    } else {
+        return none;
+    }
+}
+
+fn main() -> int {
+    // Test option pattern matching
+    let numbers: array[int] = [10, 20, 30, 40, 50];
+
+    // Test Some case
+    let maybeValue: option[int] = tryGetElement(numbers, 2);
+    let result1: string = match maybeValue {
+        some(value) => {
+            "Found value: " + string(value);
+        }
+        none => {
+            "No value found";
+        }
+    };
+    print(result1);
+
+    // Test None case
+    let maybeValue2: option[int] = tryGetElement(numbers, 10);
+    let result2: string = match maybeValue2 {
+        some(value) => {
+            "Found value: " + string(value);
+        }
+        none => {
+            "Index out of bounds";
+        }
+    };
+    print(result2);
+
+    // Test result pattern matching - Ok case
+    let divResult1: result[int] = divideInts(42, 6);
+    let message1: string = match divResult1 {
+        ok(value) =>{
+            "Division successful: " + string(value);
+        }
+        error(err) =>{
+            "Division failed: " + err;
+        }
+    };
+    print(message1);
+
+    // Test result pattern matching - Error case
+    let divResult2: result[int] = divideInts(42, 0);
+    let message2: string = match divResult2 {
+        ok(value) =>{
+            "Division successful: " + string(value);
+        }
+        error(err) =>{
+            "Division failed: " + err;
+        }
+    };
+    print(message2);
+
+    // Test nested pattern matching with parsing
+    let parseResult: result[int] = parseInt("123");
+    let nestedResult: string = match parseResult {
+        ok(parsedValue) =>{
+            let doubled: result[int] = divideInts(246, 1);
+            match doubled {
+                ok(final) =>{
+                    "Parsed and doubled: " + string(final);
+                }
+                error(err) =>{
+                    "Failed to double: " + err;
+                }
+            };
+        }
+        error(msg) =>{
+            "Failed to parse number: " + msg;
+        }
+    };
+    print(nestedResult);
+
+    return 0;
+}

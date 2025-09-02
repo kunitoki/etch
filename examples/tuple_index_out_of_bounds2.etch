@@ -1,0 +1,6 @@
+// Tuple index out of bounds with explicit type
+fn main() {
+    let t = (1, 2, 3);
+    let x: int = t[5];  // Error: index 5 out of bounds for tuple with 3 elements
+    discard x;
+}

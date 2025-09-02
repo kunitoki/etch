@@ -1,0 +1,5 @@
+examples/unused_variable_error.etch:2:7: error: unused variable 'unused_var'
+  1 | fn main() -> void {
+  2 |   let unused_var: int = 42;
+            ^
+  3 |   let used_var: int = 10;

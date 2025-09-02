@@ -1,0 +1,38 @@
+// Test: Comprehensive safety demonstration with file I/O
+// Shows multiple safety features working together
+
+fn main() -> void {
+    // Safe file reading and parsing
+    let file_num: int = match readFile("examples/data/file_safe_numbers.txt") {
+        ok(content) => match parseInt(content) {
+            ok(num) => num;
+            error(_) => 0;
+        };
+        error(_) => 0;
+    };
+
+    // Safe array operations
+    let data: array[int] = [1, 2, 3, 4, 5];
+    let first_elem: int = data[0];  // Compile-time bounds check: 0 < 5 ✓
+
+    // Safe arithmetic operations with known constant
+    let small_const: int = 5;  // Known constant
+    let safe_sum: int = small_const + first_elem;  // 5 + 1 = 6, provably safe
+    print(safe_sum);
+
+    // Safe casting operations
+    let as_float: float = float(file_num);
+    let back_to_string: string = string(file_num);
+    print(as_float);
+    print(back_to_string);
+
+    // Safe range operations using the safe sum
+    let small_rand: int = rand(5);         // Range: [0, 5]
+    let safe_total: int = safe_sum + small_rand; // Range: [6, 11] - safe
+    print(safe_total);
+
+    // Safe array length operations
+    let length: int = #data;
+    let length_based: int = length + length;   // 5 + 5 = 10, safer than multiplication
+    print(length_based);
+}

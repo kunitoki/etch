@@ -1,0 +1,5 @@
+examples/lambda_assignment_fail.etch:3:29: error: parameter 'x' type string incompatible with expected int
+  2 |     // Failing: assigning lambda with wrong signature to variable
+  3 |     let f: fn(int) -> int = |x: string| -> int { 1 };
+                                  ^
+  4 |     discard f;

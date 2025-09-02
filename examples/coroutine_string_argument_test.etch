@@ -1,0 +1,39 @@
+// Test passing coroutine[string] as function arguments
+fn string_generator(prefix: string, count: int) {
+    var i = 0;
+    while i < count {
+        yield prefix;
+        i = i + 1;
+    }
+    return prefix;
+}
+
+// Function that takes a coroutine[string] and consumes values
+fn print_messages(coro: coroutine[string], times: int) {
+    var i = 0;
+    while i < times {
+        match resume coro {
+            ok(msg) => {
+                print(msg);
+            }
+            error(err) => {
+                print("resume error: ");
+                print(err);
+                return;
+            }
+        };
+        i = i + 1;
+    }
+}
+
+fn main() {
+    let gen1 = spawn string_generator("Hello", 3);
+    print("Messages from gen1:");
+    print_messages(gen1, 3);
+
+    let gen2 = spawn string_generator("World", 2);
+    print("Messages from gen2:");
+    print_messages(gen2, 2);
+
+    print("Done!");
+}

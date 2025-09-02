@@ -1,0 +1,5 @@
+examples/overflow_array_index_computation.etch:8:18: error: addition overflow
+  7 |   // Compute index - this addition might overflow!
+  8 |   let idx = base + offset;
+                       ^
+  9 |

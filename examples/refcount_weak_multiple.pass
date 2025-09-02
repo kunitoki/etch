@@ -1,0 +1,10 @@
+=== Multiple Weak References Test ===
+Created strong ref: 42
+Weak1 alive: 42
+Weak2 alive: 42
+Weak3 alive: 42
+Destroying: 42
+Weak1 is nil
+Weak2 is nil
+Weak3 is nil
+=== Test Complete ===

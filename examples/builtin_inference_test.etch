@@ -1,0 +1,14 @@
+// Test type inference on FFI imported symbols
+
+fn main() {
+  // These should work with type inference
+  let s = string(42);      // Should infer string
+  let r = rand(100);         // Should infer int
+
+  print(s);  // Use the inferred variable
+  print(r);  // Use the inferred variable
+
+  // Test chaining
+  let s2 = string(rand(10));  // Should infer string
+  print(s2); // Use the inferred variable
+}

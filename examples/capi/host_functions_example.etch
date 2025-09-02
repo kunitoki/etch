@@ -1,0 +1,29 @@
+// Test file for host functions example
+// This demonstrates calling C host functions from Etch
+
+import host {
+    fn host_add(a: int, b: int) -> int;
+    fn host_sqrt(x: float) -> float;
+    fn host_greet(name: string) -> string;
+    fn host_max(a: int, b: int, c: int, d: int) -> int;
+}
+
+fn main() {
+    // Test host_add
+    let sum: int = host_add(10, 32);
+    print("host_add(10, 32) = " + string(sum));
+
+    // Test host_sqrt
+    let root: float = host_sqrt(16.0);
+    print("host_sqrt(16.0) = " + string(root));
+
+    // Test host_greet
+    let greeting: string = host_greet("Etch");
+    print("host_greet(\"Etch\") = \"" + greeting + "\"");
+
+    // Test host_max with multiple arguments
+    let maximum: int = host_max(5, 12, 7, 3);
+    print("host_max(5, 12, 7, 3) = " + string(maximum));
+
+    return 0;
+}

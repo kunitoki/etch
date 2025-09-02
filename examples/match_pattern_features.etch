@@ -1,0 +1,88 @@
+fn grade(score: int) -> string {
+  return match score {
+    0 ..< 60  => "F";
+    60 ..< 70 => "D";
+    70 ..< 80 => "C";
+    80 ..< 90 => "B";
+    90 .. 100 => "A";
+    _ => "invalid";
+  };
+}
+
+fn describeValue(value: int) -> string {
+  return match value {
+    0 | 1 => "tiny";
+    2 | 3 | 5 | 7 => "prime under 10";
+    _ => "other";
+  };
+}
+
+fn matchChar(ch: char) -> string {
+  return match ch {
+    'a' .. 'z' => "lower";
+    'A' .. 'Z' => "upper";
+    _ => "other";
+  };
+}
+
+fn route(cmd: array[string]) -> string {
+  return match cmd {
+    ["GET", path, ...] => "GET " + path;
+    ["POST", path, ...rest] => "POST " + path + " rest:" + string(#rest);
+    _ => "UNKNOWN";
+  };
+}
+
+fn tupleUse(left: option[int], right: option[int]) -> string {
+  return match (left, right) {
+    (some(a), some(b)) => "both (" + string(a) + "," + string(b) + ")";
+    (some(a), none) => "left " + string(a);
+    (none, some(b)) => "right " + string(b);
+    _ => "missing";
+  };
+}
+
+fn captureRange(value: int) -> string {
+  return match value {
+    (1 ..< 10) as v => "digit " + string(v);
+    _ => "value " + string(value);
+  };
+}
+
+fn detectTeen(age: option[int]) -> string {
+  return match age {
+    some(10 ..< 20 as teen) => "teen " + string(teen);
+    some(a) => "age " + string(a);
+    none => "unknown";
+  };
+}
+
+fn main() -> void {
+  print(grade(95));
+  print(grade(65));
+
+  print(describeValue(2));
+  print(describeValue(9));
+
+  print(matchChar('G'));
+  print(matchChar('!'));
+
+  let getCmd: array[string] = ["GET", "/health"];
+  let postCmd: array[string] = ["POST", "/submit", "payload"];
+  let badCmd: array[string] = ["PATCH"];
+  let emptyOpt: option[int] = none;
+
+  print(route(getCmd));
+  print(route(postCmd));
+  print(route(badCmd));
+
+  print(tupleUse(some(10), emptyOpt));
+  print(tupleUse(emptyOpt, some(7)));
+
+  print(captureRange(5));
+  print(captureRange(42));
+
+  print(detectTeen(some(15)));
+  print(detectTeen(some(3)));
+  print(detectTeen(emptyOpt));
+}

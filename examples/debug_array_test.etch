@@ -1,0 +1,9 @@
+fn main() {
+    let x: int = 10;
+    let y: int = 20;
+    let sum: int = x + y;  // sum should be 30
+    let arr: array[int] = [1, 2, 3];
+
+    print(sum);
+    print(arr[0]);
+}

@@ -1,0 +1,41 @@
+fn main() -> void {
+  // Test basic char functionality
+  let ch: char = 'A';
+  print(ch);
+
+  // Test char assignment and printing
+  let greeting_char: char = 'H';
+  print(greeting_char);
+
+  // Test string basics
+  let greeting: string = "Hello World!";
+  print(greeting);
+
+  // Test string length
+  let len: int = #greeting;
+  print(len);
+
+  // Test string indexing - returns char
+  let first_char: char = greeting[0];
+  print(first_char);
+  let last_char: char = greeting[11];
+  print(last_char);
+
+  // Test string slicing
+  let hello: string = greeting[0:5];
+  print(hello);
+  let world: string = greeting[6:11];
+  print(world);
+
+  // Test combining chars and strings - get exclamation mark
+  let exclamation: char = greeting[11];  // Known safe index
+  print(exclamation);
+
+  // Test edge case slicing
+  let empty_slice: string = greeting[5:5];
+  print(empty_slice);
+
+  // Test char literals with escapes
+  let quote: char = '\'';
+  print(quote);
+}

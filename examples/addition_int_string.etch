@@ -1,0 +1,6 @@
+fn main() -> void {
+    let x: int = 42;
+    let y: string = "hello";
+    let z: int = x + y;  // Type error: cannot add int and string
+    discard z;
+}

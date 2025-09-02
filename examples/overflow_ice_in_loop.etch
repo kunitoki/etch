@@ -1,0 +1,21 @@
+// Test: ICE when overflow happens in loop body
+// Should give proper prover error, not ICE
+
+fn testLoopWithConstantOverflow() -> int {
+  var sum = 0;
+  var i = 0;
+
+  while i < 3 {
+    // Each iteration tries to add a value that would overflow
+    let huge = 9223372036854775000;
+    sum = huge + huge;  // This will overflow
+    i = i + 1;
+  }
+
+  return sum;
+}
+
+fn main() -> void {
+  let result = testLoopWithConstantOverflow();
+  print("Result: " + string(result));
+}

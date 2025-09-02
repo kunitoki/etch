@@ -1,0 +1,24 @@
+// Test weak ref invalidation - safe because we check for nil
+type Node = object {
+    value: int;
+};
+
+fn main() {
+    var weak_arr: array[weak[Node]];
+
+    {
+        let node = new[Node](value: 42);
+        let weak_node: weak[Node] = node;
+        weak_arr = [weak_node];
+    }
+
+    // node is out of scope, weak ref should be dead
+    let promoted: ref[Node] = weak_arr[0];
+
+    // Safe: we check if promoted is nil before dereferencing
+    if promoted == nil {
+        print("Ref is nil");
+    } else {
+        print(promoted.value);
+    }
+}

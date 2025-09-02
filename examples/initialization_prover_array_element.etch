@@ -1,0 +1,7 @@
+// Test: Using uninitialized array element (should FAIL)
+
+fn main() -> void {
+  var arr : array[int];
+  let value = arr[0]; // Error: arr[0] is not initialized
+  print(value);
+}

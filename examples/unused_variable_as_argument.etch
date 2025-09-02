@@ -1,0 +1,9 @@
+fn test(x: int) -> int {
+  return x * 2;
+}
+
+fn main() -> void {
+  var unused_var: int = 42;
+  unused_var = 10;
+  print(unused_var.test());
+}

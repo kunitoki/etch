@@ -1,0 +1,5 @@
+fn main() -> void {
+    // Failing: assigning lambda with wrong signature to variable
+    let f: fn(int) -> int = |x: string| -> int { 1 };
+    discard f;
+}

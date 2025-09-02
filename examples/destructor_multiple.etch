@@ -1,0 +1,27 @@
+// Test multiple objects with destructors
+// Validates that each object's destructor is called in correct order
+
+type Resource = object {
+  id: int;
+};
+
+fn ~(r: Resource) -> void {
+  print("Destructor called for Resource #" + string(r.id));
+}
+
+fn main() -> void {
+  print("Creating first resource...");
+  let res1 = new[Resource]( id: 1 );
+  discard res1;
+
+  print("Creating second resource...");
+  let res2 = new[Resource]( id: 2 );
+  discard res2;
+
+  print("Creating third resource...");
+  let res3 = new[Resource]( id: 3 );
+  discard res3;
+
+  print("All resources created");
+  print("Exiting main...");
+}

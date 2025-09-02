@@ -1,0 +1,10 @@
+// Test: Complex range expressions 
+// Shows how expressions in range bounds are tracked
+
+fn main() -> void {
+  let x: int = rand(10);              // Range: [0, 10]
+  let shifted: int = x + 1;           // Range: [1, 11]
+  let bounded: int = rand(100, shifted); // Range: [1, 100] - min from shifted
+  let safe_result: int = 50 / bounded;   // Safe: divisor proven non-zero
+  print(safe_result);
+}

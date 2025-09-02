@@ -1,0 +1,27 @@
+// Minimal reproduction for color globals resolved from host rgb()
+import host
+{
+    fn rgb(r: int, g: int, b: int) -> int;
+}
+
+let COLOR_WHITE: int = rgb(255, 255, 255);
+let COLOR_DARKGRAY: int = rgb(15, 26, 26);
+let COLOR_RED: int = rgb(255, 0, 0);
+let COLOR_ORANGE: int = rgb(255, 165, 0);
+let COLOR_YELLOW: int = rgb(255, 255, 0);
+let COLOR_GREEN: int = rgb(0, 255, 0);
+let COLOR_BLUE: int = rgb(0, 0, 255);
+
+fn showColor(name: string, color: int) -> void {
+  print(name + "=" + string(color));
+}
+
+fn main() -> void {
+  showColor("COLOR_WHITE", COLOR_WHITE);
+  showColor("COLOR_DARKGRAY", COLOR_DARKGRAY);
+  showColor("COLOR_RED", COLOR_RED);
+  showColor("COLOR_ORANGE", COLOR_ORANGE);
+  showColor("COLOR_YELLOW", COLOR_YELLOW);
+  showColor("COLOR_GREEN", COLOR_GREEN);
+  showColor("COLOR_BLUE", COLOR_BLUE);
+}

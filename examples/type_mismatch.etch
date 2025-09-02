@@ -1,0 +1,4 @@
+fn test() -> string { return "hello"; }
+fn main() -> void {
+  let x: int = test();
+}

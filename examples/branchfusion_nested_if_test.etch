@@ -1,0 +1,47 @@
+// Verifies fused Lt+Jmp keeps correct targets in nested conditionals
+fn main() -> void {
+  // both branches true -> take inner then
+  let a: int = 600;
+  let b: int = 700;
+  var r1: int = 0;
+  if a > 500 {
+    if b > 500 {
+      r1 = a + b;
+    } else {
+      r1 = a;
+    }
+  } else {
+    r1 = b;
+  }
+  print(r1);
+
+  // outer false -> go to else without touching inner
+  let c: int = 100;
+  let d: int = 200;
+  var r2: int = 0;
+  if c > 500 {
+    if d > 500 {
+      r2 = c + d;
+    } else {
+      r2 = c;
+    }
+  } else {
+    r2 = d;
+  }
+  print(r2);
+
+  // outer true, inner false -> select outer value
+  let e: int = 600;
+  let f: int = 100;
+  var r3: int = 0;
+  if e > 500 {
+    if f > 500 {
+      r3 = e + f;
+    } else {
+      r3 = e;
+    }
+  } else {
+    r3 = f;
+  }
+  print(r3);
+}

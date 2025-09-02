@@ -1,0 +1,8 @@
+fn main() -> void {
+  // Always false condition
+  if 0 == 1 {
+    print(10 / 0);  // Should error about dead code, not division error
+  }
+  
+  print(42);
+}

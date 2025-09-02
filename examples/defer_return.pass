@@ -1,0 +1,10 @@
+Test 1: Early return
+Start
+Early return
+Deferred finalization for early return
+Deferred cleanup
+
+Test 2: Normal return
+Start
+Normal path
+Deferred cleanup

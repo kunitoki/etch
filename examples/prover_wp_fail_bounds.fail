@@ -1,0 +1,5 @@
+examples/prover_wp_fail_bounds.etch:7:14: error: index 10 out of bounds [0, 4]
+  6 |   let arr: array[int] = [1, 2, 3, 4, 5];
+  7 |   return arr[idx];
+                   ^
+  8 | }

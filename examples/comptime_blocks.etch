@@ -1,0 +1,36 @@
+let global_config: int = 42;
+
+fn main() -> void {
+    comptime {
+        print(10);
+        print(20);
+        print(30);
+    }
+    
+    let x: int = 5;
+    print(x);
+    
+    comptime {
+        let ct_var: int = 100;
+        print(ct_var);
+        
+        let ct_calc: int = 7 * 8;
+        print(ct_calc);
+        
+        print(999);
+    }
+    
+    print(global_config);
+    
+    comptime {
+        let debug_info: int = 1;
+        if debug_info == 1 {
+            print(777);
+        } else {
+            print(888);
+        }
+    }
+    
+    let y: int = 15;
+    print(y);
+}

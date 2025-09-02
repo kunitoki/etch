@@ -1,0 +1,9 @@
+// Test: Overflow detection failure case
+// This should fail at compile time due to potential overflow
+
+fn main() -> void {
+  let large_a: int = rand(9223372036854775800);  // Range: [0, near int64.max]
+  let large_b: int = rand(1000);                 // Range: [0, 1000]
+  let overflow_risk: int = large_a + large_b;    // Should fail: potential overflow
+  print(overflow_risk);
+}

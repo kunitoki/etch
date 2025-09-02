@@ -1,0 +1,91 @@
+// Test multiple coroutines spawned in a loop
+fn counter(start: int) {
+    var i = start;
+    while i < start + 3 {
+        yield i;
+        i = i + 1;
+    }
+    return i;
+}
+
+fn main() {
+    // Spawn multiple coroutines
+    let c1 = spawn counter(0);
+    let c2 = spawn counter(10);
+    let c3 = spawn counter(20);
+
+    // Interleave resuming them
+    match resume c1 {
+        ok(v1) => {
+            print("C1 yielded: ");
+            print(v1);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume c2 {
+        ok(v2) => {
+            print("C2 yielded: ");
+            print(v2);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume c3 {
+        ok(v3) => {
+            print("C3 yielded: ");
+            print(v3);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume c1 {
+        ok(v4) => {
+            print("C1 yielded: ");
+            print(v4);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume c2 {
+        ok(v5) => {
+            print("C2 yielded: ");
+            print(v5);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume c3 {
+        ok(v6) => {
+            print("C3 yielded: ");
+            print(v6);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    print("All coroutines completed!");
+}

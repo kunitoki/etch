@@ -1,0 +1,5 @@
+examples/operators_compound_immutable_fail.etch:4:9: error: cannot assign to immutable variable 'total'
+  3 |   let total = 1;
+  4 |   total += 1;
+              ^
+  5 | }

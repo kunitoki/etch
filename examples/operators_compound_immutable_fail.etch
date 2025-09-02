@@ -1,0 +1,5 @@
+// Attempting to use compound assignment on an immutable binding must fail.
+fn main() -> void {
+  let total = 1;
+  total += 1;
+}

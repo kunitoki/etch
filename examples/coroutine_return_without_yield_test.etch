@@ -1,0 +1,41 @@
+// Test coroutine that conditionally yields (but doesn't in this case)
+// Demonstrates early completion without hitting yield
+fn compute(x: int, should_yield: bool) -> coroutine[int] {
+    if should_yield {
+        yield x;
+    }
+    return x * 2;
+}
+
+fn main() {
+    // Spawn with should_yield=false, so it never yields, just returns
+    let coro = spawn compute(5, false);
+    print("Created coroutine");
+
+    // Resume should immediately get the return value (10)
+    match resume coro {
+        ok(value) => {
+            print("Got value: ");
+            print(value);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    // Subsequent resume now reports an error because coroutine completed
+    match resume coro {
+        ok(value2) => {
+            print("Unexpected value after completion: ");
+            print(value2);
+        }
+        error(msg) => {
+            print("Resume after completion error: ");
+            print(msg);
+        }
+    };
+
+    print("Done!");
+}

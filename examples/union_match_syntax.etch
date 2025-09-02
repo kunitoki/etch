@@ -1,0 +1,27 @@
+// Test union pattern matching with identifier syntax
+type MyObj = object {
+  x: int;
+  y: int;
+};
+
+type MyUnion = int | string | MyObj;
+
+fn main() {
+  var val: MyUnion = 42;
+  match val {
+    v: int => { print("Got int: " + string(v)); },
+    _ => { print("Not an int"); }
+  };
+
+  val = "hello";
+  match val {
+    v: string => { print("Got string: " + v); },
+    _ => { print("Not a string"); }
+  };
+
+  val = { x: 10, y: 20 };
+  match val {
+    v: MyObj => { print("Got MyObj: " + string(v.x) + "," + string(v.y)); },
+    _ => { print("Not a MyObj"); }
+  };
+}

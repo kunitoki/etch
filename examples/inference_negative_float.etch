@@ -1,0 +1,13 @@
+fn main() -> void {
+    // Test negative float type inference
+    var x = -3.14;
+    print(x);
+
+    // Test positive float for comparison
+    var y = 2.71;
+    print(y);
+
+    // Test explicit typing
+    var z: float = -1.0;
+    print(z);
+}

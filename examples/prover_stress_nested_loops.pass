@@ -1,0 +1,7 @@
+Test 1 (nested simple): 1
+Test 2 (nested with conditions): 0
+Test 3 (nested while): 0
+Test 4 (triple nested): 1
+Test 5 (nested with break): 0
+
+✅ All nested loop stress tests passed!

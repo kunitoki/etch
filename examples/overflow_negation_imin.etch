@@ -1,0 +1,9 @@
+// Test: Negation of minimum integer
+// Should be caught: -IMin would overflow
+
+fn main() -> void {
+  // Compute IMin: -IMax - 1
+  let min_val = -9223372036854775807 - 1;  // IMin
+  let negated = -min_val;  // This should fail!
+  print("Result: " + string(negated));
+}

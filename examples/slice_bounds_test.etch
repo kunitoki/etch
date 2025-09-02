@@ -1,0 +1,10 @@
+fn main() -> void {
+    // Test slice bounds checking
+    let arr: array[int] = [1, 2, 3];
+    
+    // Valid slice
+    let good: array[int] = arr[1:3];
+    
+    // Invalid slice - start > array size
+    let bad: array[int] = arr[5:10];
+}

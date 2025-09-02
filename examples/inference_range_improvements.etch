@@ -1,0 +1,19 @@
+fn main() {
+    seed(42);
+
+    // Test modulo range inference
+    var a = rand(1, 1000) % 10;  // Should be in range [0..9]
+    print(a + 100);  // Should not overflow: [100..109]
+
+    // Test division range inference
+    var b = 1000 / 10;  // Should be exactly 100
+    print(b);
+
+    // Test range division
+    var c = rand(50, 100) / 2;  // Should be in range [25..50]
+    print(c + 1000);  // Should not overflow: [1025..1050]
+
+    // Test negation bounds
+    var d = -(rand(1, 10));  // Should be in range [-10..-1]
+    print(d + 1000);  // Should be [990..999]
+}

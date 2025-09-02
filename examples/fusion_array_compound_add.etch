@@ -1,0 +1,13 @@
+// Test array compound operations that should fuse to GetArithmeticSet
+fn main() {
+  let arr = [10, 20, 30];
+  let i = 1;
+
+  // This should fuse: arr[i] = arr[i] + 5
+  arr[i] = arr[i] + 5;
+
+  // Verify result
+  print(arr[0]);  // Should print 10
+  print(arr[1]);  // Should print 25
+  print(arr[2]);  // Should print 30
+}

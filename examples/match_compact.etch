@@ -1,0 +1,8 @@
+fn main() -> void {
+    let x: option[int] = some(42);
+    let r: int = match x {
+        some(num) => num;
+        none => 0;
+    };
+    print(r);
+}

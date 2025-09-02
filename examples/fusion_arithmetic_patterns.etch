@@ -1,0 +1,21 @@
+// Test arithmetic fusion patterns (AddAdd and MulAdd)
+fn main() {
+  // Test AddAdd pattern: (a + b) + c
+  let r1 = (5 + 3) + 2;
+  print(r1);  // Should print 10
+
+  // Test MulAdd pattern: a * b + c
+  let r2 = 4 * 3 + 5;
+  print(r2);  // Should print 17
+
+  // Test nested additions
+  let r3 = (10 + 20) + 30;
+  print(r3);  // Should print 60
+
+  // Test multiply-add with variables
+  let x = 2;
+  let y = 3;
+  let z = 4;
+  let r4 = x * y + z;
+  print(r4);  // Should print 10
+}

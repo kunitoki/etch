@@ -1,0 +1,123 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "etch",
+            "request": "launch",
+            "name": "Launch Etch VM Program",
+            "program": "${file}",
+            "stopAtEntry": true
+        },
+        {
+            "type": "etch",
+            "request": "attach",
+            "name": "Attach to Etch Remote Debugger",
+            "host": "127.0.0.1",
+            "timeout": 30000,
+            "port": 9823,
+            "stopAtEntry": false
+        },
+        {
+            "type": "cppdbg",
+            "request": "launch",
+            "name": "Debug Etch Generated C",
+            "program": "${file}",
+            "cwd": "${workspaceFolder}",
+            "externalConsole": false,
+            "MIMode": "lldb",
+            "stopAtEntry": true,
+            "preLaunchTask": "",
+        },
+        {
+            "type": "cppdbg",
+            "request": "launch",
+            "name": "Debug C++ with Embedded Etch",
+            "program": "${workspaceFolder}/examples/capi/cpp_hybrid_debug",
+            "args": ["${workspaceFolder}/examples/capi/test_debug.etch"],
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "ETCH_DEBUG_PORT",
+                    "value": "9823"
+                },
+                {
+                    "name": "ETCH_DEBUG_TIMEOUT",
+                    "value": "30000"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "lldb",
+            "stopAtEntry": false,
+            "preLaunchTask": "",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "type": "cppdbg",
+            "request": "launch",
+            "name": "Debug Arkanoid",
+            "program": "${workspaceFolder}/demo/build/Debug/arkanoid",
+            "args": [],
+            "cwd": "${workspaceFolder}/demo",
+            "environment": [
+                {
+                    "name": "ETCH_DEBUG_PORT",
+                    "value": "9823"
+                },
+                {
+                    "name": "ETCH_DEBUG_TIMEOUT",
+                    "value": "30000"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "lldb",
+            "stopAtEntry": false,
+            "preLaunchTask": "",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Debug C++ + Etch (Remote)",
+            "configurations": [
+                "Debug C++ with Embedded Etch",
+                "Attach to Etch Remote Debugger"
+            ],
+            "stopAll": true,
+            "preLaunchTask": "",
+            "presentation": {
+                "hidden": false,
+                "group": "Hybrid Debugging",
+                "order": 1
+            }
+        },
+        {
+            "name": "Arkanoid (Remote)",
+            "configurations": [
+                "Debug Arkanoid",
+                "Attach to Etch Remote Debugger"
+            ],
+            "stopAll": true,
+            "preLaunchTask": "",
+            "presentation": {
+                "hidden": false,
+                "group": "Hybrid Debugging",
+                "order": 1
+            }
+        }
+    ]
+}

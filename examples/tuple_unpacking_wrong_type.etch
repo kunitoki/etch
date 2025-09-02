@@ -1,0 +1,6 @@
+// Tuple unpacking with non-tuple type
+fn main() {
+    let x = 42;
+    let [a, b] = x;  // Error: can't unpack int as tuple
+    discard a, b;
+}

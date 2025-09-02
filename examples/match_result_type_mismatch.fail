@@ -1,0 +1,5 @@
+examples/match_result_type_mismatch.etch:5:7: error: if expression branches must return the same type: then returns string, else returns int
+  4 |     ok(value) => {
+  5 |       if value > 0 {
+            ^
+  6 |         "positive"  // string

@@ -1,0 +1,7 @@
+type X = int | string;
+
+fn main() -> void {
+    var x: X = 1;
+    var x: X = "hello";
+    discard x;
+}

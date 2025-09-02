@@ -1,0 +1,11 @@
+// Test that private (non-exported) functions are not accessible
+
+import lib/math
+
+fn main() {
+  // This should work - add is exported
+  print(add(5, 3));
+
+  // This should fail - double is not exported
+  print(double(5));  // Error: undefined function
+}

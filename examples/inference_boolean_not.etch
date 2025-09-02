@@ -1,0 +1,12 @@
+fn main() -> void {
+    // Test boolean not type inference
+    var x = not true;
+    print(x);
+
+    var y = not false;
+    print(y);
+
+    // Test explicit typing
+    var z: bool = not true;
+    print(z);
+}

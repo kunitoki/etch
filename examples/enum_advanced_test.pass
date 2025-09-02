@@ -1,0 +1,23 @@
+Testing basic enum access:
+Color.Red = Color.Red
+Status.Active = Status.Active
+Priority.High = High Priority
+
+Testing int() casting:
+int(Color.Red) = 10
+int(Color.Green) = 20
+int(Color.Blue) = 30
+
+Testing string() casting:
+string(Status.Active) = Status.Active
+string(Color.Red) = Color.Red
+
+Testing enum with tuple values:
+Priority.Low = Low Priority
+Priority.Low = 1
+Priority.Medium = Medium Priority
+Priority.Medium = 5
+Priority.Urgent = Priority.Urgent
+Priority.Urgent = 11
+
+All enum casting and access tests passed!

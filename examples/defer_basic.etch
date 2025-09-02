@@ -1,0 +1,17 @@
+// Test basic defer functionality
+// Defer should execute at the end of the function scope
+
+fn test_defer() -> void {
+    print("Start");
+
+    defer {
+        print("Deferred");
+    }
+
+    print("End");
+}
+
+fn main() -> int {
+    test_defer();
+    return 0;
+}

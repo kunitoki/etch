@@ -1,0 +1,10 @@
+// Test importing specific functions from a module
+
+import import_module_test { add, square }
+
+fn main() -> void {
+  let sum: int = add(5, 3);
+  let sq: int = square(4);
+  print(sum);  // Should print 8
+  print(sq);   // Should print 16
+}

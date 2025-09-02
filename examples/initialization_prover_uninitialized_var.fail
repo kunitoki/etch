@@ -1,0 +1,5 @@
+examples/initialization_prover_uninitialized_var.etch:5:16: error: use of uninitialized variable 'x' - variable may not be initialized in all control flow paths
+  4 |   var x: int;
+  5 |   let y: int = x; // Error: use of uninitialized variable 'x'
+                     ^
+  6 |   print(y);

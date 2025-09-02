@@ -1,0 +1,5 @@
+examples/initialization_prover_nested_if.etch:17:16: error: use of uninitialized variable 'x' - variable may not be initialized in all control flow paths
+  16 |
+  17 |   let y: int = x; // Error: x not initialized in inner else path
+                      ^
+  18 |   print(y);

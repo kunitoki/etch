@@ -1,0 +1,11 @@
+// Test error: yield in a regular (non-coroutine) function
+fn compute(x: int) -> int {
+    let res = x * 2;
+    yield res;  // Error: should not be able to yield in non-coroutine function
+    return res;
+}
+
+fn main() {
+    let val = compute(5);
+    print(val);
+}

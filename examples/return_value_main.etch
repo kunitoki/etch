@@ -1,0 +1,5 @@
+
+fn main() -> result[int] {
+  let x = "123456";
+  return parseInt(x);
+}

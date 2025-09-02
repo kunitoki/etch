@@ -1,0 +1,5 @@
+examples/clear_syntax_error.etch:2:16: error: unexpected symbol ';'
+  1 | fn main() -> void {
+  2 |   let x: int = ;
+                     ^
+  3 | }

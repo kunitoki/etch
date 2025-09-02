@@ -1,0 +1,3 @@
+filter greater than 5: count = 4
+filter even numbers: count = 4
+filter above threshold 4: count = 4

@@ -1,0 +1,6 @@
+// Test cleanup pass - dead store elimination
+fn main() {
+  var x = 10;  // Dead store - immediately overwritten
+  x = 20;      // Actual value used
+  print(x);
+}

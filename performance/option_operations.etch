@@ -1,0 +1,20 @@
+fn main() {
+    seed(42);
+    var success_count = 0;
+    var none_count = 0;
+
+    // Option operations benchmark (simulated with conditionals)
+    for i in 0..<50000 {
+        var val = rand(0, 100);
+
+        // Simulate option behavior
+        if val > 50 {
+            success_count = success_count + val;
+        } else {
+            none_count = none_count + 1;
+        }
+    }
+
+    print(success_count);
+    print(none_count);
+}

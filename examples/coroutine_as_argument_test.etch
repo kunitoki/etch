@@ -1,0 +1,78 @@
+// Test passing coroutine[T] as function arguments
+fn counter(start: int, limit: int) {
+    var i = start;
+    while i < limit {
+        yield i;
+        i = i + 1;
+    }
+    return i;
+}
+
+// Function that takes a coroutine and resumes it multiple times
+fn consume_three(coro: coroutine[int]) {
+    match resume coro {
+        ok(v1) => {
+            print("Got: ");
+            print(v1);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume coro {
+        ok(v2) => {
+            print("Got: ");
+            print(v2);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume coro {
+        ok(v3) => {
+            print("Got: ");
+            print(v3);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+}
+
+// Function that takes a coroutine and returns it
+fn passthrough(coro: coroutine[int]) -> coroutine[int] {
+    print("Received coroutine");
+    return coro;
+}
+
+fn main() {
+    // Create coroutine and pass to function
+    let c1 = spawn counter(0, 10);
+    print("Consuming first three:");
+    consume_three(c1);
+
+    // Test passthrough
+    let c2 = spawn counter(100, 105);
+    let c3 = passthrough(c2);
+    match resume c3 {
+        ok(val) => {
+            print("After passthrough: ");
+            print(val);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    print("Done!");
+}

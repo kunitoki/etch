@@ -1,0 +1,7 @@
+type Pred = fn(int) -> int;
+
+fn main() -> void {
+	// Lambdas in type definitions (alias)
+	let p: Pred = |x| x - 1;
+	print(string(p(5)));
+}

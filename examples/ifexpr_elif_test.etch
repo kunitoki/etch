@@ -1,0 +1,36 @@
+// Test if-expressions with elif
+
+fn main() {
+  let score: int = 85;
+
+  // If-elif-else expression
+  let grade: string = if score >= 90 {
+    "A"
+  } elif score >= 80 {
+    "B"
+  } elif score >= 70 {
+    "C"
+  } else {
+    "F"
+  };
+
+  print("Grade: ");
+  print(grade);
+
+  // Another example
+  let x: int = 5;
+  let category: string = if x < 0 {
+    "negative"
+  } elif x == 0 {
+    "zero"
+  } elif x < 10 {
+    "small"
+  } else {
+    "large"
+  };
+
+  print("Category: ");
+  print(category);
+
+  print("Test passed!");
+}

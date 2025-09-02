@@ -1,0 +1,35 @@
+// Test coroutine with container argument
+
+type Node = object {
+    value: int;
+};
+
+type Container = object {
+    node: ref[Node];
+};
+
+fn coro_func(c: ref[Container]) -> coroutine[int] {
+    var x = new[int](13);
+    print(@x);
+    yield c.node.value;
+    print(@x);
+    return c.node.value; // This one should raise a compiler error, yields invalidates ref args
+}
+
+fn main() {
+    var container = new[Container](node: new[Node](value: 42));
+    let coro = spawn coro_func(container);
+
+    match resume coro {
+        ok(v) => print(v),
+        error(msg) => print(msg)
+    };
+
+    // Modify the container while coroutine is suspended
+    container.node = nil;
+
+    match resume coro {
+        ok(v) => print(v),
+        error(msg) => print(msg)
+    };
+}

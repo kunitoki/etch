@@ -1,0 +1,81 @@
+// Arithmetic operators
+fn +(a: int, b: int) -> int {
+    return a * 10;  // Custom addition: multiply first arg by 10
+}
+
+fn -(a: int, b: int) -> int {
+    return a / 2;   // Custom subtraction: divide first arg by 2
+}
+
+fn *(x: int, y: int) -> int {
+    return 999;     // Custom multiplication: always return 999
+}
+
+fn /(a: int, b: int) -> int {
+    return a % 3;   // Custom division: return remainder when dividing by 3
+}
+
+fn %(x: int, y: int) -> int {
+    return x + y + 100;  // Custom modulo: add both args plus 100
+}
+
+// Comparison operators
+fn ==(a: int, b: int) -> bool {
+    return false;   // Custom equality: always return false
+}
+
+fn !=(x: int, y: int) -> bool {
+    return true;    // Custom inequality: always return true
+}
+
+fn <(a: int, b: int) -> bool {
+    return a > b;   // Custom less-than: reverse the comparison
+}
+
+fn <=(x: int, y: int) -> bool {
+    return x >= y;  // Custom less-equal: reverse the comparison
+}
+
+fn >(a: int, b: int) -> bool {
+    return a < b;   // Custom greater-than: reverse the comparison
+}
+
+fn >=(x: int, y: int) -> bool {
+    return x <= y;  // Custom greater-equal: reverse the comparison
+}
+
+fn main() -> void {
+    let x: int = 5;
+    let y: int = 3;
+
+    print(x + y);   // 50 (5 * 10)
+    print(x - y);   // 2 (5 / 2)
+    print(x * y);   // 999
+    print(x / y);   // 2 (5 % 3)
+    print(x % y);   // 108 (5 + 3 + 100)
+
+    // Test comparison operators
+    if x == y {
+        print(1);   // Won't print (custom == always returns false)
+    }
+
+    if x != y {
+        print(2);   // Will print (custom != always returns true)
+    }
+
+    if x < y {      // Custom < uses built-in > (5 > 3 = true)
+        print(3);   // Will print
+    }
+
+    if x <= y {     // Custom <= uses built-in >= (5 >= 3 = true)
+        print(4);   // Will print
+    }
+
+    if x > y {      // Custom > uses built-in < (5 < 3 = false)
+        print(5);   // Won't print
+    }
+
+    if x >= y {     // Custom >= uses built-in <= (5 <= 3 = false)
+        print(6);   // Won't print
+    }
+}

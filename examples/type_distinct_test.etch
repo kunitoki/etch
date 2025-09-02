@@ -1,0 +1,12 @@
+// Test distinct types
+type UserId = distinct int;
+type Money = distinct int;
+
+fn main() {
+    let uid: UserId = 123;  // Should work - base type assignment to distinct
+    let cash: Money = 456;  // Should work - base type assignment to distinct
+
+    // Cast back to base types for printing (distinct types can't be printed directly)
+    print(int(uid));
+    print(int(cash));
+}

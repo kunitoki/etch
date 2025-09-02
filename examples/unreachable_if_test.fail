@@ -1,0 +1,5 @@
+examples/unreachable_if_test.etch:4:5: error: unreachable code (condition is always true)
+  3 |     
+  4 |     if true {
+          ^
+  5 |         x = 42;

@@ -1,0 +1,12 @@
+Value 1:
+0
+Value 2:
+1
+Value 3:
+2
+Resuming completed coroutine...
+Value 4 (after completion):
+3
+Value 5 (after completion) error:
+cannot resume completed coroutine
+Done!

@@ -1,0 +1,5 @@
+examples/prover_stress_fail4.etch:15:16: error: index range [0, 10] extends beyond array bounds [0, 9]
+  14 |   if x >= 0 and x <= 10 {
+  15 |     return arr[x];  // ❌ Should fail! x could be 10, array is [0,9]
+                      ^
+  16 |   }

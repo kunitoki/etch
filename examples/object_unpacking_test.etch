@@ -1,0 +1,103 @@
+// Test object unpacking with {x, y} syntax
+
+type Point = object {
+    x: int;
+    y: int;
+};
+
+type Person = object {
+    name: string;
+    age: int;
+    active: bool;
+};
+
+type Rectangle = object {
+    topLeft: ref[Point];
+    bottomRight: ref[Point];
+};
+
+fn test_basic_object_unpacking() {
+    let p = new[Point](x: 10, y: 20);
+
+    // Basic unpacking
+    let {x, y} = p;
+
+    discard x, y;
+    print("Basic unpacking: x=" + string(x) + ", y=" + string(y));
+}
+
+fn test_object_unpacking_with_rename() {
+    let p = new[Point](x: 100, y: 200);
+
+    // Unpacking with renamed variables
+    let {x: posX, y: posY} = p;
+
+    discard posX, posY;
+    print("Renamed unpacking: posX=" + string(posX) + ", posY=" + string(posY));
+}
+
+fn test_mixed_unpacking() {
+    let p = new[Point](x: 5, y: 15);
+
+    // Mix of renamed and non-renamed
+    let {x: newX, y} = p;
+
+    discard newX, y;
+    print("Mixed unpacking: newX=" + string(newX) + ", y=" + string(y));
+}
+
+fn test_person_unpacking() {
+    let person = new[Person](
+        name: "Alice",
+        age: 30,
+        active: true
+    );
+
+    // Unpack all fields
+    let {name, age, active} = person;
+
+    discard name, age, active;
+    print("Person unpacking: name=" + name + ", age=" + string(age) + ", active=" + string(active));
+}
+
+fn test_partial_unpacking() {
+    let person = new[Person](
+        name: "Bob",
+        age: 25,
+        active: false
+    );
+
+    // Unpack only some fields
+    let {name, age} = person;
+
+    discard name, age;
+    print("Partial unpacking: name=" + name + ", age=" + string(age));
+}
+
+fn test_nested_object_unpacking() {
+    let tl = new[Point](x: 0, y: 0);
+    let br = new[Point](x: 100, y: 100);
+    let rect = new[Rectangle](
+        topLeft: tl,
+        bottomRight: br
+    );
+
+    // Unpack the nested objects
+    let {topLeft, bottomRight} = rect;
+
+    // Now unpack the points
+    let {x: x1, y: y1} = topLeft;
+    let {x: x2, y: y2} = bottomRight;
+
+    discard x1, y1, x2, y2;
+    print("Nested unpacking: topLeft=(" + string(x1) + "," + string(y1) + "), bottomRight=(" + string(x2) + "," + string(y2) + ")");
+}
+
+fn main() {
+    test_basic_object_unpacking();
+    test_object_unpacking_with_rename();
+    test_mixed_unpacking();
+    test_person_unpacking();
+    test_partial_unpacking();
+    test_nested_object_unpacking();
+}

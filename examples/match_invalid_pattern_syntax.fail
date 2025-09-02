@@ -1,0 +1,5 @@
+examples/match_invalid_pattern_syntax.etch:7:22: error: expected type, got symbol '=>'
+  6 |     // This should fail: invalid pattern syntax
+  7 |     invalid_pattern: => { "Invalid pattern"; }
+                           ^
+  8 |     _ => { "Other"; }

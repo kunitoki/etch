@@ -1,0 +1,11 @@
+// Test SubSub fusion: (a - b) - c -> opSubSub
+fn main() {
+  let a = 100;
+  let b = 30;
+  let c = 20;
+
+  // This should fuse into a single opSubSub instruction
+  let res = (a - b) - c;
+
+  print(res);  // Should print 50
+}

@@ -1,0 +1,23 @@
+// Test ref return with provable condition - should pass
+// The prover should be able to determine that we call maybe_nil with true
+type Node = object {
+    value: int;
+};
+
+fn maybe_nil(cond: bool) -> ref[Node] {
+    if cond {
+        return new[Node](value: 42);
+    } else {
+        return nil;
+    }
+}
+
+fn main() {
+    let result = maybe_nil(true);
+
+    // The prover should know that result is non-nil because we called with true
+    // But for now, we need to add a check
+    if result != nil {
+        print(result.value);
+    }
+}

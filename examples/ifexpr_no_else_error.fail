@@ -1,0 +1,5 @@
+examples/ifexpr_no_else_error.etch:7:16: error: if expression requires an 'else' branch
+  6 |   // This should error - if-expression requires else
+  7 |   let y: int = if x > 5 { 1 };
+                     ^
+  8 |

@@ -1,0 +1,20 @@
+// Stress test failure: Nested loop with out-of-bounds access
+
+fn testNestedOutOfBounds() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+  // Nested loops creating index beyond array bounds
+  for i in 0..<5 {
+    for j in 0..<5 {
+      // Compute index: i*5 + j ranges from 0 to 24
+      let idx = i * 5 + j;
+      return arr[idx];  // ❌ Should fail! idx can be up to 24, array is [0, 9]
+    }
+  }
+
+  return -1;
+}
+
+fn main() -> void {
+  print(string(testNestedOutOfBounds()));
+}

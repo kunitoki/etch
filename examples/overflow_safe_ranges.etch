@@ -1,0 +1,12 @@
+// Test case: Safe ranges - no overflow possible
+// This should pass because ranges are small and provably safe
+
+fn main() {
+    var x = 100;
+    var y = 200;
+
+    // Both values are small constants, sum is 300 - clearly safe
+    var z = x + y;
+
+    print(z);
+}

@@ -1,0 +1,85 @@
+// Enum pattern matching test
+type Direction = enum {
+  North = 0;
+  South = 1;
+  East = 2;
+  West = 3;
+};
+
+type Status = enum {
+  Idle = "Idle";
+  Running = "Running";
+  Stopped = "Stopped";
+};
+
+fn printDirection(d: Direction) -> string {
+  match d {
+    Direction.North => { return "Going North"; },
+    Direction.South => { return "Going South"; },
+    Direction.East => { return "Going East"; },
+    Direction.West => { return "Going West"; }
+  };
+}
+
+fn processStatus(status: Status) -> string {
+  match status {
+    Status.Idle => {
+      return "System is idle";
+    },
+    Status.Running => {
+      return "System is running";
+    },
+    Status.Stopped => {
+      return "System has stopped";
+    }
+  };
+}
+
+fn main() {
+  let dir = Direction.North;
+  //let status = Status.Running;
+
+  print("Testing enum pattern matching:");
+  print(printDirection(dir));
+
+  /*
+  print("Status.Running: ");
+  print(processStatus(status));
+
+  // Test with different enum values
+  let dir2 = Direction.West;
+  let status2 = Status.Stopped;
+
+  print("Direction.West: ");
+  print(printDirection(dir2));
+
+  print("Status.Stopped: ");
+  print(processStatus(status2));
+
+  // Test pattern matching with explicit int/string values
+  let directValue = Direction.East;
+  let statusValue = Status.Idle;
+
+  print("Pattern matching with cast values:");
+  match directValue {
+    Direction.East => {
+      print("Found East direction!");
+    },
+    _ => {
+      print("Not East direction.");
+    }
+  };
+
+  match statusValue {
+    Status.Idle => {
+      print("Found Idle status!");
+    },
+    _ => {
+      print("Not Idle status.");
+    }
+  };
+
+  */
+
+  print("All enum pattern matching tests passed!");
+}

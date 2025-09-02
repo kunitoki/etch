@@ -1,0 +1,28 @@
+// Demonstrate postfix ? result propagation for functions and coroutines
+
+fn requirePositive(label: string, value: int) -> result[int] {
+  if value < 0 {
+    return error(label + " must be positive: " + string(value));
+  }
+  return ok(value);
+}
+
+fn requirePositive2(label: string, value: int) {
+  let x = requirePositive(label, value)?;
+  print(x);
+  return ok(x);
+}
+
+fn main() {
+  let x = requirePositive2("test", -5);
+  match x {
+    ok(v) => print("Success: " + string(v)),
+    error(msg) => print("Error: " + msg),
+  };
+
+  let y = requirePositive2("test", 10);
+  match y {
+    ok(v) => print("Success: " + string(v)),
+    error(msg) => print("Error: " + msg),
+  };
+}

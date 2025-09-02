@@ -1,0 +1,10 @@
+// Test just the capture syntax
+fn test() {
+  let x = 42;
+  let f = [x] |y: int| x - y;
+  print("debug-single = " + string(f(10)));
+}
+
+fn main() {
+  test();
+}

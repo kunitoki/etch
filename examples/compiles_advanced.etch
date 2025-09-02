@@ -1,0 +1,39 @@
+fn main() {
+  // Test with arithmetic operations
+  let arithmetic_compiles: bool = compiles {
+    let x: int = 5 + 10;
+    let y: int = x * 2;
+  };
+  print(arithmetic_compiles);  // Should be true
+
+  // Test with array operations
+  let array_compiles: bool = compiles {
+    let arr: array[int] = [1, 2, 3];
+    let first: int = arr[0];
+  };
+  print(array_compiles);  // Should be true
+
+  // Test with type mismatch in array
+  let array_type_error: bool = compiles {
+    let arr: array[int] = [1, 2, 3];
+    let first: string = arr[0];  // Type mismatch
+  };
+  print(array_type_error);  // Should be false
+
+  // Test with boolean logic
+  let bool_compiles: bool = compiles {
+    let a: bool = true;
+    let b: bool = false;
+    let c: bool = a and b;
+  };
+  print(bool_compiles);  // Should be true
+
+  // Test with multiple statements
+  let multiple_stmts: bool = compiles {
+    let a: int = 10;
+    let b: int = 20;
+    let c: int = a + b;
+    let d: int = c * 2;
+  };
+  print(multiple_stmts);  // Should be true
+}

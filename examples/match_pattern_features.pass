@@ -1,0 +1,16 @@
+A
+D
+prime under 10
+other
+upper
+other
+GET /health
+POST /submit rest:1
+UNKNOWN
+left 10
+right 7
+digit 5
+value 42
+teen 15
+age 3
+unknown

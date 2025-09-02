@@ -1,0 +1,16 @@
+fn main() -> void {
+  print(test());
+  print(123123);
+}
+
+fn test() -> string {
+    print(test2());
+    return "abcabc";
+}
+
+fn test2() -> string {
+    return x + y;
+}
+
+let x: string = "def";
+let y: string = "def";

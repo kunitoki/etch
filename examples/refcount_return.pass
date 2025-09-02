@@ -1,0 +1,12 @@
+=== Return Value Tests ===
+Created node value:
+42
+Multiple nodes:
+10
+20
+30
+Doubled value:
+100
+Chain result:
+2
+=== All Return Tests Complete ===

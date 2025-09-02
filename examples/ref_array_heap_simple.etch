@@ -1,0 +1,7 @@
+// Test creating array ref on heap and dereferencing elements
+fn main() {
+    let arr = new[array[int]]([1, 2, 3]);
+    print(@arr[0]);
+    print(@arr[1]);
+    print(@arr[2]);
+}

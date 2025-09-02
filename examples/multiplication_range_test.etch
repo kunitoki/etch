@@ -1,0 +1,34 @@
+// Test: Improved multiplication range analysis
+// Tests various multiplication scenarios that should be provably safe
+
+fn main() -> void {
+    // Constant multiplication
+    let const_mult: int = 5 * 10;  // 50, should be safe
+    print(const_mult);
+
+    // Multiplication by zero
+    let zero_mult: int = 0 * 999;  // 0, always safe
+    print(zero_mult);
+
+    // Multiplication by one (identity)
+    let data: array[int] = [1, 2, 3];
+    let first: int = data[0];
+    let identity_mult: int = first * 1;  // 1 * 1 = 1, should be safe
+    print(identity_mult);
+
+    // Multiplication by -1 (negation)
+    let neg_mult: int = first * -1;  // 1 * -1 = -1, should be safe
+    print(neg_mult);
+
+    // Small positive range multiplication
+    let small_a: int = 5;
+    let small_b: int = 10;
+    let small_mult: int = small_a * small_b;  // 5 * 10 = 50, should be safe
+    print(small_mult);
+
+    // Range multiplication with known small bounds
+    let bound_a: int = 3;     // Known value in small range
+    let bound_b: int = 7;     // Known value in small range
+    let range_mult: int = bound_a * bound_b;  // 3 * 7 = 21, should be safe
+    print(range_mult);
+}

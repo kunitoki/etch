@@ -1,0 +1,5 @@
+examples/tuple_unpacking_arity_mismatch.etch:4:9: error: tuple unpacking arity mismatch: expected 2 variables, tuple has 3 elements
+  3 |     let t = (1, 2, 3);
+  4 |     let [a, b] = t;  // Error: tuple has 3 elements but only 2 variables
+              ^
+  5 |     discard a, b;

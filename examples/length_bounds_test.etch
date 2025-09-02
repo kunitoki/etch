@@ -1,0 +1,15 @@
+fn main() -> void {
+    // Test that # operator provides compile-time constants for bounds checking
+    let arr: array[int] = [10, 20, 30];
+    let size: int = #arr;  // Should be compile-time constant 3
+
+    // This should work - accessing last element using size
+    let lastIndex: int = size - 1;
+    let last: int = arr[lastIndex];  // Should be 30
+    print(last);  // Expected: 30
+
+    // Test with slice
+    let slice: array[int] = arr[1:size];  // Should be [20, 30]
+    let sliceSize: int = #slice;  // Should be 2
+    print(sliceSize);  // Expected: 2
+}

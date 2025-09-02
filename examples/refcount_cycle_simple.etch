@@ -1,0 +1,17 @@
+// Test simple reference cycle detection
+type Node = object {
+    value: int;
+    next: ref[Node];
+};
+
+fn main() -> void {
+    let a = new[Node]( value: 1, next: nil );
+    let b = new[Node]( value: 2, next: nil );
+
+    // Create cycle: a -> b -> a
+    a.next = b;
+    b.next = a;
+
+    print("Created cycle");
+    // Cycle detector should report this cycle
+}

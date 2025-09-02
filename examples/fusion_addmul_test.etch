@@ -1,0 +1,11 @@
+// Test AddMul fusion: (a + b) * c -> opAddMul
+fn main() {
+  let a = 10;
+  let b = 5;
+  let c = 4;
+
+  // This should fuse into a single opAddMul instruction
+  let result = (a + b) * c;
+
+  print(result);  // Should print 60 (15 * 4)
+}

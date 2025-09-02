@@ -1,0 +1,5 @@
+examples/tuple_comparison_type_mismatch.etch:5:27: error: tuple comparison requires identical tuple types
+  4 |     let t2 = (1, 2, 3);
+  5 |     let result: bool = t1 == t2;  // Error: can't compare tuples of different sizes
+                                ^
+  6 |     discard result;

@@ -1,0 +1,29 @@
+// Test: Nested OR with multiple unsafe intervals
+// Complex chain: (A or B) or C where B and C are both unsafe
+
+fn testNestedOrUnsafe() -> int {
+  let x = match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => 5;
+    };
+    error(_) => 5;
+  };
+
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+  // x in [0, 2] OR [15, 20] OR [30, 40]
+  // Array has 10 elements [0..9]
+  // [0, 2] is safe
+  // [15, 20] extends beyond bounds - UNSAFE
+  // [30, 40] extends beyond bounds - UNSAFE
+  if (x >= 0 and x < 3) or (x >= 15 and x < 21) or (x >= 30 and x < 41) {
+    return arr[x];  // ❌ Should fail!
+  }
+
+  return -1;
+}
+
+fn main() -> void {
+  print(testNestedOrUnsafe());
+}

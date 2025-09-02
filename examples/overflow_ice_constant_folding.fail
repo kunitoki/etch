@@ -1,0 +1,5 @@
+examples/overflow_ice_constant_folding.etch:6:31: error: addition overflow
+  5 |   // Direct constant overflow - should give proper error
+  6 |   let x = 9223372036854775000 + 1000;  // Near IMax + 1000
+                                    ^
+  7 |   let y = x + 1000;  // This will overflow in constant folding

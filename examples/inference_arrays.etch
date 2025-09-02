@@ -1,0 +1,17 @@
+// Test array type inference
+fn main() {
+    // Array inference from elements
+    let nums = [1, 2, 3];         // array[int]
+    let floats = [1.0, 2.0];      // array[float]
+    let words = ["a", "b"];       // array[string]
+
+    // Nested arrays
+    let matrix = [[1, 2], [3, 4]]; // array[array[int]]
+
+    print(#nums);
+    print(#floats);
+    print(#words);
+    print(#matrix);
+    print(nums[0]);
+    print(matrix[0][1]);
+}

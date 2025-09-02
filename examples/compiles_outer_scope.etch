@@ -1,0 +1,48 @@
+fn main() {
+  // Test referencing outer scope variables
+  let a: string = "hello";
+  let b: int = 42;
+  let c: float = 3.14;
+
+  // Use variables to avoid unused variable warnings
+  discard a;
+  discard b;
+  discard c;
+
+  // Test 1: Valid operation with outer int variable
+  let test1: bool = compiles {
+    let result: int = b + 10;
+  };
+  print(test1);  // Should be true
+
+  // Test 2: Invalid - trying to add string and int from outer scope
+  let test2: bool = compiles {
+    let result: int = a + b;
+  };
+  print(test2);  // Should be false
+
+  // Test 3: Valid - using outer string variable
+  let test3: bool = compiles {
+    let s: string = a;
+  };
+  print(test3);  // Should be true
+
+  // Test 4: Valid - using outer float variable
+  let test4: bool = compiles {
+    let f: float = c * 2.0;
+  };
+  print(test4);  // Should be true
+
+  // Test 5: Invalid - type mismatch with outer variable
+  let test5: bool = compiles {
+    let wrong: int = a;  // Can't assign string to int
+  };
+  print(test5);  // Should be false
+
+  // Test 6: Valid - multiple outer variables
+  let test6: bool = compiles {
+    let sum: float = c + 1.0;
+    let num: int = b * 2;
+  };
+  print(test6);  // Should be true
+}

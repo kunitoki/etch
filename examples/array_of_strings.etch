@@ -1,0 +1,6 @@
+fn main() {
+    var x = ["Hello", "World", "from", "Etch"];
+    for s in x + ["a", "b", "c"] {
+        print(s);
+    }
+}

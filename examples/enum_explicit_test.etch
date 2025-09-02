@@ -1,0 +1,76 @@
+// Comprehensive enum explicit casting test
+type Color = enum {
+  Red;
+  Green = 10;
+  Blue = "BlueColor";
+};
+
+type Direction = enum {
+  North;
+  East = 5;
+  South;
+  West = (100, "WestDirection");
+};
+
+fn main() {
+  // Test basic enum operations
+  let red = Color.Red;
+  let green = Color.Green;
+  let blue = Color.Blue;
+
+  print("=== Basic Enum Creation ===");
+  print("Created enum variables: red, green, blue");
+
+  // Test explicit casting - int()
+  print("=== Explicit Casting to Int ===");
+  let redInt = int(red);
+  let greenInt = int(green);
+
+  print("int(Color.Red): ");
+  print(redInt);
+
+  print("int(Color.Green): ");
+  print(greenInt);
+
+  // Test explicit casting - string()
+  print("=== Explicit Casting to String ===");
+  let redStr = string(red);
+  let blueStr = string(blue);
+  let greenStr = string(green);
+
+  print("string(Color.Red): ");
+  print(redStr);
+
+  print("string(Color.Green): ");
+  print(greenStr);
+
+  print("string(Color.Blue): ");
+  print(blueStr);
+
+  // Test advanced enum with tuple values
+  print("=== Advanced Enum Operations ===");
+  let north = Direction.North;
+  let east = Direction.East;
+  let south = Direction.South;
+  let west = Direction.West;
+
+  // Test casting on advanced enums
+  let northInt = int(north);
+  let eastInt = int(east);
+  let southInt = int(south);
+  let westInt = int(west);
+
+  print("int(Direction.North): ");
+  print(northInt);
+
+  print("int(Direction.East): ");
+  print(eastInt);
+
+  print("int(Direction.South): ");
+  print(southInt);
+
+  print("int(Direction.West): ");
+  print(westInt);
+
+  print("=== All enum operations completed successfully ===\n");
+}

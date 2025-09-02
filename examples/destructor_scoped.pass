@@ -1,0 +1,11 @@
+Starting test...
+Creating resource 1
+Exiting scope for resource 1
+Destructor called for Resource #1
+Creating resource 2
+Exiting scope for resource 2
+Destructor called for Resource #2
+Creating resource 3
+Exiting scope for resource 3
+Destructor called for Resource #3
+All scopes exited

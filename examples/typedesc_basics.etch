@@ -1,0 +1,36 @@
+type X = int;
+type Y = distinct int;
+type Z = object {
+    a: int;
+    b: string;
+};
+
+fn main() {
+    {
+        let x: int = 42;
+        let t: typedesc = typeof x;
+        print(string(t));
+        print(int(t));
+    }
+
+    {
+        let x: X = 42;
+        let t: typedesc = typeof x;
+        print(string(t));
+        print(int(t));
+    }
+
+    {
+        let x: Y = 42;
+        let t: typedesc = typeof x;
+        print(string(t));
+        print(int(t));
+    }
+
+    {
+        let x: Z = { a:42, b:"hello" };
+        let t: typedesc = typeof x;
+        print(string(t));
+        print(int(t));
+    }
+}

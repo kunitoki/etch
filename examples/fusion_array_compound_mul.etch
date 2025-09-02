@@ -1,0 +1,12 @@
+// Test array compound multiplication fusion
+fn main() {
+  let arr = [2, 3, 4];
+  let idx = 0;
+
+  // This should fuse: arr[idx] = arr[idx] * 10
+  arr[idx] = arr[idx] * 10;
+
+  print(arr[0]);  // Should print 20
+  print(arr[1]);  // Should print 3
+  print(arr[2]);  // Should print 4
+}

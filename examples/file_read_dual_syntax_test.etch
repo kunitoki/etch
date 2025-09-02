@@ -1,0 +1,37 @@
+// Test: Both compact and block syntax for match expressions
+// Demonstrates the new dual syntax capability
+
+fn main() -> void {
+    let x: option[int] = some(42);
+
+    // Compact syntax - single expression
+    let result1: int = match x {
+        some(num) => num;
+        none => 0;
+    };
+    print(result1);
+
+    // Block syntax - multiple statements
+    let result2: string = match x {
+        some(num) => {
+            print(num);
+            string(num);
+        }
+        none => {
+            print("No value");
+            "none";
+        }
+    };
+    print(result2);
+
+    // Mixed syntax - some cases compact, some with blocks
+    let result3: int = match x {
+        some(num) => num; // compact
+        none => {         // block
+            print("Default case");
+            let default_val: int = -1;
+            default_val;
+        }
+    };
+    print(result3);
+}

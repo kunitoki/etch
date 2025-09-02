@@ -1,0 +1,11 @@
+// Test importing from another Etch module
+
+import lib/math
+
+fn main() {
+  let sum: int = add(5, 3);
+  print(sum);  // 8
+
+  let sq: int = square(4);
+  print(sq);   // 16
+}

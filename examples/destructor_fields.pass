@@ -1,0 +1,7 @@
+Creating resource with fields...
+Resource created
+Exiting main...
+Cleaning up resource:
+  Name: TestResource
+  Value: 42
+  Active: true

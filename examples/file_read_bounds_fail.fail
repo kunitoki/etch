@@ -1,0 +1,5 @@
+examples/file_read_bounds_fail.etch:18:31: error: index range [-9223372036854775808, 9223372036854775807] includes negative values
+  17 |     // Use file data in unsafe array index
+  18 |     var safe_calc: int = data[file_number];
+                                     ^
+  19 |     print(safe_calc);

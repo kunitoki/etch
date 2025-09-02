@@ -1,0 +1,10 @@
+// Simple lambda with capture test
+fn test() {
+  let x = 5;
+  let f = [x] |y: int| x + y;
+  print("capture-test = " + string(f(7)));
+}
+
+fn main() {
+  test();
+}

@@ -1,0 +1,5 @@
+add(2,3) = 5
+mul(4) = 40
+square(6) = 36
+array literal parsed
+Lambda expressions successfully parse and compile in Etch!

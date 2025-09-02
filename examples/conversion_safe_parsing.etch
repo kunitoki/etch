@@ -1,0 +1,33 @@
+fn describeInt(label: string, value: result[int]) -> void {
+    match value {
+        ok(v) => print(label + " ok: " + string(v));
+        error(msg) => print(label + " err: " + msg);
+    };
+}
+
+fn describeFloat(label: string, value: result[float]) -> void {
+    match value {
+        ok(v) => print(label + " ok: " + string(v));
+        error(msg) => print(label + " err: " + msg);
+    };
+}
+
+fn describeBool(label: string, value: result[bool]) -> void {
+    match value {
+        ok(v) => print(label + " ok: " + string(v));
+        error(msg) => print(label + " err: " + msg);
+    };
+}
+
+fn main() -> void {
+    describeInt("goodInt", parseInt("42"));
+    describeInt("badInt", parseInt("not a number"));
+
+    describeFloat("goodFloat", parseFloat("3.14"));
+    describeFloat("badFloat", parseFloat("invalid"));
+
+    describeBool("goodBool", parseBool("true"));
+    describeBool("badBool", parseBool("maybe"));
+
+    print("Safe parsing functions test passed");
+}

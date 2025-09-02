@@ -1,0 +1,12 @@
+// Test: ICE when overflow happens through function boundaries
+// Should give proper prover error at call site
+
+fn addToMax(x: int) -> int {
+  return 9223372036854775000 + x;
+}
+
+fn main() -> void {
+  // This call will cause overflow in constant evaluation
+  let result = addToMax(1000);
+  print("Result: " + string(result));
+}

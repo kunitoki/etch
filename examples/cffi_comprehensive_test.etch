@@ -1,0 +1,31 @@
+// Comprehensive test for libffi-based C FFI
+// Tests various parameter counts and types
+
+import ffi cmath {
+  fn sin(x: float) -> float;
+  fn cos(x: float) -> float;
+  fn sqrt(x: float) -> float;
+  fn pow(x: float, y: float) -> float;
+  fn fabs(x: float) -> float;
+  fn floor(x: float) -> float;
+  fn ceil(x: float) -> float;
+}
+
+fn main() -> void {
+  // Test 1-arg functions
+  print(sin(1.5708)); // ~1.0 (pi/2)
+  print(cos(0.0));    // 1.0
+  print(sqrt(25.0));  // 5.0
+  print(fabs(-42.5)); // 42.5
+  print(floor(3.7));  // 3.0
+  print(ceil(3.2));   // 4.0
+
+  // Test 2-arg function
+  print(pow(2.0, 3.0));  // 8.0
+  print(pow(5.0, 2.0));  // 25.0
+  print(pow(10.0, 0.5)); // ~3.16 (sqrt of 10)
+
+  // Test chaining/composition
+  var x: float = pow(2.0, 4.0);  // 16.0
+  print(sqrt(x));                 // 4.0
+}

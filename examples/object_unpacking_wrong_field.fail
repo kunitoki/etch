@@ -1,0 +1,5 @@
+examples/object_unpacking_wrong_field.etch:9:9: error: object type Point has no field 'z'
+  8 |     let p = new[Point](x: 10, y: 20);
+  9 |     let {x, z} = p;  // Error: Point has no field 'z'
+              ^
+  10 |     discard x, z;

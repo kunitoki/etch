@@ -1,0 +1,34 @@
+=== Array Concatenation Edge Cases Tests ===
+Triple tiny concat length should be 3:
+3
+Should be [1, 2, 3]:
+1
+2
+3
+Large concat length should be 20:
+20
+First element should be 1:
+1
+Middle element should be 10:
+10
+Next element should be 11:
+11
+Last element should be 20:
+20
+Single element concat length should be 2:
+2
+First should be 42:
+42
+Second should be 84:
+84
+Special chars concat length should be 3:
+3
+Contains newline, tab, and quote
+Slice and concat length should be 4:
+4
+Should be [2, 3, 1, 2]:
+2
+3
+1
+2
+=== Edge Cases Tests Complete ===

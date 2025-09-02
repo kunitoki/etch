@@ -1,0 +1,22 @@
+// Test C FFI with math library functions
+import ffi cmath {
+  fn sin(x: float) -> float;
+  fn cos(x: float) -> float;
+  fn sqrt(x: float) -> float;
+}
+
+fn main() -> void {
+  var pi: float = 3.14159;
+
+  // Test sin
+  var sine: float = sin(pi / 2.0);
+  print(sine);  // Should print ~1.0
+
+  // Test cos
+  var cosine: float = cos(0.0);
+  print(cosine);  // Should print 1.0
+
+  // Test sqrt
+  var root: float = sqrt(16.0);
+  print(root);  // Should print 4.0
+}

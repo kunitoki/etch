@@ -1,0 +1,5 @@
+examples/overflow_subtraction_underflow.etch:11:15: error: subtraction overflow
+  10 |     // Subtracting positive from potentially very negative value can underflow
+  11 |     var z = x - y;
+                     ^
+  12 |

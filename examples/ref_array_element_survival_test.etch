@@ -1,0 +1,22 @@
+// Test that a strong reference keeps the object alive even after array element is replaced
+type Node = object {
+    value: int;
+};
+
+fn consume(n: ref[Node]) {
+    if n != nil {
+        print(@n.value);
+    }
+}
+
+fn main() {
+    var arr: array[ref[Node]] = [new[Node](value: 1), new[Node](value: 2)];
+    let elem = arr[0];  // elem points to first node
+
+    arr[0] = new[Node](value: 99);  // Replace first element
+    consume(arr[0]);
+
+    // elem holds a strong reference to the original node with value 1
+    // so it should still be valid
+    print(@elem.value);
+}

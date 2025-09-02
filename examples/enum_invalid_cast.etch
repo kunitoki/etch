@@ -1,0 +1,14 @@
+// Test: Invalid enum casting operations
+type Color = enum {
+  Red;
+  Green;
+  Blue;
+};
+
+fn main() {
+  let color = Color.Red;
+
+  // This should fail: invalid casting operations
+  let invalid: int = color(42);  // Trying to call enum as function
+  print("Should not reach here");
+}

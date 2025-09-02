@@ -1,0 +1,36 @@
+// Test overwriting one ref with another
+type Node = object {
+    value: int;
+};
+
+fn ~(node: Node) {
+    print("Destroying: " + string(node.value));
+}
+
+fn main() -> void {
+    print("=== Ref Overwrite Test ===");
+
+    var ref1: ref[Node] = new[Node](value: 100);
+    print("Created ref1: " + string(ref1.value));
+
+    var ref2: ref[Node] = new[Node](value: 200);
+    print("Created ref2: " + string(ref2.value));
+
+    // Overwrite ref1 with ref2 - should destroy node 100
+    ref1 = ref2;
+    print("Assigned ref2 to ref1");
+
+    print("ref1 value: " + string(ref1.value));
+    print("ref2 value: " + string(ref2.value));
+
+    // Both should point to same object (200)
+    ref2 = nil;
+    print("Set ref2 to nil");
+
+    // ref1 should still be valid
+    if ref1 != nil {
+        print("ref1 still valid: " + string(ref1.value));
+    }
+
+    print("=== Test Complete ===");
+}

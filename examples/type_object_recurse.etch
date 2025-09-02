@@ -1,0 +1,27 @@
+// Test object types
+
+type Wallet = object {
+    balance: float = 0.0;
+};
+
+type Person = object {
+    name: string;
+    age: int = 0;
+    wallet: Wallet = { balance: 100.0 };
+};
+
+type Car = object {
+    passengers: array[Person];
+};
+
+fn test(p: Person) -> string {
+    return p.name + " " + string(p.age) + " " + string(p.wallet.balance);
+}
+
+fn main() {
+    let p: Car = { passengers: [{ name: "Alice", age: 25 }, { name: "Carlos", age: 30, wallet: { balance: 10.0 } }] };
+
+    for person in p.passengers {
+        print(test(person));
+    }
+}

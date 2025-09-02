@@ -1,0 +1,5 @@
+examples/enum_pattern_missing.etch:11:3: error: match expression on enum 'Direction' is not exhaustive. Missing cases: South, West. Add these cases or use '_' wildcard
+  10 |   let d = Direction.North;
+  11 |   match d {
+         ^
+  12 |     Direction.North => { print("Going North"); },

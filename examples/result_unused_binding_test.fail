@@ -1,0 +1,5 @@
+examples/result_unused_binding_test.etch:10:7: error: unused variable 'unused'
+  9 |   let used = ensurePositive(1)?;
+  10 |   let unused = ensurePositive(2)?;
+             ^
+  11 |   return ok(used);

@@ -1,0 +1,29 @@
+// Test: Triple OR with all branches unsafe in different ways
+// Demonstrates multiple failure modes
+
+fn testTripleOrAllUnsafe() -> int {
+  let x = match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => 5;
+    };
+    error(_) => 5;
+  };
+
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+  // x in [-10, -5] OR [20, 30] OR [50, 60]
+  // Array has 10 elements [0..9]
+  // [-10, -5] negative - UNSAFE
+  // [20, 30] beyond bounds - UNSAFE
+  // [50, 60] beyond bounds - UNSAFE
+  if (x >= -10 and x < -4) or (x >= 20 and x < 31) or (x >= 50 and x < 61) {
+    return arr[x];  // ❌ Should fail!
+  }
+
+  return -1;
+}
+
+fn main() -> void {
+  print(testTripleOrAllUnsafe());
+}

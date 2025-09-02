@@ -1,0 +1,12 @@
+// Test edge cases that should require explicit type annotations
+// These should fail compilation due to inability to infer types
+
+fn main() {
+    // Empty arrays - cannot infer element type
+    let empty = [];                 // Should fail
+
+    // Mixed type operations - not supported
+    let mixed = 1 + 1.5;           // Should fail
+
+    print(42);  // This won't be reached
+}

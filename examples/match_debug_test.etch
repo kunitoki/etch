@@ -1,0 +1,14 @@
+fn main() -> int {
+    let r: result[int] = error("oops");
+    let message: string = match r {
+        ok(x) => {
+            "hello";
+        }
+        error(e) => {
+            let xx = "aargh";
+            "world " + e + " " + xx;
+        }
+    };
+    print(message);
+    return 0;
+}

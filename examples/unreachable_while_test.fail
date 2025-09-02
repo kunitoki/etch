@@ -1,0 +1,5 @@
+examples/unreachable_while_test.etch:3:3: error: unreachable code (while condition is always false)
+  2 |   // Dead while loop with constant false condition
+  3 |   while false {
+        ^
+  4 |     print(777);  // This should cause compilation error

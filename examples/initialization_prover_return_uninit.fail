@@ -1,0 +1,5 @@
+examples/initialization_prover_return_uninit.etch:5:10: error: use of uninitialized variable 'x' - variable may not be initialized in all control flow paths
+  4 |   var x: int;
+  5 |   return x; // Error: returning uninitialized variable
+               ^
+  6 | }

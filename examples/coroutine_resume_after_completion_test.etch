@@ -1,0 +1,79 @@
+// Test resuming a coroutine multiple times after it completes
+fn counter(limit: int) {
+    var i = 0;
+    while i < limit {
+        yield i;
+        i = i + 1;
+    }
+    // Return the final counter value when the coroutine completes
+    return i;
+}
+
+fn main() {
+    let coro = spawn counter(3);
+
+    // Resume 3 times - get yielded values
+    match resume coro {
+        ok(v1) => {
+            print("Value 1: ");
+            print(v1);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume coro {
+        ok(v2) => {
+            print("Value 2: ");
+            print(v2);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume coro {
+        ok(v3) => {
+            print("Value 3: ");
+            print(v3);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    // Coroutine is now completed (no more yields)
+    // What happens if we resume again?
+    print("Resuming completed coroutine...");
+    match resume coro {
+        ok(v4) => {
+            print("Value 4 (after completion): ");
+            print(v4);
+        }
+        error(msg) => {
+            print("Value 4 (after completion) error: ");
+            print(msg);
+        }
+    };
+
+    // And again?
+    match resume coro {
+        ok(v5) => {
+            print("Value 5 (after completion): ");
+            print(v5);
+        }
+        error(msg) => {
+            print("Value 5 (after completion) error: ");
+            print(msg);
+        }
+    };
+
+    print("Done!");
+}

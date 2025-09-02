@@ -1,0 +1,30 @@
+// Test: Overflow in match expressions
+// Tests if the prover tracks overflow through pattern matching
+
+fn testMatchOption() -> int {
+  let maybeN: result[int] = match readFile("examples/data/file_safe_numbers.txt") {
+    ok(content) => parseInt(content);
+    error(reason) => error(reason);
+  };
+
+  let res = match maybeN {
+    ok(value) => {
+      // value is an int, could be anything
+      // Try to square it - might overflow
+      let squared = if value > 0 and value < 10000 {
+        value * value
+      } else {
+        value
+      };
+      squared;
+    }
+    error(_) => 0;
+  };
+
+  return res;
+}
+
+fn main() -> void {
+  let r1 = testMatchOption();
+  print("Result: " + string(r1));
+}

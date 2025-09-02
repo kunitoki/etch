@@ -1,0 +1,5 @@
+examples/tuple_index_out_of_bounds2.etch:4:20: error: tuple index 5 out of bounds (tuple has 3 elements)
+  3 |     let t = (1, 2, 3);
+  4 |     let x: int = t[5];  // Error: index 5 out of bounds for tuple with 3 elements
+                         ^
+  5 |     discard x;

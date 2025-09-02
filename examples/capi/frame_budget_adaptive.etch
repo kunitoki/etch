@@ -1,0 +1,20 @@
+// Adaptive budget test - moderate allocation
+
+type Node = object {
+  value: int;
+};
+
+var deallocations = 0;
+
+fn ~(x: Node) {
+  deallocations = deallocations + 1;
+}
+
+fn main() -> int {
+  for i in 0..<10000 {
+    let node = new[Node](value: i);
+    discard node.value;
+  }
+  print("Total deallocations: " + string(deallocations));
+  return 0;
+}

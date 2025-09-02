@@ -1,0 +1,11 @@
+fn doSomething() {
+    let x: int = 42;
+    let y: string = "hello";
+    discard x;
+    discard y;
+}
+
+fn main() {
+    doSomething();
+    print("done");
+}

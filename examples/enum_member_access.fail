@@ -1,0 +1,5 @@
+examples/enum_member_access.etch:12:18: error: cannot access member 'Green' on enum value of type 'Color'. Use enum type access like 'Color.Green' instead
+  11 |   // This should fail: member access on enum value
+  12 |   let res = color.Green;
+                        ^
+  13 |   print("Should not reach here: " + string(res));

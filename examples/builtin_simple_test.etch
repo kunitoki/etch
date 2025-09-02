@@ -1,0 +1,8 @@
+// Test FFI import of builtin functions
+
+fn main() {
+  seed(42);  // seed is still a builtin
+  let r = rand(100);
+  print(r);
+  print(42);
+}

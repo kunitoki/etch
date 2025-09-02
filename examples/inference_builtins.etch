@@ -1,0 +1,16 @@
+fn main() -> void {
+    // Test readFile type inference
+    var content = match readFile("nonexistent.txt") {
+        ok(data) => data;
+        error(_) => "default content";
+    };
+    print(content); // Should be of type string
+    print("File reading attempted");
+
+    // Test new type inference
+    var intRef = new(42);
+    print(deref(intRef));
+
+    var floatRef = new(3.14);
+    print(deref(floatRef));
+}

@@ -1,0 +1,34 @@
+// Lambda captures a coroutine handle and resumes it over multiple calls
+fn counter(start: int, count: int) {
+  var current = start;
+  var emitted = 0;
+  while emitted < count {
+    yield current;
+    current = current + 1;
+    emitted = emitted + 1;
+  }
+  return current;
+}
+
+fn makeStepper(base: int) -> (fn() -> result[int]) {
+  let coro = spawn counter(base, 2);
+  return [coro] || {
+    return resume coro;
+  };
+}
+
+fn main() {
+  let step = makeStepper(5);
+
+  let first = match step() {
+    ok(value) => value,
+    error(_) => -1
+  };
+
+  let second = match step() {
+    ok(value) => value,
+    error(_) => -1
+  };
+
+  print("values=" + string(first) + "," + string(second));
+}

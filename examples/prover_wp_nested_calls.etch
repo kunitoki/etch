@@ -1,0 +1,61 @@
+// Test: Weakest precondition - nested function calls
+// The prover should propagate preconditions through call chains
+
+fn innerFunction(x: int) -> int {
+  // WP should infer: requires x >= 0 and x < 5
+  let arr: array[int] = [1, 2, 3, 4, 5];
+  return arr[x];
+}
+
+fn middleFunction(y: int) -> int {
+  // WP should propagate: requires y >= 0 and y < 5
+  return innerFunction(y);
+}
+
+fn outerFunction(z: int) -> int {
+  // WP should propagate: requires z >= 0 and z < 5
+  return middleFunction(z);
+}
+
+fn testNestedCalls() -> int {
+  let idx = match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => 0;
+    };
+    error(_) => 0;
+  };
+
+  // Check precondition before calling outer function
+  if idx >= 0 and idx < 5 {
+    return outerFunction(idx);
+  }
+  return -1;
+}
+
+fn computeIndex(base: int, offset: int) -> int {
+  // WP should infer: requires base + offset >= 0 and base + offset < 5
+  return innerFunction(base + offset);
+}
+
+fn testComputedIndex() -> int {
+  let base = 1;
+  let offset = 2;
+
+  // Computed index is 3, which is valid
+  return computeIndex(base, offset);
+}
+
+fn main() -> void {
+  print("Test nested calls:");
+  let result1 = testNestedCalls();
+  print("Result: " + string(result1));
+  print("");
+
+  print("Test computed index:");
+  let result2 = testComputedIndex();
+  print("Result: " + string(result2));
+  print("");
+
+  print("✅ WP nested calls tests passed!");
+}

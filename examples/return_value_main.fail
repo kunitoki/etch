@@ -1,0 +1,5 @@
+examples/return_value_main.etch:2:1: error: main cannot return other than void or int, returning 'result[int]'
+  1 |
+  2 | fn main() -> result[int] {
+      ^
+  3 |   let x = "123456";

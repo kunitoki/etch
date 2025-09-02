@@ -1,0 +1,18 @@
+// Test implicit dereference for ref[array[T]] - C-style pointer semantics
+// arr[i] should work without needing @arr[i]
+fn main() {
+    var arr = new[array[int]]([10, 20, 30]);
+
+    // Read without explicit deref (implicit)
+    print(arr[0]);
+    print(arr[1]);
+    print(arr[2]);
+
+    // Write without explicit deref (implicit)
+    arr[1] = 99;
+
+    // Read again to verify mutation
+    print(arr[0]);
+    print(arr[1]);
+    print(arr[2]);
+}

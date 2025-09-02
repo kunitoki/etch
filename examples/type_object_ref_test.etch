@@ -1,0 +1,20 @@
+// Test object types
+type Person = object {
+    name: string;
+    age: int = 0;
+};
+
+fn test(p: ref[Person]) -> string {
+    return @p.name;
+}
+
+fn main() {
+    var p = new[Person]( name: "Alice", age: 25 );
+    print(p.name);
+    print(@p.age);
+    print(test(p));
+    print(p.test());
+
+    let x = p.name;
+    print(x);
+}

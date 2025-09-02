@@ -1,0 +1,15 @@
+// Test basic literal type inference
+fn main() {
+    // Basic literals
+    let x = 42;          // int
+    let y = 3.14;        // float
+    let s = "hello";     // string
+    let c = 'a';         // char
+    let b = true;        // bool
+
+    print(x);
+    print(y);
+    print(s);
+    print(c);
+    print(b);
+}

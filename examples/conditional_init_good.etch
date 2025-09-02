@@ -1,0 +1,12 @@
+fn main() -> void {
+    var x: int;
+    seed(42);
+    
+    if rand(1) == 0 {
+        x = 42;
+    } else {
+        x = 99;
+    }
+    
+    print(x);  // This should be fine - x is always initialized
+}

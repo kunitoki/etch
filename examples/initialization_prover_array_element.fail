@@ -1,0 +1,5 @@
+examples/initialization_prover_array_element.etch:5:15: error: use of uninitialized variable 'arr' - variable may not be initialized in all control flow paths
+  4 |   var arr : array[int];
+  5 |   let value = arr[0]; // Error: arr[0] is not initialized
+                    ^
+  6 |   print(value);

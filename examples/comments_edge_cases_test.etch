@@ -1,0 +1,17 @@
+fn main() -> void {
+    /* Comment at start of line */
+/* Comment with no indentation */
+    let x: int = /* inline comment */ 42;
+
+    /*
+       Multi-line comment
+       with several lines
+       and different content
+    */
+
+    print(x);
+
+    /* Comment */ print(x * 2); /* Another comment */
+
+    /**/  // Empty comment followed by line comment
+}

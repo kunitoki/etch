@@ -1,0 +1,22 @@
+// Test that an alias strong reference keeps the object alive
+// even when the original container field is set to nil
+type Inner = object {
+    value: int;
+};
+
+type Container = object {
+    data: ref[Inner];
+};
+
+fn main() {
+    var container: Container = Container(data: new[Inner](value: 42));
+    let alias = container.data;  // alias points to the same Inner
+
+    container.data = nil;  // Invalidate through container
+
+    // alias holds its own strong reference, so the Inner object is still alive
+    // We need to check for nil since the prover can't track field-level non-nil information
+    if alias != nil {
+        print(alias.value);
+    }
+}

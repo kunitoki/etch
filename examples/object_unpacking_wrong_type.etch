@@ -1,0 +1,6 @@
+// Object unpacking with non-object type
+fn main() {
+    let x = 42;
+    let {a, b} = x;  // Error: can't unpack int as object
+    discard a, b;
+}

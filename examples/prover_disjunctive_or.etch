@@ -1,0 +1,21 @@
+// Test disjunctive OR constraints
+// The prover can now handle "x < 5 or x > 10" patterns!
+
+fn testDisjunctiveOr(x: int) -> string {
+  let arr: array[int] = [0, 1, 2, 3, 4, 100, 101, 102, 103, 104, 105];
+
+  // x is either < 5 or > 10
+  // This means x can be in [0, 4] OR [11, IMax]
+  // Since our array has 11 elements [0..10], only x in [0, 4] is safe
+  if (x >= 0 and x < 5) or x >= 11 {
+    // The prover tracks: x in [0, 4] ∪ [11, IMax]
+    // This will fail (correctly) because [11, IMax] extends beyond bounds
+    return "Value: " + string(arr[x]);
+  }
+
+  return "x is between 5 and 10";
+}
+
+fn main() -> void {
+  print("Test 1 (should work): " + testDisjunctiveOr(7));
+}

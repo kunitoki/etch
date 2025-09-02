@@ -1,0 +1,15 @@
+fn main() -> void {
+    seed(123);  // Set deterministic seed
+
+    // Test case 1: rand(n) type inference should work now
+    var x = rand(10);
+    print(x);
+
+    // Test case 2: rand(n, s) type inference should work now
+    var y = rand(50, 100);
+    print(y);
+
+    // Test case 3: explicit typing should work
+    var z: int = rand(42);
+    print(z);
+}

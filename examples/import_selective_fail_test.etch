@@ -1,0 +1,14 @@
+// Test that selective imports prevent access to non-imported functions
+
+import lib/math {
+  fn add(a: int, b: int) -> int;
+  // Note: we're NOT importing mul
+}
+
+fn main() {
+  // This works - add is imported
+  print(add(10, 5));
+
+  // This should fail - mul is not imported even though it's exported from math.etch
+  print(mul(3, 4));  // Error: undefined function
+}

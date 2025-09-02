@@ -1,0 +1,5 @@
+examples/ifexpr_type_mismatch_error.etch:7:16: error: if expression branches must return the same type: then returns int, else returns string
+  6 |   // This should error - branches return different types
+  7 |   let y: int = if x > 5 { 1 } else { "hello" };
+                     ^
+  8 |

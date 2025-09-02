@@ -1,0 +1,75 @@
+// Test coroutine with nested loops
+fn matrix_generator(rows: int, cols: int) {
+    var r = 0;
+    while r < rows {
+        var c = 0;
+        while c < cols {
+            let value = r * cols + c;
+            yield value;
+            c = c + 1;
+        }
+        r = r + 1;
+    }
+    return rows * cols;
+}
+
+fn main() {
+    let matrix = spawn matrix_generator(2, 3);
+
+    print("Matrix values:");
+    match resume matrix {
+        ok(v0) => print(v0);
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume matrix {
+        ok(v1) => print(v1);
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume matrix {
+        ok(v2) => print(v2);
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume matrix {
+        ok(v3) => print(v3);
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume matrix {
+        ok(v4) => print(v4);
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume matrix {
+        ok(v5) => print(v5);
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    print("Matrix complete!");
+}

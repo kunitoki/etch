@@ -1,0 +1,14 @@
+fn max[T: Comparable](a: T, b: T) -> T {
+  if a > b {
+    return a;
+  } else {
+    return b;
+  }
+}
+
+fn main() -> void {
+  seed(42);
+  let x: int = rand(10, 50);  // [10, 50]
+  let y: int = rand(10, 50);  // [10, 50]
+  print( max(x, y) );
+}

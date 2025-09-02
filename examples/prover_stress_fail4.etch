@@ -1,0 +1,23 @@
+// Stress test failure: Off-by-one error in boundary check
+
+fn testOffByOne() -> int {
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  let x = match readFile("examples/data/input.txt") {
+    ok(content) => match parseInt(content) {
+      ok(value) => value;
+      error(_) => 5;
+    };
+    error(_) => 5;
+  };
+
+  // Off-by-one: should be x < 10, not x <= 10
+  if x >= 0 and x <= 10 {
+    return arr[x];  // ❌ Should fail! x could be 10, array is [0,9]
+  }
+
+  return -1;
+}
+
+fn main() -> void {
+  print(string(testOffByOne()));
+}

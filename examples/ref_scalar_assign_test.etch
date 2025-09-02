@@ -1,0 +1,14 @@
+fn main() {
+    let greet = new[string]("hi");
+    print("initial: " + @greet);
+    @greet = "bye";
+    print("updated: " + @greet);
+
+    let nested = new[ref[string]](nil);
+    @nested = new[string]("inner");
+    let inner = @nested;
+    print("nested initial: " + @inner); // provable to be non nil
+    @nested = new[string]("outer");
+    let innerNew = @nested;
+    print("nested updated: " + @innerNew); // provable to be non nil
+}

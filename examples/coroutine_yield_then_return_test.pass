@@ -1,0 +1,11 @@
+Yielded:
+0
+Yielded:
+1
+Yielded:
+2
+Final value:
+999
+After completion error:
+cannot resume completed coroutine
+Done!

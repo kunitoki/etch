@@ -1,0 +1,10 @@
+// Simple lambda test
+fn test() {
+  let f = |x: int| x + 1;
+  let res = f(5);
+  print("simple = " + string(res));
+}
+
+fn main() {
+  test();
+}

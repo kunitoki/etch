@@ -1,0 +1,29 @@
+// Basic lambda expressions test
+fn testLambdas() {
+  // Simple lambda without captures
+  let add = |x: int, y: int| -> int { return x + y; };
+  let addRes = add(2, 3);
+  print("add(2,3) = " + string(addRes));
+
+  // Lambda with captures
+  let factor = 10;
+  let multiply = [factor] |x: int| -> int { return factor * x; };
+  let mulRes = multiply(4);
+  print("mul(4) = " + string(mulRes));
+
+  // Lambda with expression body
+  let square = |x: int| x * x;
+  print("square(6) = " + string(square(6)));
+
+  // Array literal (should not be confused with lambda)
+  let arr1 = [1, 2, 3, 4];
+  discard arr1;
+  let arr2: array[string] = [];
+  discard arr2;
+  print("array literal parsed");
+}
+
+fn main() {
+  testLambdas();
+  print("Lambda expressions successfully parse and compile in Etch!");
+}

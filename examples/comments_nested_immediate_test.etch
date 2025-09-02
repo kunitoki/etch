@@ -1,0 +1,5 @@
+fn main() -> void {
+    /* /* immediate nested comment */ should error */
+    let x: int = 42;
+    print(x);
+}

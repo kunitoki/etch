@@ -1,0 +1,8 @@
+fn main() -> void {
+    let x: int = 10;
+    if x > 5 {
+        let y: int = 20;
+        print(y);
+    }
+    print(x);
+}

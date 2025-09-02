@@ -1,0 +1,4 @@
+examples/cffi_implicit_test.etch:1:20: error: FFI imports require 'fn' keyword before function declarations
+  1 | import ffi cmath { sin, cos }
+                         ^
+  2 |

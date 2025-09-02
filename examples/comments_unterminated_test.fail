@@ -1,0 +1,5 @@
+examples/comments_unterminated_test.etch:3:5: error: Unterminated multiline comment
+  2 |     let x: int = 42;
+  3 |     /* This comment is not terminated
+          ^
+  4 |     print(x);

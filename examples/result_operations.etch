@@ -1,0 +1,27 @@
+fn divide(a: int, b: int) -> result[int] {
+    if b == 0 {
+        return error("error");
+    }
+    return ok(a / b);
+}
+
+fn main() {
+    seed(42);
+    var success_sum = 0;
+    var error_count = 0;
+
+    // Division benchmark (simulating result type)
+    for i in 0..<50000 {
+        var a = rand(1, 100);
+        var b = rand(0, 10);
+
+        var res = divide(a, b);
+        match res {
+            ok(val) => { success_sum = success_sum + val; }
+            error(msg) => { error_count = error_count + 1; }
+        };
+    }
+
+    print(success_sum);
+    print(error_count);
+}

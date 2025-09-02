@@ -1,0 +1,6 @@
+Created coroutine
+Got value:
+10
+Resume after completion error:
+cannot resume completed coroutine
+Done!

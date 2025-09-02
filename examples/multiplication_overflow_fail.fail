@@ -1,0 +1,5 @@
+examples/multiplication_overflow_fail.etch:8:34: error: multiplication overflow
+  7 |     let big_b: int = 2;
+  8 |     let unsafe_mult: int = big_a * big_b;  // Should overflow int64
+                                       ^
+  9 |     print(unsafe_mult);

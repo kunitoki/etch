@@ -1,0 +1,29 @@
+// Test ref member access chain after non-mutating call
+// Prover should track that process() doesn't modify any members
+type A = object { value: int; };
+type B = object { a: ref[A]; };
+type C = object { b: ref[B]; };
+
+fn process(c: ref[C]) {
+    if c != nil {
+        if c.b != nil {
+            if c.b.a != nil {
+                print(c.b.a.value);
+            }
+        }
+    }
+}
+
+fn main() {
+    var c = new[C](
+        b: new[B](
+            a: new[A](value: 42)
+        )
+    );
+
+    process(c);
+
+    // process() does not modify any member (recursively)
+    // so the chain of refs should still be valid
+    print(c.b.a.value);
+}

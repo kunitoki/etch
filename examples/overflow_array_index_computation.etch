@@ -1,0 +1,21 @@
+// Test: Array index computed with overflow
+// The index computation itself might overflow before bounds checking
+
+fn accessWithComputedIndex(base: int, offset: int) -> int {
+  let arr: array[int] = [1, 2, 3, 4, 5];
+
+  // Compute index - this addition might overflow!
+  let idx = base + offset;
+
+  // Then bounds check happens - but what if idx overflowed and wrapped?
+  return arr[idx];
+}
+
+fn main() -> void {
+  // Try with values that would overflow when added
+  let large_base = 9223372036854775800;
+  let offset = 100;
+
+  let result = accessWithComputedIndex(large_base, offset);
+  print("Result: " + string(result));
+}

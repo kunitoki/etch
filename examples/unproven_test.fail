@@ -1,0 +1,5 @@
+examples/unproven_test.etch:2:12: error: cannot prove divisor is non-zero in function divide
+  1 | fn divide(x: int, y: int) -> int {
+  2 |   return x / y;  // Cannot prove y is non-zero
+                 ^
+  3 | }

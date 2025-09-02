@@ -1,0 +1,22 @@
+// Test that reversed comparisons work correctly
+// Before the fix, "5 > x" wouldn't constrain x properly
+
+fn safeAccess(arr: array[int]) -> int {
+  let index = 2;
+
+  // Reversed comparison: 5 > index
+  // This means index < 5, so index in [min, 4]
+  // Combined with index == 2, we get index in [2, 2]
+  if 5 > index and index >= 0 {
+    // index is definitely in bounds for arr[0..2]
+    return arr[index];  // Should be proven safe!
+  }
+
+  return -1;
+}
+
+fn main() -> void {
+  let numbers: array[int] = [10, 20, 30];
+  let result = safeAccess(numbers);
+  print(result);
+}

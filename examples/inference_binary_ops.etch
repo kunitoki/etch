@@ -1,0 +1,17 @@
+// Test binary operation type inference
+fn main() {
+    // Arithmetic operations
+    let sum = 1 + 2;           // int
+    let fsum = 1.5 + 2.5;      // float
+
+    // Comparison operations
+    let eq = 5 == 5;           // bool
+
+    // Logical operations
+    let and_op = true and false; // bool
+
+    print(sum);
+    print(fsum);
+    print(eq);
+    print(and_op);
+}

@@ -1,0 +1,35 @@
+fn main() {
+  // Store the compiles results in variables to avoid prover unreachable code warnings
+  let test1: bool = compiles {
+    let x: int = 5;
+    let y: int = 10;
+  };
+
+  let test2: bool = compiles {
+    let a: string = "hello";
+    let b: string = "world";
+  };
+
+  let test3: bool = compiles {
+    let invalid: int = "not an int";
+  };
+
+  // Print the results
+  if test1 {
+    print("Basic arithmetic compiles!");
+  } else {
+    print("Basic arithmetic does not compile!");
+  }
+
+  if test2 {
+    print("String declarations compile!");
+  } else {
+    print("String declarations do not compile!");
+  }
+
+  if test3 {
+    print("Type error compiles (unexpected)!");
+  } else {
+    print("Type error does not compile (expected)!");
+  }
+}

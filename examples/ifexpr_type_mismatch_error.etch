@@ -1,0 +1,10 @@
+// Test that if-expression branches must return same type
+
+fn main() {
+  let x: int = 10;
+
+  // This should error - branches return different types
+  let y: int = if x > 5 { 1 } else { "hello" };
+
+  print(y);
+}

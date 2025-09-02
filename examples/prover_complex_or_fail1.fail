@@ -1,0 +1,5 @@
+examples/prover_complex_or_fail1.etch:19:16: error: index interval [20, 9223372036854775807] extends beyond array bounds [0, 14]
+  18 |   if (x >= 0 and x < 10) or x >= 20 {
+  19 |     return arr[x];  // ❌ Should fail!
+                      ^
+  20 |   }

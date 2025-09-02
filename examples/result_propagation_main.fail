@@ -1,0 +1,5 @@
+examples/result_propagation_main.etch:4:22: error: ? operator cannot be used inside main
+  3 |   let x = "123456";
+  4 |   let y = parseInt(x)?;
+                           ^
+  5 |   print(string(y)); // 123456

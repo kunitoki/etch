@@ -1,0 +1,24 @@
+// Test: Overflow in match expressions
+// Tests if the prover tracks overflow through pattern matching
+
+fn testMatchWithLargeValues() -> int {
+  let x = rand(3);  // [0, 2]
+
+  // Each branch returns different range
+  let res = match x {
+    0 => 1000000000;      // 1B
+    1 => 2000000000;      // 2B
+    2 => 3000000000;      // 3B
+    _ => 0;
+  };
+
+  // After match, result is in [0, 3B]
+  // Doubling is [0, 6B] - safe
+  return res * 2;
+}
+
+fn main() -> void {
+  seed(42);
+  let r2 = testMatchWithLargeValues();
+  print("Result: " + string(r2));
+}

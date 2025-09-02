@@ -1,0 +1,9 @@
+// Physics module
+
+export fn velocity(distance: int, time: int) -> int {
+  return distance / time;
+}
+
+export fn force(mass: int, acceleration: int) -> int {
+  return mass * acceleration;
+}

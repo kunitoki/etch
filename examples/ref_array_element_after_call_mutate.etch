@@ -1,0 +1,20 @@
+// Test array element access after array passed to function
+
+type Node = object {
+    value: int;
+};
+
+fn process_array(arr: array[ref[Node]]) {
+    for i in 0 ..< #arr {
+        arr[i] = nil;
+    }
+}
+
+fn main() {
+    var arr = [new[Node](value: 1), new[Node](value: 2)];
+    let elem = arr[0];
+
+    process_array(arr);
+
+    print(elem.value);
+}

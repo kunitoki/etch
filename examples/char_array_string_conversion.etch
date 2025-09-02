@@ -1,0 +1,20 @@
+fn ==(a: string, b: array[char]) -> bool {
+  for i in 0..<#a {
+    print("a=" + string(a[i]));
+    print("b=" + string(b[i]));
+    if a[i] != b[i] {
+      return false;
+    }
+  }
+  return true;
+}
+
+fn main() -> void {
+  seed(42);
+  let s = rand(1, 10);
+  print(s);
+  let c: string = "aaaaaaaaaaaaa";
+  let d: array[char] = arrayNew(s, 'a');
+  print(d);
+  print(c == d);
+}

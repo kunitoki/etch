@@ -1,0 +1,24 @@
+// Test basic discard functionality with function calls
+
+fn getString() -> string {
+  return "hello";
+}
+
+fn getInt() -> int {
+  return 42;
+}
+
+fn main() {
+  // Explicitly discard return values
+  discard getString();
+  discard getInt();
+
+  // Multiple discards in one statement
+  discard getString(), getInt();
+
+  // Discard with variable
+  let x: int = 10;
+  discard x;
+
+  print("Test passed!");
+}

@@ -1,0 +1,5 @@
+examples/overflow_interprocedural_definite_fail.etch:5:12: error: addition overflow
+  4 | fn addThousand(x: int) -> int {
+  5 |   return x + 1000;
+                 ^
+  6 | }

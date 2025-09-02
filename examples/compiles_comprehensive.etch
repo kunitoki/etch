@@ -1,0 +1,82 @@
+// Comprehensive test of all language features inside compiles blocks
+
+fn main() {
+  // Test 1: Variable declarations and assignments
+  let test1: bool = compiles {
+    let x: int = 10;
+    let y: int = 20;
+    let z: int = x + y;
+  };
+  print(test1);  // Should be true
+
+  // Test 2: If statements
+  let test2: bool = compiles {
+    let x: int = 10;
+    if x > 5 {
+      let y: int = 20;
+    } else {
+      let y: int = 30;
+    }
+  };
+  print(test2);  // Should be true
+
+  // Test 3: While loops
+  let test3: bool = compiles {
+    let i: int = 0;
+    while i < 10 {
+      let x: int = i * 2;
+    }
+  };
+  print(test3);  // Should be true
+
+  // Test 4: Arrays
+  let test4: bool = compiles {
+    let arr: array[int] = [1, 2, 3, 4, 5];
+    let first: int = arr[0];
+    let len: int = arr.len;
+  };
+  print(test4);  // Should be true
+
+  // Test 5: Type error
+  let test5: bool = compiles {
+    let x: int = "string";  // Type error
+  };
+  print(test5);  // Should be false
+
+  // Test 6: Undefined variable
+  let test6: bool = compiles {
+    let x: int = undefined_var;
+  };
+  print(test6);  // Should be false
+
+  // Test 7: Boolean operations
+  let test7: bool = compiles {
+    let a: bool = true;
+    let b: bool = false;
+    let c: bool = a and b;
+    let d: bool = not c;
+  };
+  print(test7);  // Should be true
+
+  // Test 8: Float operations
+  let test8: bool = compiles {
+    let f1: float = 3.14;
+    let f2: float = 2.0;
+    let f3: float = f1 * f2;
+  };
+  print(test8);  // Should be true
+
+  // Test 9: String operations
+  let test9: bool = compiles {
+    let s: string = "hello";
+  };
+  print(test9);  // Should be true
+
+  // Test 10: Mixed type error
+  let test10: bool = compiles {
+    let i: int = 10;
+    let s: string = "test";
+    let result: int = i + s;  // Can't add int and string
+  };
+  print(test10);  // Should be false
+}

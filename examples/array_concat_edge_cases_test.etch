@@ -1,0 +1,63 @@
+fn main() -> void {
+    print("=== Array Concatenation Edge Cases Tests ===");
+
+    // Concatenating multiple small arrays
+    let tiny1: array[int] = [1];
+    let tiny2: array[int] = [2];
+    let tiny3: array[int] = [3];
+    let all_tiny: array[int] = tiny1 + tiny2 + tiny3;
+    print("Triple tiny concat length should be 3:");
+    print(#all_tiny);
+    print("Should be [1, 2, 3]:");
+    print(all_tiny[0]);
+    print(all_tiny[1]);
+    print(all_tiny[2]);
+
+    // Large array concatenation (performance test)
+    let big1: array[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    let big2: array[int] = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+    let big_result: array[int] = big1 + big2;
+    print("Large concat length should be 20:");
+    print(#big_result);
+    print("First element should be 1:");
+    print(big_result[0]);
+    print("Middle element should be 10:");
+    print(big_result[9]);
+    print("Next element should be 11:");
+    print(big_result[10]);
+    print("Last element should be 20:");
+    print(big_result[19]);
+
+    // Single element arrays
+    let single1: array[int] = [42];
+    let single2: array[int] = [84];
+    let single_result: array[int] = single1 + single2;
+    print("Single element concat length should be 2:");
+    print(#single_result);
+    print("First should be 42:");
+    print(single_result[0]);
+    print("Second should be 84:");
+    print(single_result[1]);
+
+    // String edge cases
+    let newline: string = "\n";
+    let tab: string = "\t";
+    let quote: string = "\"";
+    let special: string = newline + tab + quote;
+    print("Special chars concat length should be 3:");
+    print(#special);
+    print("Contains newline, tab, and quote");
+
+    // Chained concatenations with mixed operations
+    let base: array[int] = [1, 2, 3];
+    let slice_and_concat: array[int] = base[1:] + base[:2];  // [2, 3] + [1, 2] = [2, 3, 1, 2]
+    print("Slice and concat length should be 4:");
+    print(#slice_and_concat);
+    print("Should be [2, 3, 1, 2]:");
+    print(slice_and_concat[0]);  // 2
+    print(slice_and_concat[1]);  // 3
+    print(slice_and_concat[2]);  // 1
+    print(slice_and_concat[3]);  // 2
+
+    print("=== Edge Cases Tests Complete ===");
+}

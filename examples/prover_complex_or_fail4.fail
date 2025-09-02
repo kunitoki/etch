@@ -1,0 +1,5 @@
+examples/prover_complex_or_fail4.etch:22:16: error: index interval [-5, 2] includes negative values
+  21 |   if (x >= -5 and x < 3) or (x >= 7 and x < 10) {
+  22 |     return arr[x];  // ❌ Should fail!
+                      ^
+  23 |   }

@@ -1,0 +1,4 @@
+initial: hi
+updated: bye
+nested initial: inner
+nested updated: outer

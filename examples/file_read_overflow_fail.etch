@@ -1,0 +1,18 @@
+// Test: Overflow detection failure case with file data
+// This should fail at compile time due to potential overflow
+
+fn main() -> void {
+    // Read a large number from file
+    let large_number: int = match readFile("examples/data/file_large_numbers.txt") {
+        ok(content) => match parseInt(content) {
+            ok(num) => num;  // This could be near int64.max
+            error(_) => 0;
+        };
+        error(_) => 0;
+    };
+
+    // This should fail - potential overflow when adding to large number
+    let small_add: int = rand(1000);           // Range: [0, 1000]
+    let overflow_risk: int = large_number + small_add;  // Should fail: potential overflow
+    print(overflow_risk);
+}

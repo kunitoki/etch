@@ -1,0 +1,29 @@
+// Frame budget example - heavy allocation to trigger adaptive GC
+// Creates enough allocations to exceed frame budgets and require multiple GC cycles
+
+type Node = object {
+  value: int;
+  next: ref[Node];
+};
+
+// Global keeps old list alive, forcing orphaned cycles
+var global_list: ref[Node] = nil;
+
+fn main() -> int {
+  // Create a chain of 2500 nodes per frame
+  // This creates substantial GC pressure that may exceed budget
+  var head: ref[Node] = nil;
+
+  for i in 0..<2500 {
+    let node = new[Node](value: i, next: head);
+    head = node;
+  }
+
+  // Replace global list - old list becomes garbage
+  // Each frame creates 2500 new nodes and orphans the previous 2500
+  global_list = head;
+
+  print("Created linked list with 2500 nodes");
+
+  return 0;
+}

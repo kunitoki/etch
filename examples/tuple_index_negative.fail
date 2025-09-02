@@ -1,0 +1,5 @@
+examples/tuple_index_negative.etch:4:20: error: tuple index -1 out of bounds (tuple has 3 elements)
+  3 |     let t = (1, 2, 3);
+  4 |     let x: int = t[-1];  // Error: negative index
+                         ^
+  5 |     discard x;

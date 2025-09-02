@@ -1,0 +1,16 @@
+fn apply(arr: array[int], f: fn(int) -> int) -> array[int] {
+    var out: array[int] = [];
+    var i = 0;
+    while i < #arr {
+        out = out + [ f(arr[i]) ];
+        i = i + 1;
+    }
+    return out;
+}
+
+fn main() -> void {
+    // Passing lambdas to functions
+    let a = [1, 2, 3];
+    let res = apply(a, |x: int| x * 2);
+    print(string(#res));
+}

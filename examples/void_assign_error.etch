@@ -1,0 +1,8 @@
+fn void_func() -> void {
+    print(42);
+}
+
+fn main() -> void {
+    let x: int = void_func();  // This should be an error
+    print(x);
+}

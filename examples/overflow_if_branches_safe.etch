@@ -1,0 +1,72 @@
+// Test: Overflow tracking through if branches (safe version)
+
+fn testIfConditionRefinement() -> int {
+  let x = rand(10000000000);  // [0, 10B]
+
+  if x < 1000 {
+    // x is now [0, 999]
+    let squared = x * x;  // max: 998001 - safe
+    return squared;
+  } else {
+    // x is now [1000, 10B]
+    let doubled = x * 2;  // max: 20B - safe for int64
+    return doubled;
+  }
+}
+
+fn testNestedIfOverflow() -> int {
+  let a = rand(1000000000);  // [0, 1B]
+  let b = rand(1000000000);  // [0, 1B]
+
+  var result = 0;
+
+  if a > 500000000 {
+    if b > 500000000 {
+      // Both large, addition might approach 2B
+      result = a + b;  // max: 2B - safe
+    } else {
+      result = a;
+    }
+  } else {
+    result = b;
+  }
+
+  return result;
+}
+
+fn testDisjointRanges() -> int {
+  let choice = rand(2);  // [0, 1]
+
+  var x = 0;
+
+  if choice == 0 {
+    x = 1000000000;  // 1B
+  } else {
+    x = 2000000000;  // 2B
+  }
+
+  // After merge, x is either 1B or 2B
+  // Doubling could reach 4B - safe
+  let result = x * 2;
+
+  return result;
+}
+
+fn main() -> void {
+  print("Test if condition refinement:");
+  let r1 = testIfConditionRefinement();
+  print("Result: " + string(r1));
+  print("");
+
+  print("Test nested if:");
+  let r2 = testNestedIfOverflow();
+  print("Result: " + string(r2));
+  print("");
+
+  print("Test disjoint ranges:");
+  let r3 = testDisjointRanges();
+  print("Result: " + string(r3));
+  print("");
+
+  print("✅ If branch tests passed!");
+}

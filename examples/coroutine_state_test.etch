@@ -1,0 +1,56 @@
+// Test that coroutine preserves state across yields
+fn stateful_counter() {
+    var sum = 0;
+    var count = 0;
+
+    while count < 4 {
+        count = count + 1;
+        sum = sum + count;
+        yield sum;
+    }
+    return sum;
+}
+
+fn main() {
+    let c = spawn stateful_counter();
+
+    print("Running sum:");
+
+    match resume c {
+        ok(v1) => print(v1);  // 1
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume c {
+        ok(v2) => print(v2);  // 3 (1+2)
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume c {
+        ok(v3) => print(v3);  // 6 (1+2+3)
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume c {
+        ok(v4) => print(v4);  // 10 (1+2+3+4)
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    print("State preserved correctly!");
+}

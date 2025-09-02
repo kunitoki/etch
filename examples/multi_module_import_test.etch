@@ -1,0 +1,16 @@
+// Test multi-module import syntax
+// import lib { math, str } is equivalent to:
+// import lib/math
+// import lib/str
+
+import lib/[ math, str ]  // Import multiple modules from lib directory
+
+fn main() {
+  // From lib/math
+  print(add(3, 5));
+  print(square(4));
+
+  // From lib/str
+  print(uppercase("hello"));
+  print(length("test"));
+}

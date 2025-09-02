@@ -1,0 +1,26 @@
+fn main() {
+  // Test 1: Valid code should compile
+  let valid_code_compiles: bool = compiles {
+    let x: int = 5;
+    let y: int = 10;
+    let z: int = x + y;
+  };
+
+  print(valid_code_compiles);  // Should print true
+
+  // Test 2: Type error should not compile
+  let invalid_type_compiles: bool = compiles {
+    let x: int = 5;
+    let y: string = "hello";
+    let z: int = x + y;  // Type error: can't add int and string
+  };
+
+  print(invalid_type_compiles);  // Should print false
+
+  // Test 3: Undefined variable should not compile
+  let undefined_var_compiles: bool = compiles {
+    let x: int = undefined_variable;
+  };
+
+  print(undefined_var_compiles);  // Should print false
+}

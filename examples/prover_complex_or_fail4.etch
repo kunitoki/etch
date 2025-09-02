@@ -1,0 +1,30 @@
+// Test: Disjunctive intervals with negative values
+// One interval includes negative indices
+
+fn testNegativeDisjunction() -> int {
+  let maybeX = match readFile("examples/data/input.txt") {
+    ok(content) => content.parseInt();
+    error(_) => ok(5);
+  };
+
+  let x = match maybeX {
+    ok(value) => value;
+    error(_) => 5;
+  };
+
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+  // x in [-5, 2] OR [7, 9]
+  // Array has 10 elements [0..9]
+  // [-5, 2] includes negative values - UNSAFE
+  // [7, 9] is safe
+  if (x >= -5 and x < 3) or (x >= 7 and x < 10) {
+    return arr[x];  // ❌ Should fail!
+  }
+
+  return -1;
+}
+
+fn main() -> void {
+  print(testNegativeDisjunction());
+}

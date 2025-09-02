@@ -1,0 +1,13 @@
+// String utility functions
+
+export fn uppercase(s: string) -> string {
+  return "UPPERCASE";  // Placeholder
+}
+
+export fn lowercase(s: string) -> string {
+  return "lowercase";  // Placeholder
+}
+
+export fn length(s: string) -> int {
+  return 10;  // Placeholder
+}

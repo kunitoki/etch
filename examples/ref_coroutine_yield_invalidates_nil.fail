@@ -1,0 +1,6 @@
+examples/ref_coroutine_yield_invalidates_nil.etch:16:13: error: accessing ref parameter 'c' after yield is unsafe - the caller may have modified it while the coroutine was suspended
+  15 |     print(@x);
+  16 |     return c.node.value; // This one should raise a compiler error, yields invalidates ref args
+                   ^
+  17 | }
+

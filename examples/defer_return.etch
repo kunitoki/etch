@@ -1,0 +1,31 @@
+// Test defer with early return
+// Defer should execute before return
+
+fn test_defer_with_return(x: int) -> int {
+    print("Start");
+
+    defer {
+        print("Deferred cleanup");
+    }
+
+    if x < 0 {
+        defer {
+            print("Deferred finalization for early return");
+        }
+        print("Early return");
+        return -1;
+    }
+
+    print("Normal path");
+    return x * 2;
+}
+
+fn main() -> int {
+    print("Test 1: Early return");
+    discard test_defer_with_return(-5);
+
+    print("\nTest 2: Normal return");
+    discard test_defer_with_return(10);
+
+    return 0;
+}

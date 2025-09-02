@@ -1,0 +1,14 @@
+// Test: Using partially initialized object (should FAIL)
+
+type Point = object {
+  x: int;
+  y: int;
+};
+
+fn main() -> void {
+  var p: Point;
+  p.x = 10;
+  // p.y not initialized
+  let sum: int = p.x + p.y; // Error: p.y is not initialized
+  print(sum);
+}

@@ -1,0 +1,5 @@
+examples/undeclared_symbol.etch:3:11: error: use of undeclared variable 'undeclared_var'
+  2 |     let x: int = 42;
+  3 |     print(undeclared_var);
+                ^
+  4 | }

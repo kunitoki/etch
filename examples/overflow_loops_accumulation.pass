@@ -1,0 +1,13 @@
+Test while loop accumulation:
+Result: 10000000000
+
+Test while loop large values:
+Result: 20000000000
+
+Test unbounded loop:
+Result: 6500000000000
+
+Test loop with large step:
+Result: 5510184682
+
+✅ Loop accumulation tests passed!

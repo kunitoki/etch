@@ -1,0 +1,27 @@
+// math.etch - A simple math library module
+
+// Basic arithmetic functions - exported
+export fn add(a: int, b: int) -> int {
+  return a + b;
+}
+
+export fn sub(a: int, b: int) -> int {
+  return a - b;
+}
+
+export fn mul(a: int, b: int) -> int {
+  return a * b;
+}
+
+export fn square(x: int) -> int {
+  return x * x;
+}
+
+// Private helper function - not exported
+fn double(x: int) -> int {
+  return x * 2;
+}
+
+// Constants
+// let PI: float = 3.14159;
+// let E: float = 2.71828;

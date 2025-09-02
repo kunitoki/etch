@@ -1,0 +1,18 @@
+// Regression test: functions using postfix ? must still return ok(...) on the success path
+
+fn requirePositive(label: string, value: int) -> result[int] {
+  if value < 0 {
+    return error(label + " must be positive: " + string(value));
+  }
+  return ok(value);
+}
+
+fn requirePositiveNoReturn(label: string, value: int) {
+  let x = requirePositive(label, value)?;
+  print(x);
+  // Missing `return ok(x);` on the success path
+}
+
+fn main() {
+  discard requirePositiveNoReturn("demo", -1);
+}

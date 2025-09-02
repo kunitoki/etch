@@ -1,0 +1,11 @@
+// Test SubDiv fusion: (a - b) / c -> opSubDiv
+fn main() {
+  let a = 100;
+  let b = 40;
+  let c = 6;
+
+  // This should fuse into a single opSubDiv instruction
+  let result = (a - b) / c;
+
+  print(result);  // Should print 10 (60 / 6)
+}

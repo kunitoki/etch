@@ -1,0 +1,11 @@
+// Test AddAdd fusion: (a + b) + c -> opAddAdd
+fn main() {
+  let a = 10;
+  let b = 20;
+  let c = 30;
+
+  // This should fuse into a single opAddAdd instruction
+  let result = (a + b) + c;
+
+  print(result);  // Should print 60
+}

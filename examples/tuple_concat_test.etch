@@ -1,0 +1,27 @@
+// Test tuple concatenation with +
+fn main() {
+    let t1 = (1, 2);
+    let t2 = (3, 4);
+
+    {
+        let t3: tuple[int, int, int, int] = t1 + t2;
+
+        let a: int = t3[0];
+        let b: int = t3[1];
+        let c: int = t3[2];
+        let d: int = t3[3];
+
+        print("Concat: " + string(a) + ", " + string(b) + ", " + string(c) + ", " + string(d));
+    }
+
+    {
+        let t3 = t1 + t2;
+
+        let a: int = t3[0];
+        let b: int = t3[1];
+        let c: int = t3[2];
+        let d: int = t3[3];
+
+        print("Concat: " + string(a) + ", " + string(b) + ", " + string(c) + ", " + string(d));
+    }
+}

@@ -1,0 +1,18 @@
+// Test basic reference counting
+type Person = object {
+    name: string;
+    age: int;
+};
+
+fn main() -> void {
+    // Allocate object (refcount = 1)
+    let p1: ref[Person] = new[Person]( name: "Alice", age: 25 );
+    print(p1.name);
+
+    // Create another reference (refcount = 2)
+    let p2: ref[Person] = p1;
+    print(p2.name);
+
+    // p2 goes out of scope (refcount = 1)
+    // p1 goes out of scope (refcount = 0, freed)
+}

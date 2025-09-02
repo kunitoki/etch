@@ -1,0 +1,20 @@
+fn print_value(x: int) -> void {
+    print(x);
+}
+
+fn print_value(x: float) -> void {
+    print(x);
+}
+
+fn main() -> void {
+    let x: int = 42;
+    let y: float = 3.14;
+
+    // Test basic overloading - should work with regular function calls
+    print_value(x);
+    print_value(y);
+
+    // Test with UFCS
+    x.print_value();
+    y.print_value();
+}

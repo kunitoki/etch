@@ -1,0 +1,11 @@
+// Test MulAdd fusion: a * b + c -> opMulAdd
+fn main() {
+  let a = 5;
+  let b = 4;
+  let c = 10;
+
+  // This should fuse into a single opMulAdd instruction
+  let result = a * b + c;
+
+  print(result);  // Should print 30
+}

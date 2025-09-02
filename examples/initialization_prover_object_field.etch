@@ -1,0 +1,12 @@
+// Test: Using uninitialized object field (should FAIL)
+
+type Point = object {
+  x: int;
+  y: int;
+};
+
+fn main() -> void {
+  var p: Point;
+  let value: int = p.x; // Error: p.x is not initialized
+  print(value);
+}

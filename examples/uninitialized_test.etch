@@ -1,0 +1,4 @@
+fn main() -> void {
+    var x: int;
+    print(x);  // This should fail - x is not initialized
+}

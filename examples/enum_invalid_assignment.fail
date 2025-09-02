@@ -1,0 +1,5 @@
+examples/enum_invalid_assignment.etch:20:7: error: initialization type mismatch: Direction vs Color
+  19 |   // This should fail: assigning direction to color variable
+  20 |   let invalid_color: Color = direction;
+             ^
+  21 |   print("Should not reach here");

@@ -1,0 +1,31 @@
+// Test parent object containing child object, both with destructors
+// Validates that child destructor is called after parent destructor
+
+type Child = object {
+  id: int;
+};
+
+type Parent = object {
+  name: string;
+  child: Child;
+};
+
+fn ~(c: Child) -> void {
+  print("Child destructor called for ID: " + string(c.id));
+}
+
+fn ~(p: Parent) -> void {
+  print("Parent destructor called for: " + p.name);
+  print("Parent can still access child ID: " + string(p.child.id));
+}
+
+fn main() -> void {
+  print("Creating parent with child...");
+  let parent = new[Parent](
+    name: "ParentObj",
+    child: Child(id: 123)
+  );
+  discard parent;
+  print("Parent created");
+  print("Exiting main...");
+}

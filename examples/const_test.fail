@@ -1,0 +1,5 @@
+examples/const_test.etch:3:26: error: division by zero in main
+  2 |     let zero: int = 0;
+  3 |     let result: int = 10 / zero;  // Direct division - should be caught
+                               ^
+  4 |     print(result);

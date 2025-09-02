@@ -1,0 +1,31 @@
+fn create_array(size: int) -> array[int] {
+    var arr: array[int] = arrayNew(size, 0);
+    for i in 0..<size {
+        arr[i] = i;
+    }
+    return arr;
+}
+
+fn main() {
+    seed(42);
+    var total_length = 0;
+
+    // Memory allocation and array creation benchmark
+    for i in 0..<1000 {
+        var size = rand(10, 50);
+        var arr = create_array(size);
+
+        var bounded_len = total_length;
+        var bounded_arr_len = #arr;
+        total_length = (bounded_len + bounded_arr_len);
+
+        // Create some temporary arrays
+        var temp1 = [1, 2, 3, 4, 5];
+        var temp2 = temp1 + arr[0:5];
+        var bounded_len2 = total_length;
+        var bounded_temp_len = #temp2;
+        total_length = (bounded_len2 + bounded_temp_len);
+    }
+
+    print(total_length);
+}

@@ -1,0 +1,77 @@
+// Test coroutine with conditional yields
+fn filter_evens(n: int) {
+    var i = 0;
+    while i < n {
+        if i % 2 == 0 {
+            yield i;
+        }
+        i = i + 1;
+    }
+    return i;
+}
+
+fn main() {
+    let evens = spawn filter_evens(10);
+
+    match resume evens {
+        ok(v0) => {
+            print("Even: ");
+            print(v0);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume evens {
+        ok(v1) => {
+            print("Even: ");
+            print(v1);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume evens {
+        ok(v2) => {
+            print("Even: ");
+            print(v2);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume evens {
+        ok(v3) => {
+            print("Even: ");
+            print(v3);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    match resume evens {
+        ok(v4) => {
+            print("Even: ");
+            print(v4);
+        }
+        error(msg) => {
+            print("resume error: ");
+            print(msg);
+            return;
+        }
+    };
+
+    print("Filtered!");
+}

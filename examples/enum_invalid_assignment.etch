@@ -1,0 +1,22 @@
+// Test: Assigning enum values from different enum types
+type Color = enum {
+  Red;
+  Green;
+  Blue;
+};
+
+type Direction = enum {
+  North;
+  South;
+  East;
+  West;
+};
+
+fn main() {
+  let color = Color.Red;
+  let direction = Direction.North;
+
+  // This should fail: assigning direction to color variable
+  let invalid_color: Color = direction;
+  print("Should not reach here");
+}
