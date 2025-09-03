@@ -1,5 +1,0 @@
-tests/error_test.etch:3:3: error: cannot assign to immutable variable 'd'
-  2 |   let d: int = 1 - 1;
-  3 |   d = 0;
-        ^
-  4 |   d = 1;

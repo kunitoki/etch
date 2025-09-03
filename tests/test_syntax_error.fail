@@ -1,5 +1,0 @@
-tests/test_syntax_error.etch:3:12: error: expected symbol ')', got symbol ';'
-  2 |     let x: int = 42;
-  3 |     print(x;  // missing closing parenthesis
-                 ^
-  4 | }

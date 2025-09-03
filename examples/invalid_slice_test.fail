@@ -1,0 +1,5 @@
+examples/invalid_slice_test.etch:6:30: error: invalid slice: start 4 > end 2
+  5 |     // This should be caught: start > end
+  6 |     let bad: array[int] = arr[4:2];
+                                   ^
+  7 | }

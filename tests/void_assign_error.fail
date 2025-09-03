@@ -1,5 +1,0 @@
-tests/void_assign_error.etch:6:9: error: cannot assign void function result to variable 'x' of type int
-  5 | fn main() -> void {
-  6 |     let x: int = void_func();  // This should be an error
-              ^
-  7 |     print(x);

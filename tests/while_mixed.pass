@@ -1,8 +1,0 @@
-tests/while_mixed.etch:10:3: warning: unreachable code (while condition is always false)
-tests/while_mixed.etch:22:3: warning: unreachable code (while condition is always false)
-tests/while_mixed.etch:27:3: warning: unreachable code (while condition is always false)
-45
-0
-1
-2
-555

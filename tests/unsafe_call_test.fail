@@ -1,5 +1,0 @@
-tests/unsafe_call_test.etch:2:14: error: division by zero
-  1 | fn divide(x: int, y: int) -> int {
-  2 |     return x / y;  // This should be fine to define
-                   ^
-  3 | }

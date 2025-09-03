@@ -1,0 +1,4 @@
+examples/dead_code_test.etch:3:3: warning: unreachable code (condition is always false)
+examples/dead_code_test.etch:8:3: warning: unreachable code (condition is always true)
+examples/dead_code_test.etch:16:3: warning: unreachable code (condition is always false)
+42

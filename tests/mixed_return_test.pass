@@ -1,1 +1,0 @@
-tests/mixed_return_test.etch:2:5: warning: unreachable code (condition is always true)

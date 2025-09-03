@@ -1,5 +1,0 @@
-tests/test_invalid_casts.etch:7:27: error: invalid cast from int to bool
-  6 |     // These should fail - invalid cast types
-  7 |     let bad_cast1: bool = bool(x);  // int to bool not allowed
-                                ^
-  8 |     let bad_cast2: int = int(y);    // string to int not allowed

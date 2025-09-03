@@ -1,5 +1,0 @@
-tests/hello.etch:18:3: error: cannot assign to immutable variable 'd'
-  17 |   let d: int = 1;
-  18 |   d = add (d, -g);
-         ^
-  19 |   if d != 0 {

@@ -1,7 +1,9 @@
 nimcache/
 nimblecache/
 htmldocs/
-__etch__/
 
-*.etcx
 .DS_Store
+
+__etch__/
+*.etcx
+*.etca

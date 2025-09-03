@@ -1,0 +1,5 @@
+examples/negative_index_test.etch:6:24: error: array index cannot be negative: -1
+  5 |     // This should be caught as negative index
+  6 |     let bad: int = arr[-1];
+                             ^
+  7 | }

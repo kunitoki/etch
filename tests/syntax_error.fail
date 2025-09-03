@@ -1,5 +1,0 @@
-tests/syntax_error.etch:2:7: error: cannot assign void function result to variable 'x' of type int
-  1 | fn main() -> void {
-  2 |   let x: int =
-            ^
-  3 |   print(x);

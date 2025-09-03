@@ -1,5 +1,0 @@
-tests/loop_init_test.etch:10:11: error: use of uninitialized variable 'x' - variable may not be initialized in all control flow paths
-  9 | 
-  10 |     print(x);  // This should fail - x may not be initialized if loop doesn't execute
-                 ^
-  11 | }

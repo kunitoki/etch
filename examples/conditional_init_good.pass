@@ -1,0 +1,2 @@
+examples/conditional_init_good.etch:4:5: warning: unreachable code (condition is always true)
+42

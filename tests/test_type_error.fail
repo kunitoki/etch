@@ -1,5 +1,0 @@
-tests/test_type_error.etch:4:20: error: arithmetic operation requires matching types, got int and string. Use explicit casts like int(x) or float(x)
-  3 |     let y: string = "hello";
-  4 |     let z: int = x + y;  // Type error: cannot add int and string
-                         ^
-  5 | }

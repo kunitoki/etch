@@ -1,5 +1,0 @@
-tests/circular_ref.etch:2:16: error: use of undeclared variable 'x'
-  1 | fn main() -> void {
-  2 |   let x: int = x + 1;
-                     ^
-  3 | }
