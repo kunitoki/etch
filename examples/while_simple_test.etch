@@ -1,11 +1,13 @@
 fn main() -> void {
     seed(42);  
-    let x: int = rand(100, 20);  // Range: [20, 100]
+
+    var x: int = rand(100, 9);  // Range: [20, 100]
     print(x);
-    
+
     while x < 10 {
         print(999);  // This should never execute
+        x = x - 1;
     }
-    
+
     print(555);  // End marker
 }

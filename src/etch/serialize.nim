@@ -41,7 +41,7 @@ type
     sarg*: string
     debug*: DebugInfo
 
-  FunctionDebugInfo* = object
+  FunctionInfo* = object
     name*: string
     startLine*: int
     endLine*: int
@@ -56,7 +56,7 @@ type
     globals*: seq[string]
     globalValues*: Table[string, GlobalValue]
     sourceFile*: string
-    functionDebugInfo*: Table[string, FunctionDebugInfo]
+    functionInfo*: Table[string, FunctionInfo]
     lineToInstructionMap*: Table[int, seq[int]]
     compilerFlags*: CompilerFlags
 
@@ -157,13 +157,13 @@ proc serializeToBinary*(prog: BytecodeProgram): string =
       stream.write(uint32(instr.debug.col))
 
   # Function debug info (parameter names are essential for execution)
-  var funcDebugCount = uint32(prog.functionDebugInfo.len)
+  var funcDebugCount = uint32(prog.functionInfo.len)
   stream.write(funcDebugCount)
-  for name, debugInfo in prog.functionDebugInfo:
+  for name, debugInfo in prog.functionInfo:
     var nameLen = uint32(name.len)
     stream.write(nameLen)
     stream.write(name)
-    
+
     var paramCount = uint32(debugInfo.parameterNames.len)
     stream.write(paramCount)
     for paramName in debugInfo.parameterNames:
@@ -193,7 +193,7 @@ proc deserializeFromBinary*(data: string): BytecodeProgram =
     constants: @[],
     functions: initTable[string, int](),
     globals: @[],
-    functionDebugInfo: initTable[string, FunctionDebugInfo](),
+    functionInfo: initTable[string, FunctionInfo](),
     lineToInstructionMap: initTable[int, seq[int]](),
     compilerFlags: CompilerFlags()  # Will be set below
   )
@@ -276,14 +276,14 @@ proc deserializeFromBinary*(data: string): BytecodeProgram =
   for i in 0..<funcDebugCount:
     let nameLen = stream.readUint32()
     let name = stream.readStr(int(nameLen))
-    
+
     let paramCount = stream.readUint32()
     var parameterNames: seq[string] = @[]
     for j in 0..<paramCount:
       let paramLen = stream.readUint32()
       parameterNames.add(stream.readStr(int(paramLen)))
-    
-    result.functionDebugInfo[name] = FunctionDebugInfo(
+
+    result.functionInfo[name] = FunctionInfo(
       name: name,
       startLine: 0,
       endLine: 0,

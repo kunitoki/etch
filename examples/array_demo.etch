@@ -4,7 +4,7 @@ fn main() -> void {
 
     // Array indexing
     let first: int = numbers[0];
-    var last: int = numbers[rand(0, 2)];
+    var last: int = numbers[rand(2, 0)];
     print(numbers[0]);
     print(numbers[4]);
 

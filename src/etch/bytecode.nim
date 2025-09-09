@@ -331,7 +331,7 @@ proc compileProgram*(astProg: Program, sourceHash: string, sourceFile: string = 
     globals: @[],
     globalValues: initTable[string, GlobalValue](),
     sourceFile: sourceFile,
-    functionDebugInfo: initTable[string, FunctionDebugInfo](),
+    functionInfo: initTable[string, FunctionInfo](),
     lineToInstructionMap: initTable[int, seq[int]](),
     compilerFlags: flags
   )
@@ -370,14 +370,14 @@ proc compileProgram*(astProg: Program, sourceHash: string, sourceFile: string = 
       ctx.localVars.add(param.name)
 
     # Always store function debug info (parameter names are essential for execution)
-    let debugInfo = FunctionDebugInfo(
+    let debugInfo = FunctionInfo(
       name: name,
       startLine: if includeDebugInfo: 0 else: 0,  # Could be enhanced to track actual lines
       endLine: if includeDebugInfo: 0 else: 0,
       parameterNames: fn.params.mapIt(it.name),  # Always needed for execution
       localVarNames: if includeDebugInfo: @[] else: @[]
     )
-    result.functionDebugInfo[name] = debugInfo
+    result.functionInfo[name] = debugInfo
 
     result.functions[name] = result.instructions.len
     for stmt in fn.body:

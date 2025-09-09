@@ -67,364 +67,6 @@ proc truthy(v: V): bool =
   of tkFloat: v.fval != 0.0
   else: false
 
-proc evalExpr*(vm: VM; fr: Frame; e: Expr): V =
-  case e.kind
-  of ekInt: return vInt(e.ival)
-  of ekFloat: return vFloat(e.fval)
-  of ekString: return vString(e.sval)
-  of ekBool: return vBool(e.bval)
-  of ekVar:  return loadVar(fr, e.vname)
-  of ekUn:
-    let a = vm.evalExpr(fr, e.ue)
-    case e.uop
-    of uoNeg: return vInt(-a.ival)
-    of uoNot: return vBool(not truthy(a))
-  of ekBin:
-    let a = vm.evalExpr(fr, e.lhs)
-    let b = vm.evalExpr(fr, e.rhs)
-    case e.bop
-    of boAdd:
-      if a.kind == tkInt: return vInt(a.ival + b.ival)
-      else: return vFloat(a.fval + b.fval)
-    of boSub:
-      if a.kind == tkInt: return vInt(a.ival - b.ival)
-      else: return vFloat(a.fval - b.fval)
-    of boMul:
-      if a.kind == tkInt: return vInt(a.ival * b.ival)
-      else: return vFloat(a.fval * b.fval)
-    of boDiv:
-      if a.kind == tkInt: return vInt(a.ival div b.ival)
-      else: return vFloat(a.fval / b.fval)
-    of boMod:
-      if a.kind == tkInt: return vInt(a.ival mod b.ival)
-      else: return vFloat(math.mod(a.fval, b.fval))
-    of boEq:
-      if a.kind == tkInt: return vBool(a.ival == b.ival)
-      else: return vBool(a.fval == b.fval)
-    of boNe:
-      if a.kind == tkInt: return vBool(a.ival != b.ival)
-      else: return vBool(a.fval != b.fval)
-    of boLt:
-      if a.kind == tkInt: return vBool(a.ival < b.ival)
-      else: return vBool(a.fval < b.fval)
-    of boLe:
-      if a.kind == tkInt: return vBool(a.ival <= b.ival)
-      else: return vBool(a.fval <= b.fval)
-    of boGt:
-      if a.kind == tkInt: return vBool(a.ival > b.ival)
-      else: return vBool(a.fval > b.fval)
-    of boGe:
-      if a.kind == tkInt: return vBool(a.ival >= b.ival)
-      else: return vBool(a.fval >= b.fval)
-    of boAnd: return vBool(a.truthy and b.truthy)
-    of boOr:  return vBool(a.truthy or b.truthy)
-  of ekCall:
-    # builtins
-    if e.fname == "print":
-      let vv = vm.evalExpr(fr, e.args[0])
-      case vv.kind
-      of tkBool: echo (if vv.bval: "true" else: "false")
-      of tkInt: echo vv.ival
-      of tkFloat: echo vv.fval
-      of tkString: echo vv.sval
-      else: echo "<ref>"
-      return V(kind: tkVoid)
-    if e.fname == "newref":
-      let vv = vm.evalExpr(fr, e.args[0])
-      return vm.alloc(vv)
-    if e.fname == "deref":
-      let rr = vm.evalExpr(fr, e.args[0])
-      if rr.kind != tkRef: raise newException(ValueError, "deref on non-ref")
-      let cell = vm.heap[rr.refId]
-      if cell.isNil or not cell.alive: raise newException(ValueError, "nil ref")
-      return cell.val
-    if e.fname == "rand":
-      # rand(max, [min]) - generate random int from min to max (inclusive)
-      let maxVal = vm.evalExpr(fr, e.args[0])
-      let minVal = if e.args.len > 1: vm.evalExpr(fr, e.args[1]) else: vInt(0)
-      if maxVal.kind != tkInt or minVal.kind != tkInt:
-        raise newException(ValueError, "rand arguments must be int")
-      let minI = minVal.ival
-      let maxI = maxVal.ival
-      if minI > maxI:
-        raise newException(ValueError, "rand: min cannot be greater than max")
-      # Simple random generation using system time (not cryptographically secure)
-      let range = maxI - minI + 1
-      if range <= 0:
-        raise newException(ValueError, "rand: invalid range")
-      # Use current time in nanoseconds as seed for simple randomness
-      let timeVal = getTime().toUnix() * 1000000 + getTime().nanosecond
-      let res = minI + (timeVal mod range)
-      return vInt(int64(res))
-    if e.fname == "seed":
-      # seed(value) - set random seed for deterministic testing
-      if e.args.len != 1: raise newException(ValueError, "seed expects 1 arg")
-      let seedVal = vm.evalExpr(fr, e.args[0])
-      if seedVal.kind != tkInt: raise newException(ValueError, "seed expects int")
-      randomize(int(seedVal.ival))
-      return V(kind: tkVoid)
-    if e.fname.startsWith("assume"): return V(kind: tkVoid)
-    if e.fname == "readFile":
-      if e.args.len != 1: raise newException(ValueError, "readFile expects 1 arg")
-      let pathArg = vm.evalExpr(fr, e.args[0])
-      if pathArg.kind != tkString: raise newException(ValueError, "readFile expects string path")
-      try:
-        let content = readFile(pathArg.sval)
-        return vString(content)
-      except:
-        return vString("") # Return empty string on error
-    if e.fname == "inject":
-      if e.args.len != 3: raise newException(ValueError, "inject expects 3 args: name, type, value")
-      let nameArg = vm.evalExpr(fr, e.args[0])
-      let typeArg = vm.evalExpr(fr, e.args[1])
-      let valueArg = vm.evalExpr(fr, e.args[2])
-
-      if nameArg.kind != tkString or typeArg.kind != tkString:
-        raise newException(ValueError, "inject name and type must be strings")
-
-      # Create the appropriate type
-      var varType: EtchType
-      case typeArg.sval
-      of "int": varType = tInt()
-      of "string": varType = tString()
-      of "bool": varType = tBool()
-      else: raise newException(ValueError, "inject: unsupported type " & typeArg.sval)
-
-      # Create initialization expression based on value
-      var initExpr: Expr
-      case typeArg.sval
-      of "string":
-        if valueArg.kind != tkString:
-          raise newException(ValueError, "inject: string value must be string")
-        initExpr = Expr(kind: ekString, sval: valueArg.sval, typ: tString(), pos: Pos(line: 0, col: 0, filename: ""))
-      of "int":
-        if valueArg.kind != tkInt:
-          raise newException(ValueError, "inject: int value must be int")
-        initExpr = Expr(kind: ekInt, ival: valueArg.ival, typ: tInt(), pos: Pos(line: 0, col: 0, filename: ""))
-      of "bool":
-        if valueArg.kind != tkBool:
-          raise newException(ValueError, "inject: bool value must be bool")
-        initExpr = Expr(kind: ekBool, bval: valueArg.bval, typ: tBool(), pos: Pos(line: 0, col: 0, filename: ""))
-      else:
-        raise newException(ValueError, "inject: unsupported type")
-
-      # Create variable statement
-      let stmt = Stmt(
-        kind: skVar,
-        vname: nameArg.sval,
-        vtype: varType,
-        vinit: some(initExpr),
-        pos: Pos(line: 0, col: 0, filename: "")
-      )
-
-      # Add to injection queue
-      vm.injectedStmts.add(stmt)
-      return V(kind: tkVoid)
-    # user functions (monomorphized name)
-    if not vm.funs.hasKey(e.fname):
-      raise newException(ValueError, "VM unknown function " & e.fname)
-    let fn = vm.funs[e.fname]
-    var newF = Frame(vars: initTable[string, V]())
-    # Copy globals to new frame
-    for k, v in fr.vars:
-      newF.vars[k] = v
-    for i, p in fn.params:
-      if i < e.args.len:
-        # Use provided argument
-        newF.vars[p.name] = vm.evalExpr(fr, e.args[i])
-      elif p.defaultValue.isSome:
-        # Use default value
-        newF.vars[p.name] = vm.evalExpr(fr, p.defaultValue.get)
-      else:
-        # This should not happen if type checker is correct
-        raise newException(ValueError, &"Missing argument for parameter {p.name}")
-    # run body
-    for st in fn.body:
-      # emulate returns via exception-lite
-      case st.kind
-      of skReturn:
-        if st.re.isSome():
-          return vm.evalExpr(newF, st.re.get())
-        else:
-          return V(kind: tkVoid)
-      of skVar:
-        if st.vinit.isSome():
-          newF.vars[st.vname] = vm.evalExpr(newF, st.vinit.get())
-        else:
-          newF.vars[st.vname] = vInt(0)
-      of skAssign:
-        newF.vars[st.aname] = vm.evalExpr(newF, st.aval)
-      of skIf:
-        var executed = false
-        # Check main condition
-        if vm.evalExpr(newF, st.cond).truthy:
-          executed = true
-          for ss in st.thenBody:
-            if ss.kind == skReturn:
-              if ss.re.isSome(): return vm.evalExpr(newF, ss.re.get())
-              return V(kind: tkVoid)
-            elif ss.kind == skExpr:
-              discard vm.evalExpr(newF, ss.sexpr)
-            else:
-              # RECURSE shallowly
-              case ss.kind
-              of skVar:
-                if ss.vinit.isSome(): newF.vars[ss.vname] = vm.evalExpr(newF, ss.vinit.get())
-                else: newF.vars[ss.vname] = vInt(0)
-              of skAssign:
-                newF.vars[ss.aname] = vm.evalExpr(newF, ss.aval)
-              else: discard
-
-        # Check elif chain
-        if not executed:
-          for elifBranch in st.elifChain:
-            if vm.evalExpr(newF, elifBranch.cond).truthy:
-              executed = true
-              for ss in elifBranch.body:
-                if ss.kind == skReturn:
-                  if ss.re.isSome(): return vm.evalExpr(newF, ss.re.get())
-                  return V(kind: tkVoid)
-                elif ss.kind == skExpr:
-                  discard vm.evalExpr(newF, ss.sexpr)
-                else:
-                  # RECURSE shallowly
-                  case ss.kind
-                  of skVar:
-                    if ss.vinit.isSome(): newF.vars[ss.vname] = vm.evalExpr(newF, ss.vinit.get())
-                    else: newF.vars[ss.vname] = vInt(0)
-                  of skAssign:
-                    newF.vars[ss.aname] = vm.evalExpr(newF, ss.aval)
-                  else: discard
-              break
-
-        # Execute else branch if nothing else executed
-        if not executed:
-          for ss in st.elseBody:
-            if ss.kind == skReturn:
-              if ss.re.isSome(): return vm.evalExpr(newF, ss.re.get())
-              return V(kind: tkVoid)
-            elif ss.kind == skExpr:
-              discard vm.evalExpr(newF, ss.sexpr)
-      of skWhile:
-        while vm.evalExpr(newF, st.wcond).truthy:
-          for ss in st.wbody:
-            if ss.kind == skReturn:
-              if ss.re.isSome(): return vm.evalExpr(newF, ss.re.get())
-              return V(kind: tkVoid)
-            elif ss.kind == skExpr:
-              discard vm.evalExpr(newF, ss.sexpr)
-            elif ss.kind == skAssign:
-              newF.vars[ss.aname] = vm.evalExpr(newF, ss.aval)
-            elif ss.kind == skVar:
-              if ss.vinit.isSome(): newF.vars[ss.vname] = vm.evalExpr(newF, ss.vinit.get())
-              else: newF.vars[ss.vname] = vInt(0)
-      of skComptime:
-        # Comptime blocks should be empty by runtime (executed during compilation)
-        discard
-      of skExpr:
-        discard vm.evalExpr(newF, st.sexpr)
-    return V(kind: tkVoid)
-  of ekComptime:
-    # By the time VM sees this at runtime it should be replaced; but just eval inner:
-    return vm.evalExpr(fr, e.inner)
-  of ekNewRef:
-    let vv = vm.evalExpr(fr, e.init)
-    return vm.alloc(vv)
-  of ekDeref:
-    let rr = vm.evalExpr(fr, e.refExpr)
-    if rr.kind != tkRef: raise newException(ValueError, "deref on non-ref")
-    let cell = vm.heap[rr.refId]
-    if cell.isNil or not cell.alive: raise newException(ValueError, "nil ref")
-    return cell.val
-  of ekArray:
-    # Evaluate all elements and create array
-    var elements: seq[V] = @[]
-    for elem in e.elements:
-      elements.add(vm.evalExpr(fr, elem))
-    return vArray(elements)
-  of ekIndex:
-    # Evaluate array and index
-    let arr = vm.evalExpr(fr, e.arrayExpr)
-    let idx = vm.evalExpr(fr, e.indexExpr)
-    if arr.kind != tkArray: raise newException(ValueError, "indexing on non-array")
-    if idx.kind != tkInt: raise newException(ValueError, "array index must be int")
-    if idx.ival < 0 or idx.ival >= arr.aval.len:
-      raise newException(ValueError, &"array index {idx.ival} out of bounds [0, {arr.aval.len-1}]")
-    return arr.aval[idx.ival]
-  of ekSlice:
-    # Evaluate array
-    let arr = vm.evalExpr(fr, e.sliceExpr)
-    if arr.kind != tkArray: raise newException(ValueError, "slicing on non-array")
-
-    # Evaluate start and end indices
-    let startIdx = if e.startExpr.isSome:
-                     let s = vm.evalExpr(fr, e.startExpr.get)
-                     if s.kind != tkInt: raise newException(ValueError, "slice start must be int")
-                     max(0, s.ival)
-                   else:
-                     0
-    let endIdx = if e.endExpr.isSome:
-                   let e = vm.evalExpr(fr, e.endExpr.get)
-                   if e.kind != tkInt: raise newException(ValueError, "slice end must be int")
-                   min(arr.aval.len, e.ival)
-                 else:
-                   arr.aval.len
-
-    # Create slice (ensure valid bounds)
-    let actualStart = max(0, min(startIdx, arr.aval.len))
-    let actualEnd = max(actualStart, min(endIdx, arr.aval.len))
-
-    if actualStart >= actualEnd:
-      return vArray(@[])  # Empty array
-    else:
-      return vArray(arr.aval[actualStart..<actualEnd])
-  of ekArrayLen:
-    # Array length operator: #array -> int
-    let arr = vm.evalExpr(fr, e.lenExpr)
-    if arr.kind != tkArray: raise newException(ValueError, "length operator # on non-array")
-    return vInt(arr.aval.len.int64)
-  of ekCast:
-    # Explicit cast: evaluate source expression and convert to target type
-    let source = vm.evalExpr(fr, e.castExpr)
-    case e.castType.kind
-    of tkInt:
-      case source.kind
-      of tkFloat: return vInt(source.fval.int64)
-      else: raise newException(ValueError, "invalid cast to int")
-    of tkFloat:
-      case source.kind
-      of tkInt: return vFloat(source.ival.float64)
-      else: raise newException(ValueError, "invalid cast to float")
-    of tkString:
-      case source.kind
-      of tkInt: return vString($source.ival)
-      of tkFloat: return vString($source.fval)
-      else: raise newException(ValueError, "invalid cast to string")
-    else: raise newException(ValueError, "unsupported cast type")
-  of ekNil:
-    # nil reference
-    return vRef(-1)  # Use -1 to indicate nil reference
-
-proc runMain*(prog: Program; mainName="main") =
-  # collect instantiated functions + main
-  var vm = VM(mode: vmAST, heap: @[], funs: initTable[string, FunDecl]())
-  for k, f in prog.funInstances: vm.funs[k] = f
-  # Allow non-generic main as 'main<>' too
-  if prog.funInstances.hasKey("main<>"):
-    vm.funs["main<>"] = prog.funInstances["main<>"]
-  # Execute globals: assign default 0/int or false/bool by VM on demand
-  var fr = Frame(vars: initTable[string, V]())
-  for g in prog.globals:
-    case g.kind
-    of skVar:
-      if g.vinit.isSome(): fr.vars[g.vname] = vm.evalExpr(fr, g.vinit.get())
-      else: fr.vars[g.vname] = vInt(0)
-    else: discard
-  if vm.funs.hasKey("main") or vm.funs.hasKey("main<>"):
-    discard vm.evalExpr(fr, Expr(kind: ekCall, fname: (if vm.funs.hasKey("main"): "main" else: "main<>"), args: @[], pos: Pos(line:0,col:0,filename:"")))
-  else:
-    raise newException(ValueError, "No main() function found")
-
 # Bytecode VM functionality
 proc push(vm: VM; val: V) =
   vm.stack.add(val)
@@ -815,8 +457,8 @@ proc opCallImpl(vm: VM, instr: Instruction): bool =
     args.add(vm.pop())
 
   # Get parameter names from function debug info
-  if vm.program.functionDebugInfo.hasKey(funcName):
-    let debugInfo = vm.program.functionDebugInfo[funcName]
+  if vm.program.functionInfo.hasKey(funcName):
+    let debugInfo = vm.program.functionInfo[funcName]
     for i in 0..<min(args.len, debugInfo.parameterNames.len):
       newFrame.vars[debugInfo.parameterNames[i]] = args[i]
   else:
@@ -929,3 +571,81 @@ proc newBytecodeVM*(program: BytecodeProgram): VM =
     pc: 0,
     globals: initTable[string, V]()
   )
+
+proc convertVMValueToGlobalValue*(val: V): GlobalValue =
+  ## Convert a VM value to a GlobalValue for bytecode storage
+  case val.kind
+  of tkInt:
+    GlobalValue(kind: tkInt, ival: val.ival)
+  of tkFloat:
+    GlobalValue(kind: tkFloat, fval: val.fval)
+  of tkBool:
+    GlobalValue(kind: tkBool, bval: val.bval)
+  of tkString:
+    GlobalValue(kind: tkString, sval: val.sval)
+  else:
+    # Default for unsupported types
+    GlobalValue(kind: tkInt, ival: 0)
+
+proc evalExprWithBytecode*(prog: Program, expr: Expr, globals: Table[string, V] = initTable[string, V]()): V =
+  ## Evaluate an expression using bytecode compilation and execution
+  ## This reduces code duplication by using the same execution path as regular programs
+
+  # Create a temporary bytecode program for expression evaluation
+  var bytecodeProgram = BytecodeProgram(
+    instructions: @[],
+    constants: @[],
+    functions: initTable[string, int](),
+    globals: @[],
+    globalValues: initTable[string, GlobalValue](),
+    sourceFile: "",
+    compilerFlags: CompilerFlags(includeDebugInfo: false),
+    sourceHash: "",
+    lineToInstructionMap: initTable[int, seq[int]](),
+    functionInfo: initTable[string, FunctionInfo]()
+  )
+
+  # Add globals to the program
+  for name, value in globals:
+    if name notin bytecodeProgram.globals:
+      bytecodeProgram.globals.add(name)
+      bytecodeProgram.globalValues[name] = convertVMValueToGlobalValue(value)
+
+  # Create compilation context
+  var ctx = CompilationContext(
+    currentFunction: "__eval_expr__",
+    localVars: @[],
+    sourceFile: "",
+    includeDebugInfo: false,
+    astProgram: prog
+  )
+
+  # Compile the expression
+  compileExpr(bytecodeProgram, expr, ctx)
+
+  # Add return instruction to get the result
+  emit(bytecodeProgram, opReturn, ctx = ctx)
+
+  # Create a temporary function entry point
+  bytecodeProgram.functions["__eval_expr__"] = 0
+
+  # Create VM and execute
+  var vm = newBytecodeVM(bytecodeProgram)
+
+  # Set up globals in VM
+  for name, value in globals:
+    vm.globals[name] = value
+
+  # Execute the expression
+  vm.pc = 0
+  try:
+    while vm.executeInstruction():
+      discard
+
+    # Return the top stack value as result
+    if vm.stack.len > 0:
+      return vm.stack[^1]
+    else:
+      return vInt(0)  # Default value if no result
+  except:
+    return vInt(0)  # Default value on error
