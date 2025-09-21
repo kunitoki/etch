@@ -1,9 +1,18 @@
 fn main() -> void {
-    let arr: array[int] = [10, 20, 30];
+    seed(42);  // Make test deterministic
+    var arr: array[int] = [10, 20, 30];
+
+    arr = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
     // This should work fine
-    let valid: int = arr[1];  // Should be 20
+    let top: int = rand(5) + rand(5);
+    var x = rand(top);
+    if x >= #arr {
+        x = #arr - rand(#arr - 1, rand(2, 1));  // Ensure x is within bounds
+    }
+    let valid: int = arr[x];  // Should be 20
     print("valid");
+    print(valid);
 
     // This should cause a bounds check error at runtime if uncommented
     // let invalid: int = arr[5];  // Would be out of bounds

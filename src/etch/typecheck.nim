@@ -21,7 +21,7 @@ proc typeEq(a, b: EtchType): bool =
 proc requireConcept(concepts: Table[string, Concept], t: EtchType, cname: string) =
   if not concepts.hasKey(cname):
     raise newEtchError("unknown concept: " & cname)
-  # only int and Ref[...] supported for now
+  # only int and ref[...] supported for now
   case cname
   of "Addable","Divisible","Comparable":
     if t.kind notin {tkInt, tkFloat}:
@@ -42,77 +42,95 @@ proc resolveTy(t: EtchType, subst: var TySubst): EtchType =
 
 proc inferExprTypes(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType
 
+proc inferCallBuiltinPrint(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  if e.args.len != 1: raise newTypecheckError(e.pos, "print expects 1 argument")
+  let t0 = inferExprTypes(prog, nil, sc, e.args[0], subst)
+  if not (t0.kind in {tkBool, tkInt, tkFloat, tkString}): raise newTypecheckError(e.pos, "print supports bool/int/float/string")
+  e.instTypes = @[]
+  e.typ = tVoid()
+  return e.typ
+
+proc inferCallBuiltinNew(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  if e.args.len != 1: raise newTypecheckError(e.pos, "new expects 1 argument")
+  let t0 = inferExprTypes(prog, nil, sc, e.args[0], subst)
+  let rt = tRef(t0)
+  e.typ = rt
+  return rt
+
+proc inferCallBuiltinDeref(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  if e.args.len != 1: raise newTypecheckError(e.pos, "deref expects 1 argument")
+  let t0 = inferExprTypes(prog, nil, sc, e.args[0], subst)
+  if t0.kind != tkRef: raise newTypecheckError(e.pos, "deref expects Ref[...]")
+  e.typ = t0.inner
+  return e.typ
+
+proc inferCallBuiltinComptime(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  if e.args.len != 1: raise newTypecheckError(e.pos, "comptime expects 1 argument")
+  let t0 = inferExprTypes(prog, nil, sc, e.args[0], subst)
+  let comptimeExpr = Expr(kind: ekComptime, pos: e.pos, typ: t0, inner: e.args[0])
+  # Replace the original expression with the new comptime expression
+  e[] = comptimeExpr[]
+  return t0
+
+proc inferCallBuiltinRand(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  if e.args.len < 1 or e.args.len > 2:
+    raise newTypecheckError(e.pos, "rand expects 1 or 2 arguments")
+  # First arg is max (required)
+  let maxType = inferExprTypes(prog, nil, sc, e.args[0], subst)
+  if maxType.kind != tkInt:
+    raise newTypecheckError(e.pos, "rand max argument must be int")
+  # Second arg is min (optional, defaults to 0)
+  if e.args.len == 2:
+    let minType = inferExprTypes(prog, nil, sc, e.args[1], subst)
+    if minType.kind != tkInt:
+      raise newTypecheckError(e.pos, "rand min argument must be int")
+  e.instTypes = @[]
+  e.typ = tInt()
+  return e.typ
+
+proc inferCallBuiltinReadFile(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  if e.args.len != 1: raise newTypecheckError(e.pos, "readFile expects 1 argument")
+  let pathType = inferExprTypes(prog, nil, sc, e.args[0], subst)
+  if pathType.kind != tkString:
+    raise newTypecheckError(e.pos, "readFile expects string path")
+  e.instTypes = @[]
+  e.typ = tString()
+  return e.typ
+
+proc inferCallBuiltinInject(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  if e.args.len != 3: raise newTypecheckError(e.pos, "inject expects 3 arguments: name, type, value")
+  let nameType = inferExprTypes(prog, nil, sc, e.args[0], subst)
+  let typeType = inferExprTypes(prog, nil, sc, e.args[1], subst)
+  discard inferExprTypes(prog, nil, sc, e.args[2], subst)  # value can be any type
+  if nameType.kind != tkString or typeType.kind != tkString:
+    raise newTypecheckError(e.pos, "inject name and type arguments must be strings")
+  e.instTypes = @[]
+  e.typ = tVoid()
+  return e.typ
+
+proc inferCallBuiltinSeed(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  if e.args.len > 1: raise newTypecheckError(e.pos, "seed expects 0 or 1 argument")
+  if e.args.len == 1:
+    let seedType = inferExprTypes(prog, nil, sc, e.args[0], subst)
+    if seedType.kind != tkInt:
+      raise newTypecheckError(e.pos, "seed expects int argument")
+  e.instTypes = @[]
+  e.typ = tVoid()
+  return e.typ
+
 proc inferCall(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
   # monomorphize on demand
   if not prog.funs.hasKey(e.fname):
-    # builtins: print, newref, deref are handled as special names
-    if e.fname == "print":
-      if e.args.len != 1: raise newTypecheckError(e.pos, "print expects 1 argument")
-      let t0 = inferExprTypes(prog, nil, sc, e.args[0], subst)
-      if not (t0.kind in {tkBool, tkInt, tkFloat, tkString}): raise newTypecheckError(e.pos, "print supports bool/int/float/string")
-      e.instTypes = @[]
-      e.typ = tVoid()
-      return e.typ
-    if e.fname == "newref":
-      if e.args.len != 1: raise newTypecheckError(e.pos, "newref expects 1 argument")
-      let t0 = inferExprTypes(prog, nil, sc, e.args[0], subst)
-      let rt = tRef(t0)
-      e.typ = rt
-      return rt
-    if e.fname == "deref":
-      if e.args.len != 1: raise newTypecheckError(e.pos, "deref expects 1 argument")
-      let t0 = inferExprTypes(prog, nil, sc, e.args[0], subst)
-      if t0.kind != tkRef: raise newTypecheckError(e.pos, "deref expects Ref[...]")
-      e.typ = t0.inner
-      return e.typ
-    if e.fname == "comptime":
-      if e.args.len != 1: raise newTypecheckError(e.pos, "comptime expects 1 argument")
-      let t0 = inferExprTypes(prog, nil, sc, e.args[0], subst)
-      let comptimeExpr = Expr(kind: ekComptime, pos: e.pos, typ: t0, inner: e.args[0])
-      # Replace the original expression with the new comptime expression
-      e[] = comptimeExpr[]
-      return t0
-    if e.fname == "rand":
-      if e.args.len < 1 or e.args.len > 2:
-        raise newTypecheckError(e.pos, "rand expects 1 or 2 arguments")
-      # First arg is max (required)
-      let maxType = inferExprTypes(prog, nil, sc, e.args[0], subst)
-      if maxType.kind != tkInt:
-        raise newTypecheckError(e.pos, "rand max argument must be int")
-      # Second arg is min (optional, defaults to 0)
-      if e.args.len == 2:
-        let minType = inferExprTypes(prog, nil, sc, e.args[1], subst)
-        if minType.kind != tkInt:
-          raise newTypecheckError(e.pos, "rand min argument must be int")
-      e.instTypes = @[]
-      e.typ = tInt()
-      return e.typ
-    if e.fname == "readFile":
-      if e.args.len != 1: raise newTypecheckError(e.pos, "readFile expects 1 argument")
-      let pathType = inferExprTypes(prog, nil, sc, e.args[0], subst)
-      if pathType.kind != tkString:
-        raise newTypecheckError(e.pos, "readFile expects string path")
-      e.instTypes = @[]
-      e.typ = tString()
-      return e.typ
-    if e.fname == "inject":
-      if e.args.len != 3: raise newTypecheckError(e.pos, "inject expects 3 arguments: name, type, value")
-      let nameType = inferExprTypes(prog, nil, sc, e.args[0], subst)
-      let typeType = inferExprTypes(prog, nil, sc, e.args[1], subst)
-      discard inferExprTypes(prog, nil, sc, e.args[2], subst)  # value can be any type
-      if nameType.kind != tkString or typeType.kind != tkString:
-        raise newTypecheckError(e.pos, "inject name and type arguments must be strings")
-      e.instTypes = @[]
-      e.typ = tVoid()
-      return e.typ
-    if e.fname == "seed":
-      if e.args.len != 1: raise newTypecheckError(e.pos, "seed expects 1 argument")
-      let seedType = inferExprTypes(prog, nil, sc, e.args[0], subst)
-      if seedType.kind != tkInt:
-        raise newTypecheckError(e.pos, "seed expects int argument")
-      e.instTypes = @[]
-      e.typ = tVoid()
-      return e.typ
+    # builtins: print, new, deref are handled as special names
+    case e.fname
+      of "print": return inferCallBuiltinPrint(prog, sc, e, subst)
+      of "new": return inferCallBuiltinNew(prog, sc, e, subst)
+      of "deref": return inferCallBuiltinDeref(prog, sc, e, subst)
+      of "comptime": return inferCallBuiltinComptime(prog, sc, e, subst)
+      of "rand": return inferCallBuiltinRand(prog, sc, e, subst)
+      of "readFile": return inferCallBuiltinReadFile(prog, sc, e, subst)
+      of "inject": return inferCallBuiltinInject(prog, sc, e, subst)
+      of "seed": return inferCallBuiltinSeed(prog, sc, e, subst)
     raise newTypecheckError(e.pos, "unknown function: " & e.fname)
 
   let templ = prog.funs[e.fname]
@@ -190,7 +208,7 @@ proc inferExprTypes(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var T
   of ekFloat: e.typ = tFloat(); return e.typ
   of ekString: e.typ = tString(); return e.typ
   of ekBool: e.typ = tBool(); return e.typ
-  of ekNil: 
+  of ekNil:
     # nil has a special type that can be compared to any reference type
     e.typ = tRef(tVoid()); return e.typ  # Use Ref[void] as the nil type
   of ekVar:
@@ -214,22 +232,22 @@ proc inferExprTypes(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var T
     let lt = inferExprTypes(prog, fd, sc, e.lhs, subst)
     let rt = inferExprTypes(prog, fd, sc, e.rhs, subst)
     case e.bop
-    of boAdd,boSub,boMul,boDiv,boMod:
+    of boAdd, boSub, boMul, boDiv, boMod:
       if lt.kind == tkInt and rt.kind == tkInt:
         e.typ = tInt(); return e.typ
       elif lt.kind == tkFloat and rt.kind == tkFloat:
         e.typ = tFloat(); return e.typ
       else:
         raise newTypecheckError(e.pos, &"arithmetic operation requires matching types, got {lt} and {rt}. Use explicit casts like int(x) or float(x)")
-    of boEq,boNe,boLt,boLe,boGt,boGe:
+    of boEq, boNe, boLt, boLe, boGt, boGe:
       # Special handling for nil comparisons
-      if (lt.kind == tkRef and rt.kind == tkRef) and 
+      if (lt.kind == tkRef and rt.kind == tkRef) and
          (lt.inner.kind == tkVoid or rt.inner.kind == tkVoid):
         # Allow comparison between any reference type and nil (Ref[void])
         if e.bop notin {boEq, boNe}:
           raise newTypecheckError(e.pos, &"only == and != are allowed for reference comparisons")
         e.typ = tBool(); return e.typ
-      elif lt.kind != rt.kind: 
+      elif lt.kind != rt.kind:
         raise newTypecheckError(e.pos, &"comparison type mismatch: {lt} vs {rt}")
       else:
         # Only allow comparison operators on comparable types
@@ -286,7 +304,7 @@ proc inferExprTypes(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var T
       let startType = inferExprTypes(prog, fd, sc, e.startExpr.get, subst)
       if startType.kind != tkInt:
         raise newTypecheckError(e.startExpr.get.pos, &"slice start must be int, got {startType}")
-    # Check end expression if present  
+    # Check end expression if present
     if e.endExpr.isSome:
       let endType = inferExprTypes(prog, fd, sc, e.endExpr.get, subst)
       if endType.kind != tkInt:
@@ -305,7 +323,7 @@ proc inferExprTypes(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var T
     # Explicit type cast: type(expr)
     let fromType = inferExprTypes(prog, fd, sc, e.castExpr, subst)
     let toType = e.castType
-    
+
     # Define allowed conversions
     var castAllowed = false
     if (fromType.kind == tkInt and toType.kind == tkFloat) or
@@ -313,10 +331,10 @@ proc inferExprTypes(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var T
        (fromType.kind == tkInt and toType.kind == tkString) or
        (fromType.kind == tkFloat and toType.kind == tkString):
       castAllowed = true
-    
+
     if not castAllowed:
       raise newTypecheckError(e.pos, &"invalid cast from {fromType} to {toType}")
-    
+
     e.typ = toType
     return e.typ
 
@@ -328,11 +346,11 @@ proc typecheckStmt*(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var T
     if s.vinit.isSome():
       # Two-phase approach: First check type compatibility assuming all variables exist,
       # then check for undeclared variables if type check passes
-      
+
       # Phase 1: Create temporary scope with self-reference to check type compatibility
       var tempScope = Scope(types: sc.types, flags: sc.flags)
       tempScope.types[s.vname] = s.vtype  # Allow self-reference for type checking
-      
+
       var tempSubst = subst
       let t0 = try:
         inferExprTypes(prog, fd, tempScope, s.vinit.get(), tempSubst)
@@ -344,14 +362,14 @@ proc typecheckStmt*(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var T
         else:
           # Re-raise the original error (could be other undeclared variable or other issue)
           raise
-      
+
       # Phase 2: Check type compatibility
       if not typeEq(t0, s.vtype):
         if t0.kind == tkVoid:
           raise newTypecheckError(s.pos, &"cannot assign void function result to variable '{s.vname}' of type {s.vtype}")
         else:
           raise newTypecheckError(s.pos, &"initialization type mismatch: {t0} vs {s.vtype}")
-    
+
     sc.types[s.vname] = s.vtype
     sc.flags[s.vname] = s.vflag
   of skAssign:
@@ -438,26 +456,26 @@ proc inferReturnType*(returnTypes: seq[EtchType]): EtchType =
   ## Infer a single return type from collected return types, or return void if no returns
   if returnTypes.len == 0:
     return tVoid()
-  
+
   # Check that all return types are the same
   let firstType = returnTypes[0]
   for i in 1..<returnTypes.len:
     if not typeEq(firstType, returnTypes[i]):
       raise newEtchError(&"conflicting return types: {firstType} and {returnTypes[i]}")
-  
+
   return firstType
 
 proc typecheck*(prog: Program) =
   var subst: TySubst
   # globals - first pass: collect all variable declarations for forward references
   var gscope = Scope(types: initTable[string, EtchType](), flags: initTable[string, VarFlag]())
-  
+
   # First pass: add all global variable types to scope (without checking initializers)
   for g in prog.globals:
     if g.kind == skVar:
       gscope.types[g.vname] = g.vtype
       gscope.flags[g.vname] = g.vflag
-  
+
   # Second pass: typecheck all global statements with complete scope
   for g in prog.globals:
     typecheckStmt(prog, nil, gscope, g, subst)

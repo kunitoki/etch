@@ -386,7 +386,7 @@ proc opCallImpl(vm: VM, instr: Instruction): bool =
     vm.push(V(kind: tkVoid))
     return true
 
-  if funcName == "newref":
+  if funcName == "new":
     let arg = vm.pop()
     let refVal = vm.alloc(arg)
     vm.push(refVal)
@@ -425,7 +425,9 @@ proc opCallImpl(vm: VM, instr: Instruction): bool =
       let seedVal = vm.pop()
       if seedVal.kind == tkInt:
         randomize(int(seedVal.ival))
-      vm.push(V(kind: tkVoid))
+    elif argCount == 0:
+      randomize()
+    vm.push(V(kind: tkVoid))
     return true
 
   if funcName == "readFile":

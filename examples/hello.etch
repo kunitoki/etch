@@ -20,7 +20,7 @@ fn main() -> void {
     print(10 / d);        // safe: divisor proven non-zero
   }
 
-  // references: newref produces non-nil; deref requires proof of non-nil
-  let r: Ref[int] = newref(42);
+  // references: new produces non-nil; deref requires proof of non-nil
+  let r: ref[int] = new(42);
   print(deref(r));      // safe: r is non-nil by construction
 }

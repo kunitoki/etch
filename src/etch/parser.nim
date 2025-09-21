@@ -99,8 +99,8 @@ proc inferTypeFromExpr(expr: Expr): EtchType =
     of "print", "seed", "inject":
       # These functions return void
       return tVoid()
-    of "newref":
-      # newref(value) returns Ref[typeof(value)]
+    of "new":
+      # new(value) returns ref[typeof(value)]
       if expr.args.len == 1:
         let innerType = inferTypeFromExpr(expr.args[0])
         if innerType != nil:
@@ -135,8 +135,8 @@ proc parseType(p: Parser): EtchType =
     if t.lex == "string": discard p.eat; return tString()
     if t.lex == "bool": discard p.eat; return tBool()
     if t.lex == "void": discard p.eat; return tVoid()
-    if t.lex == "Ref":
-      discard p.expect(tkKeyword, "Ref")
+    if t.lex == "ref":
+      discard p.expect(tkKeyword, "ref")
       discard p.expect(tkSymbol, "[")
       let inner = p.parseType()
       discard p.expect(tkSymbol, "]")
@@ -199,7 +199,7 @@ proc parseLiteralExpr(p: Parser; t: Token): Expr =
     raise newEtchError("not a literal token")
 
 proc parseBuiltinKeywordExpr(p: Parser; t: Token): Expr =
-  ## Parses built-in keyword expressions (true, false, nil, comptime, newref)
+  ## Parses built-in keyword expressions (true, false, nil, comptime, new)
   case t.lex
   of "true": return Expr(kind: ekBool, bval: true, pos: p.posOf(t))
   of "false": return Expr(kind: ekBool, bval: false, pos: p.posOf(t))
@@ -209,7 +209,7 @@ proc parseBuiltinKeywordExpr(p: Parser; t: Token): Expr =
     let e = p.parseExpr()
     discard p.expect(tkSymbol, ")")
     return Expr(kind: ekComptime, inner: e, pos: p.posOf(t))
-  of "newref":
+  of "new":
     discard p.expect(tkSymbol, "(")
     let e = p.parseExpr()
     discard p.expect(tkSymbol, ")")
@@ -286,10 +286,6 @@ proc parseSymbolExpr(p: Parser; t: Token): Expr =
   of "#":
     let e = p.parseExpr(6)
     return Expr(kind: ekArrayLen, lenExpr: e, pos: p.posOf(t))
-  of "*":
-    let e = p.parseExpr(6)
-    # Dead path but keeps syntax consistent
-    return Expr(kind: ekUn, uop: uoNeg, ue: e, pos: p.posOf(t))
   else:
     let actualName = friendlyTokenName(t.kind, t.lex)
     raise newEtchError(&"unexpected {actualName}")

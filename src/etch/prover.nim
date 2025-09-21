@@ -674,6 +674,30 @@ proc proveStmt(s: Stmt; env: Env, prog: Program = nil, fnContext: string = "") =
           if s.cond.rhs.kind == ekInt and s.cond.rhs.ival == 0 and s.cond.lhs.kind == ekVar:
             if thenEnv.vals.hasKey(s.cond.lhs.vname):
               thenEnv.vals[s.cond.lhs.vname].nonZero = true
+        of boGe: # x >= value: in then branch, x >= value
+          if s.cond.lhs.kind == ekVar and thenEnv.vals.hasKey(s.cond.lhs.vname):
+            let rhsInfo = analyzeExpr(s.cond.rhs, env, prog)
+            if rhsInfo.known:
+              # In then branch: x >= rhsInfo.cval
+              thenEnv.vals[s.cond.lhs.vname].minv = max(thenEnv.vals[s.cond.lhs.vname].minv, rhsInfo.cval)
+        of boGt: # x > value: in then branch, x >= value + 1
+          if s.cond.lhs.kind == ekVar and thenEnv.vals.hasKey(s.cond.lhs.vname):
+            let rhsInfo = analyzeExpr(s.cond.rhs, env, prog)
+            if rhsInfo.known:
+              # In then branch: x > rhsInfo.cval means x >= rhsInfo.cval + 1
+              thenEnv.vals[s.cond.lhs.vname].minv = max(thenEnv.vals[s.cond.lhs.vname].minv, rhsInfo.cval + 1)
+        of boLe: # x <= value: in then branch, x <= value
+          if s.cond.lhs.kind == ekVar and thenEnv.vals.hasKey(s.cond.lhs.vname):
+            let rhsInfo = analyzeExpr(s.cond.rhs, env, prog)
+            if rhsInfo.known:
+              # In then branch: x <= rhsInfo.cval
+              thenEnv.vals[s.cond.lhs.vname].maxv = min(thenEnv.vals[s.cond.lhs.vname].maxv, rhsInfo.cval)
+        of boLt: # x < value: in then branch, x <= value - 1
+          if s.cond.lhs.kind == ekVar and thenEnv.vals.hasKey(s.cond.lhs.vname):
+            let rhsInfo = analyzeExpr(s.cond.rhs, env, prog)
+            if rhsInfo.known:
+              # In then branch: x < rhsInfo.cval means x <= rhsInfo.cval - 1
+              thenEnv.vals[s.cond.lhs.vname].maxv = min(thenEnv.vals[s.cond.lhs.vname].maxv, rhsInfo.cval - 1)
         else: discard
       for st in s.thenBody: proveStmt(st, thenEnv, prog, fnContext)
 
@@ -695,7 +719,7 @@ proc proveStmt(s: Stmt; env: Env, prog: Program = nil, fnContext: string = "") =
       elifEnvs.add(elifEnv)
 
     # Process else branch
-    var elseEnv = Env(vals: env.vals, nils: env.nils)
+    var elseEnv = Env(vals: env.vals, nils: env.nils, exprs: env.exprs)
     # Control flow sensitive analysis for else (condition is false)
     if s.cond.kind == ekBin:
       case s.cond.bop
@@ -703,8 +727,34 @@ proc proveStmt(s: Stmt; env: Env, prog: Program = nil, fnContext: string = "") =
         if s.cond.rhs.kind == ekInt and s.cond.rhs.ival == 0 and s.cond.lhs.kind == ekVar:
           if elseEnv.vals.hasKey(s.cond.lhs.vname):
             elseEnv.vals[s.cond.lhs.vname].nonZero = true
+      of boGe: # x >= value: in else branch (condition false), x < value
+        if s.cond.lhs.kind == ekVar and elseEnv.vals.hasKey(s.cond.lhs.vname):
+          let rhsInfo = analyzeExpr(s.cond.rhs, env, prog)
+          if rhsInfo.known:
+            # In else branch: !(x >= rhsInfo.cval) means x < rhsInfo.cval, so x <= rhsInfo.cval - 1
+            elseEnv.vals[s.cond.lhs.vname].maxv = min(elseEnv.vals[s.cond.lhs.vname].maxv, rhsInfo.cval - 1)
+      of boGt: # x > value: in else branch (condition false), x <= value
+        if s.cond.lhs.kind == ekVar and elseEnv.vals.hasKey(s.cond.lhs.vname):
+          let rhsInfo = analyzeExpr(s.cond.rhs, env, prog)
+          if rhsInfo.known:
+            # In else branch: !(x > rhsInfo.cval) means x <= rhsInfo.cval
+            elseEnv.vals[s.cond.lhs.vname].maxv = min(elseEnv.vals[s.cond.lhs.vname].maxv, rhsInfo.cval)
+      of boLe: # x <= value: in else branch (condition false), x > value
+        if s.cond.lhs.kind == ekVar and elseEnv.vals.hasKey(s.cond.lhs.vname):
+          let rhsInfo = analyzeExpr(s.cond.rhs, env, prog)
+          if rhsInfo.known:
+            # In else branch: !(x <= rhsInfo.cval) means x > rhsInfo.cval, so x >= rhsInfo.cval + 1
+            elseEnv.vals[s.cond.lhs.vname].minv = max(elseEnv.vals[s.cond.lhs.vname].minv, rhsInfo.cval + 1)
+      of boLt: # x < value: in else branch (condition false), x >= value
+        if s.cond.lhs.kind == ekVar and elseEnv.vals.hasKey(s.cond.lhs.vname):
+          let rhsInfo = analyzeExpr(s.cond.rhs, env, prog)
+          if rhsInfo.known:
+            # In else branch: !(x < rhsInfo.cval) means x >= rhsInfo.cval
+            elseEnv.vals[s.cond.lhs.vname].minv = max(elseEnv.vals[s.cond.lhs.vname].minv, rhsInfo.cval)
       else: discard
+
     for st in s.elseBody: proveStmt(st, elseEnv)
+
     # Join - merge variable states from all branches
     # For complete initialization analysis, we need to check all possible paths
 
@@ -738,18 +788,21 @@ proc proveStmt(s: Stmt; env: Env, prog: Program = nil, fnContext: string = "") =
           infos.add(env.vals[varName])  # Use original state
         branchCount += 1
 
-      # Check else branch (if it exists or if there are no elif branches)
-      let hasElseBranch = s.elseBody.len > 0 or s.elifChain.len > 0
-      if hasElseBranch:
+      # Check else branch - for if statements, there's always an implicit else branch
+      let hasExplicitElse = s.elseBody.len > 0 or s.elifChain.len > 0
+      # For if statements, we always need to consider the else branch (implicit or explicit)
+      if true:  # Always process else branch for if statements
         if elseEnv.vals.hasKey(varName):
           infos.add(elseEnv.vals[varName])
         elif env.vals.hasKey(varName):
           infos.add(env.vals[varName])  # Use original state
         branchCount += 1
 
-      # If no else branch exists, the variable might not be initialized in all paths
-      if not hasElseBranch and env.vals.hasKey(varName):
-        infos.add(env.vals[varName])  # Include original state as potential path
+      # If no explicit else branch exists, include fallthrough path
+      if not hasExplicitElse and env.vals.hasKey(varName):
+        # For implicit else (no explicit else clause), we already handled this above
+        # This case is now covered by the elseEnv processing
+        discard
 
       # Compute union of all info states for control flow merging
       if infos.len > 0:

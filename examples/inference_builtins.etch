@@ -3,10 +3,10 @@ fn main() -> void {
     var content = readFile("nonexistent.txt");
     print("File reading attempted");
 
-    // Test newref type inference
-    var intRef = newref(42);
+    // Test new type inference
+    var intRef = new(42);
     print(deref(intRef));
 
-    var floatRef = newref(3.14);
+    var floatRef = new(3.14);
     print(deref(floatRef));
 }

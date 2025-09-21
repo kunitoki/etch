@@ -4,25 +4,25 @@
 fn main() -> void {
   // Type inference from literals - no ": type" needed!
   let x = 42;           // inferred as int
-  let pi = 3.14159;     // inferred as float  
+  let pi = 3.14159;     // inferred as float
   let msg = "Hello!";   // inferred as string
   let flag = true;      // inferred as bool
-  
+
   // Type inference from arrays
   let nums = [1, 2, 3]; // inferred as array[int]
   let words = ["a", "b"]; // inferred as array[string]
-  
+
   // Type inference from references
-  let ref_val = newref(42); // inferred as Ref[int]
-  
+  let ref_val = new(42); // inferred as ref[int]
+
   // You can still use explicit types when you want to
   let explicit_int: int = 100;
   let explicit_str: string = "explicit";
-  
+
   // Variables without initializers still need explicit types
   var counter: int;
   var name: string;
-  
+
   // Both styles work together seamlessly:
   let inferred_count = 0;        // inferred as int
   let explicit_limit: int = 100; // explicitly typed

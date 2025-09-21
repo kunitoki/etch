@@ -2,8 +2,8 @@
 # Symbolic execution engine for constant propagation and program flow analysis
 # Tracks known values through program execution until runtime uncertainty
 
-import std/[tables, options, strformat]
-import ast, errors
+import std/[tables, options]
+import ast
 
 const MAX_LOOP_ITERATIONS = 1000  # Prevent infinite symbolic execution
 
@@ -32,19 +32,19 @@ type
 
   ExecutionResult* = enum
     erContinue,      # Continue symbolic execution
-    erComplete,      # Execution completed successfully  
+    erComplete,      # Execution completed successfully
     erRuntimeHit,    # Hit runtime boundary (unknown values)
     erIterationLimit # Hit iteration limit
-    
+
 # Factory functions for SymbolicValue
 proc symConst*(value: int64): SymbolicValue =
   SymbolicValue(
-    known: true, value: value, 
+    known: true, value: value,
     minRange: value, maxRange: value,
     initialized: true, nonZero: value != 0
   )
 
-proc symBool*(b: bool): SymbolicValue = 
+proc symBool*(b: bool): SymbolicValue =
   let val = if b: 1'i64 else: 0'i64
   SymbolicValue(
     known: true, value: val,
@@ -78,12 +78,12 @@ proc symArray*(size: int64, sizeKnown: bool = true): SymbolicValue =
 proc symAdd*(a, b: SymbolicValue): SymbolicValue =
   if a.known and b.known:
     # Both values known - compute exact result
-    let result = a.value + b.value
+    let res = a.value + b.value
     # Check for overflow
-    if (a.value > 0 and b.value > 0 and result < a.value) or
-       (a.value < 0 and b.value < 0 and result > a.value):
+    if (a.value > 0 and b.value > 0 and res < a.value) or
+       (a.value < 0 and b.value < 0 and res > a.value):
       return symUnknown()  # Overflow - become unknown
-    return symConst(result)
+    return symConst(res)
   else:
     # At least one unknown - compute range
     let minResult = a.minRange + b.minRange
@@ -92,12 +92,12 @@ proc symAdd*(a, b: SymbolicValue): SymbolicValue =
 
 proc symSub*(a, b: SymbolicValue): SymbolicValue =
   if a.known and b.known:
-    let result = a.value - b.value
+    let res = a.value - b.value
     # Check for overflow
-    if (a.value >= 0 and b.value < 0 and result < a.value) or
-       (a.value < 0 and b.value > 0 and result > a.value):
+    if (a.value >= 0 and b.value < 0 and res < a.value) or
+       (a.value < 0 and b.value > 0 and res > a.value):
       return symUnknown()  # Overflow - become unknown
-    return symConst(result)
+    return symConst(res)
   else:
     let minResult = a.minRange - b.maxRange
     let maxResult = a.maxRange - b.minRange
@@ -105,11 +105,11 @@ proc symSub*(a, b: SymbolicValue): SymbolicValue =
 
 proc symMul*(a, b: SymbolicValue): SymbolicValue =
   if a.known and b.known:
-    let result = a.value * b.value
+    let res = a.value * b.value
     # Check for overflow (simplified)
-    if a.value != 0 and result div a.value != b.value:
+    if a.value != 0 and res div a.value != b.value:
       return symUnknown()  # Overflow - become unknown
-    return symConst(result)
+    return symConst(res)
   else:
     # Range multiplication is complex, use conservative approach
     return symUnknown()
@@ -264,14 +264,14 @@ proc symbolicEvaluateExpr*(expr: Expr, state: SymbolicState, prog: Program = nil
   of ekBin:
     let lhs = symbolicEvaluateExpr(expr.lhs, state, prog)
     let rhs = symbolicEvaluateExpr(expr.rhs, state, prog)
-    
+
     # Check for runtime contamination
     if not lhs.initialized or not rhs.initialized:
       return symUninitialized()
-    
+
     case expr.bop
     of boAdd: return symAdd(lhs, rhs)
-    of boSub: return symSub(lhs, rhs) 
+    of boSub: return symSub(lhs, rhs)
     of boMul: return symMul(lhs, rhs)
     of boDiv: return symDiv(lhs, rhs)
     of boMod: return symMod(lhs, rhs)
@@ -286,7 +286,7 @@ proc symbolicEvaluateExpr*(expr: Expr, state: SymbolicState, prog: Program = nil
     let operand = symbolicEvaluateExpr(expr.ue, state, prog)
     if not operand.initialized:
       return symUninitialized()
-    
+
     case expr.uop
     of uoNeg:
       if operand.known:
@@ -329,72 +329,72 @@ proc symbolicExecuteStmt*(stmt: Stmt, state: SymbolicState, prog: Program = nil)
     else:
       state.setVariable(stmt.vname, symUninitialized())
     return erContinue
-    
+
   of skAssign:
     if not state.hasVariable(stmt.aname):
       # This should be caught by type checking, but handle gracefully
       return erRuntimeHit
-    
+
     let value = symbolicEvaluateExpr(stmt.aval, state, prog)
     # Assignment makes uninitialized variables initialized
     var newValue = value
     newValue.initialized = true
     state.setVariable(stmt.aname, newValue, stmt.aval)
     return erContinue
-    
+
   of skExpr:
     # Expression statements (like function calls) - evaluate for side effects
     discard symbolicEvaluateExpr(stmt.sexpr, state, prog)
     return erContinue
-    
+
   of skIf:
     let condition = symbolicEvaluateExpr(stmt.cond, state, prog)
-    
+
     if condition.known:
       # Condition is known at compile time
       if condition.value != 0:
         # Execute then branch
         for s in stmt.thenBody:
-          let result = symbolicExecuteStmt(s, state, prog)
-          if result != erContinue:
-            return result
+          let res = symbolicExecuteStmt(s, state, prog)
+          if res != erContinue:
+            return res
       else:
         # Execute else branch if it exists
         for s in stmt.elseBody:
-          let result = symbolicExecuteStmt(s, state, prog)
-          if result != erContinue:
-            return result
+          let res = symbolicExecuteStmt(s, state, prog)
+          if res != erContinue:
+            return res
     else:
       # Condition unknown - need to merge both paths
       # For now, conservatively merge (this could be enhanced)
       let thenState = state.copy()
       let elseState = state.copy()
-      
+
       # Execute then branch in copy
       for s in stmt.thenBody:
         discard symbolicExecuteStmt(s, thenState, prog)
-      
-      # Execute else branch in copy  
+
+      # Execute else branch in copy
       for s in stmt.elseBody:
         discard symbolicExecuteStmt(s, elseState, prog)
-      
+
       # Merge states conservatively
       for varName in state.variables.keys:
         if thenState.hasVariable(varName) and elseState.hasVariable(varName):
           let thenVal = thenState.getVariable(varName).get()
           let elseVal = elseState.getVariable(varName).get()
           state.setVariable(varName, symMeet(thenVal, elseVal))
-      
+
       # Mark as hitting runtime boundary if either path did
       if thenState.hitRuntimeBoundary or elseState.hitRuntimeBoundary:
         state.hitRuntimeBoundary = true
-    
+
     return erContinue
-    
+
   of skWhile:
     # This is the key enhancement - symbolic execution of loops
     return symbolicExecuteWhile(stmt, state, prog)
-    
+
   else:
     # Other statement types - treat conservatively
     return erContinue
@@ -402,11 +402,11 @@ proc symbolicExecuteStmt*(stmt: Stmt, state: SymbolicState, prog: Program = nil)
 # Enhanced while loop symbolic execution
 proc symbolicExecuteWhile*(stmt: Stmt, state: SymbolicState, prog: Program = nil): ExecutionResult =
   var iterations = 0
-  
+
   while iterations < MAX_LOOP_ITERATIONS:
     # Evaluate condition with current state
     let condition = symbolicEvaluateExpr(stmt.wcond, state, prog)
-    
+
     if condition.known:
       if condition.value == 0:
         # Condition is false - exit loop
@@ -418,20 +418,20 @@ proc symbolicExecuteWhile*(stmt: Stmt, state: SymbolicState, prog: Program = nil
       # are considered potentially initialized
       state.hitRuntimeBoundary = true
       return erRuntimeHit
-    
+
     # Execute loop body
     for s in stmt.wbody:
-      let result = symbolicExecuteStmt(s, state, prog)
-      if result != erContinue:
-        return result
-    
+      let res = symbolicExecuteStmt(s, state, prog)
+      if res != erContinue:
+        return res
+
     iterations += 1
     state.iterationCount = iterations
-    
+
     # Check if we've hit runtime boundary during loop execution
     if state.hitRuntimeBoundary:
       return erRuntimeHit
-  
+
   # Hit iteration limit
   return erIterationLimit
 
@@ -472,7 +472,7 @@ proc convertProverInfoToSymbolic*(info: auto): SymbolicValue =
 # Main entry point for symbolic execution from prover
 proc executeSymbolically*(statements: seq[Stmt], initialState: SymbolicState = nil, prog: Program = nil): SymbolicState =
   let state = if initialState != nil: initialState else: newSymbolicState()
-  
+
   for stmt in statements:
     let result = symbolicExecuteStmt(stmt, state, prog)
     case result
@@ -484,5 +484,5 @@ proc executeSymbolically*(statements: seq[Stmt], initialState: SymbolicState = n
       # Mark that we hit a boundary but continue with what we have
       state.hitRuntimeBoundary = true
       break
-  
+
   return state

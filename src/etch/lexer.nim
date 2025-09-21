@@ -13,8 +13,8 @@ type
 
 const keywords = [
   "fn","let","var","return","if","elif","else","while",
-  "true","false","int","float","string","bool","void","Ref","concept",
-  "comptime","newref","and","or","array","nil"
+  "true","false","int","float","string","bool","void","ref","concept",
+  "comptime","new","and","or","array","nil"
 ].toSeq
 
 proc isKeyword(w: string): bool = w in keywords
