@@ -8,5 +8,9 @@ fn main() -> void {
         print(x);
     }
 
+    for x in 0..<#nums {
+        print(nums[x]);
+    }
+
     print("Done");
 }
