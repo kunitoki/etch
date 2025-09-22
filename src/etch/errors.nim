@@ -1,5 +1,5 @@
 import strformat, strutils
-import ast
+import frontend/ast
 
 # Etch-specific exception types
 type

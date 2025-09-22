@@ -1,8 +1,8 @@
-# builtins.nim
-# Tiny helpers to fold comptime calls via the VM during compilation
+# comptime.nim
+# Compile-time evaluation and injection helpers for Etch
 
 import std/[tables, options]
-import ast, vm
+import frontend/ast, interpreter/vm
 
 proc foldComptime*(prog: Program; root: var Program) =
   # Process comptime blocks and handle inject statements

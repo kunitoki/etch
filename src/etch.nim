@@ -27,14 +27,12 @@ when isMainModule:
     quit runTests(testDir)
 
   var runVm = false
-  var includeDebugInfo = false
   var cOut = ""
   var files: seq[string] = @[]
   var i = 1
   while i <= paramCount():
     let a = paramStr(i)
     if a == "--run": runVm = true
-    elif a == "--debug": includeDebugInfo = true
     else:
       files.add a
     inc i
@@ -46,7 +44,6 @@ when isMainModule:
   let options = CompilerOptions(
     sourceFile: sourceFile,
     runVM: runVm,
-    includeDebugInfo: includeDebugInfo,
     cOutFile: cOut
   )
 

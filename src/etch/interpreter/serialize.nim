@@ -2,7 +2,7 @@
 # Bytecode serialization and deserialization for Etch programs
 
 import std/[tables, streams, strutils]
-import ast
+import ../frontend/ast
 
 type
   GlobalValue* = object
@@ -13,7 +13,7 @@ type
     sval*: string
 
   CompilerFlags* = object
-    includeDebugInfo*: bool
+    discard
 
   DebugInfo* = object
     line*: int
@@ -80,8 +80,8 @@ proc serializeToBinary*(prog: BytecodeProgram): string =
     hashBytes = hashBytes[0..<32]
   stream.write(hashBytes)
 
-  # Compiler flags
-  stream.write(uint8(if prog.compilerFlags.includeDebugInfo: 1 else: 0))
+  # Compiler flags (placeholder for future use)
+  stream.write(uint8(0))
 
   # Source file name
   let sourceFileBytes = prog.sourceFile
@@ -201,9 +201,9 @@ proc deserializeFromBinary*(data: string): BytecodeProgram =
   # Read source hash
   result.sourceHash = stream.readStr(32).strip(chars = {'\0'})
 
-  # Read compiler flags
-  let includeDebugFlag = stream.readUint8()
-  result.compilerFlags = CompilerFlags(includeDebugInfo: includeDebugFlag != 0)
+  # Read compiler flags (currently unused)
+  let _ = stream.readUint8()
+  result.compilerFlags = CompilerFlags()
 
   # Read source file
   let sourceFileLen = stream.readUint32()

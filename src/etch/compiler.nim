@@ -2,7 +2,8 @@
 # Etch compiler: compilation and execution orchestration
 
 import std/[os, tables, times]
-import ast, lexer, parser, typecheck, prover, vm, builtins, bytecode, globals, errors
+import frontend/[ast, lexer, parser], typechecker/[core, types, statements, inference], interpreter/[vm, bytecode], comptime, globals, errors
+import prover/core
 
 type
   CompilerResult* = object
@@ -13,7 +14,6 @@ type
   CompilerOptions* = object
     sourceFile*: string
     runVM*: bool
-    includeDebugInfo*: bool
     cOutFile*: string
 
 proc getBytecodeFileName*(sourceFile: string): string =
@@ -22,7 +22,7 @@ proc getBytecodeFileName*(sourceFile: string): string =
   let etchDir = joinPath(dir, "__etch__")
   joinPath(etchDir, name & ".etcx")
 
-proc shouldRecompile*(sourceFile, bytecodeFile: string, includeDebugInfo: bool): bool =
+proc shouldRecompile*(sourceFile, bytecodeFile: string): bool =
   ## Check if source file is newer than bytecode or if hash/flags don't match
   if not fileExists(bytecodeFile):
     return true
@@ -36,7 +36,7 @@ proc shouldRecompile*(sourceFile, bytecodeFile: string, includeDebugInfo: bool):
   # Check source hash + compiler flags
   try:
     let sourceContent = readFile(sourceFile)
-    let flags = CompilerFlags(includeDebugInfo: includeDebugInfo)
+    let flags = CompilerFlags()
     let currentHash = hashSourceAndFlags(sourceContent, flags)
     let prog = loadBytecode(bytecodeFile)
     return prog.sourceHash != currentHash
@@ -60,22 +60,22 @@ proc ensureAllNonGenericInst(prog: Program) =
         prog.funInstances[name] = FunDecl(
           name: name, typarams: @[], params: f.params, ret: f.ret, body: f.body)
 
-proc compileProgramWithGlobals(prog: Program, sourceHash: string, evaluatedGlobals: Table[string, V], sourceFile: string = "", includeDebugInfo: bool = false): BytecodeProgram =
+proc compileProgramWithGlobals(prog: Program, sourceHash: string, evaluatedGlobals: Table[string, V], sourceFile: string = ""): BytecodeProgram =
   ## Compile an AST program to bytecode with pre-evaluated global values
   # Start with standard compilation
-  result = compileProgram(prog, sourceHash, sourceFile, includeDebugInfo)
+  result = compileProgram(prog, sourceHash, sourceFile)
 
   # Override global values with evaluated ones
   for name, value in evaluatedGlobals:
     result.globalValues[name] = convertVMValueToGlobalValue(value)
 
-proc parseAndTypecheck*(sourceFile: string, includeDebugInfo: bool): (Program, string, Table[string, V]) =
+proc parseAndTypecheck*(sourceFile: string): (Program, string, Table[string, V]) =
   ## Parse source file and perform type checking, return AST, hash, and evaluated globals
   # Set up error reporting context
   errors.loadSourceLines(sourceFile)
 
   let src = readFile(sourceFile)
-  let flags = CompilerFlags(includeDebugInfo: includeDebugInfo)
+  let flags = CompilerFlags()
   let srcHash = hashSourceAndFlags(src, flags)
   let toks = lex(src)
   var prog = parseProgram(toks, sourceFile)
@@ -162,10 +162,10 @@ proc compileAndRun*(options: CompilerOptions): CompilerResult =
 
   try:
     # Parse and typecheck
-    let (prog, srcHash, evaluatedGlobals) = parseAndTypecheck(options.sourceFile, options.includeDebugInfo)
+    let (prog, srcHash, evaluatedGlobals) = parseAndTypecheck(options.sourceFile)
 
     # Compile to bytecode
-    let bytecodeProg = compileProgramWithGlobals(prog, srcHash, evaluatedGlobals, options.sourceFile, options.includeDebugInfo)
+    let bytecodeProg = compileProgramWithGlobals(prog, srcHash, evaluatedGlobals, options.sourceFile)
 
     # Save bytecode to cache
     let bytecodeFile = getBytecodeFileName(options.sourceFile)
@@ -193,7 +193,7 @@ proc tryRunCachedOrCompile*(options: CompilerOptions): CompilerResult =
   let bytecodeFile = getBytecodeFileName(options.sourceFile)
 
   # Check if we can use cached bytecode
-  if options.runVM and not shouldRecompile(options.sourceFile, bytecodeFile, options.includeDebugInfo):
+  if options.runVM and not shouldRecompile(options.sourceFile, bytecodeFile):
     let cachedResult = runCachedBytecode(bytecodeFile)
     if cachedResult.success:
       return cachedResult

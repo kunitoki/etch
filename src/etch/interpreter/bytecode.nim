@@ -2,7 +2,7 @@
 # Bytecode generation for Etch programs
 
 import std/[tables, options, hashes, sequtils]
-import ast, serialize
+import ../frontend/ast, serialize
 export serialize
 
 type
@@ -10,14 +10,12 @@ type
     currentFunction*: string
     localVars*: seq[string]  # Variables in current scope
     sourceFile*: string
-    includeDebugInfo*: bool  # Whether to include debug information
     astProgram*: Program  # Reference to the AST program for default parameter lookup
 
 proc hashSourceAndFlags*(source: string, flags: CompilerFlags): string =
   ## Generate a hash of the source code + compiler flags for cache validation
   let sourceHash = hashes.hash(source)
-  let flagsHash = hashes.hash(flags.includeDebugInfo)
-  $hashes.hash($sourceHash & $flagsHash)
+  $sourceHash
 
 proc addConstant*(prog: var BytecodeProgram, value: string): int =
   ## Add a string constant to the pool and return its index
@@ -28,25 +26,8 @@ proc addConstant*(prog: var BytecodeProgram, value: string): int =
 
 proc emit*(prog: var BytecodeProgram, op: OpCode, arg: int64 = 0, sarg: string = "",
           pos: Pos = Pos(line: 0, col: 0, filename: ""), ctx: CompilationContext = CompilationContext()) =
-  ## Emit a bytecode instruction with optional debug information
-  var debug = DebugInfo()
-
-  # Only include debug info if requested
-  if ctx.includeDebugInfo:
-    debug = DebugInfo(
-      line: pos.line,
-      col: pos.col,
-      sourceFile: ctx.sourceFile,
-      functionName: ctx.currentFunction,
-      localVars: ctx.localVars
-    )
-
-    # Update line to instruction mapping
-    if pos.line > 0:
-      if not prog.lineToInstructionMap.hasKey(pos.line):
-        prog.lineToInstructionMap[pos.line] = @[]
-      prog.lineToInstructionMap[pos.line].add(prog.instructions.len)
-
+  ## Emit a bytecode instruction
+  let debug = DebugInfo()
   let instr = Instruction(op: op, arg: arg, sarg: sarg, debug: debug)
   prog.instructions.add(instr)
 
@@ -315,9 +296,9 @@ proc evaluateConstantExpr(expr: Expr): GlobalValue =
     return GlobalValue(kind: tkInt, ival: 0)
 
 
-proc compileProgram*(astProg: Program, sourceHash: string, sourceFile: string = "", includeDebugInfo: bool = false): BytecodeProgram =
+proc compileProgram*(astProg: Program, sourceHash: string, sourceFile: string = ""): BytecodeProgram =
   ## Compile an AST program to bytecode (backward compatibility)
-  let flags = CompilerFlags(includeDebugInfo: includeDebugInfo)
+  let flags = CompilerFlags()
   result = BytecodeProgram(
     instructions: @[],
     constants: @[],
@@ -335,7 +316,6 @@ proc compileProgram*(astProg: Program, sourceHash: string, sourceFile: string = 
     currentFunction: "global",
     localVars: @[],
     sourceFile: sourceFile,
-    includeDebugInfo: includeDebugInfo,
     astProgram: astProg
   )
 
@@ -367,10 +347,10 @@ proc compileProgram*(astProg: Program, sourceHash: string, sourceFile: string = 
     # Always store function debug info (parameter names are essential for execution)
     let debugInfo = FunctionInfo(
       name: name,
-      startLine: if includeDebugInfo: 0 else: 0,  # Could be enhanced to track actual lines
-      endLine: if includeDebugInfo: 0 else: 0,
+      startLine: 0,
+      endLine: 0,
       parameterNames: fn.params.mapIt(it.name),  # Always needed for execution
-      localVarNames: if includeDebugInfo: @[] else: @[]
+      localVarNames: @[]
     )
     result.functionInfo[name] = debugInfo
 

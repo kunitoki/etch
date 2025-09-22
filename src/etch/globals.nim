@@ -2,7 +2,7 @@
 # Global variable evaluation and management for Etch
 
 import std/[tables, options]
-import ast, vm
+import frontend/ast, interpreter/vm
 
 proc evaluateGlobalVariables*(prog: Program): Table[string, V] =
   ## Evaluate global variable initialization expressions using bytecode

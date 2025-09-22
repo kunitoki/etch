@@ -2,7 +2,7 @@
 # Simple AST interpreter acting as Etch VM (used both at runtime and for comptime eval)
 
 import std/[tables, strformat, strutils, random]
-import ast, bytecode
+import ../frontend/ast, bytecode
 
 type
   V* = object
@@ -594,7 +594,7 @@ proc evalExprWithBytecode*(prog: Program, expr: Expr, globals: Table[string, V] 
     globals: @[],
     globalValues: initTable[string, GlobalValue](),
     sourceFile: "",
-    compilerFlags: CompilerFlags(includeDebugInfo: false),
+    compilerFlags: CompilerFlags(),
     sourceHash: "",
     lineToInstructionMap: initTable[int, seq[int]](),
     functionInfo: initTable[string, FunctionInfo]()
@@ -611,7 +611,6 @@ proc evalExprWithBytecode*(prog: Program, expr: Expr, globals: Table[string, V] 
     currentFunction: "",
     localVars: @[],
     sourceFile: "",
-    includeDebugInfo: false,
     astProgram: prog
   )
 

@@ -1,47 +1,13 @@
-# typecheck.nim
-# Simple type checker with generics + concept constraints and monomorphization
+# expressions.nim
+# Expression type inference for the type checker
 
-import std/[tables, strformat, sequtils, options, hashes, strutils]
-import ast, errors
+import std/[strformat, options, sequtils, tables]
+import ../frontend/ast, ../errors
+import types
 
-type
-  Scope* = ref object
-    types*: Table[string, EtchType] # variables
-    flags*: Table[string, VarFlag] # variable mutability
-  TySubst* = Table[string, EtchType] # generic var -> concrete type
+proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType
 
-proc typeEq(a, b: EtchType): bool =
-  if a.kind != b.kind: return false
-  case a.kind
-  of tkRef: return typeEq(a.inner, b.inner)
-  of tkArray: return typeEq(a.inner, b.inner)
-  of tkGeneric: return a.name == b.name
-  else: true
-
-proc requireConcept(concepts: Table[string, Concept], t: EtchType, cname: string) =
-  if not concepts.hasKey(cname):
-    raise newEtchError("unknown concept: " & cname)
-  # only int and ref[...] supported for now
-  case cname
-  of "Addable","Divisible","Comparable":
-    if t.kind notin {tkInt, tkFloat}:
-      raise newEtchError(&"type {t} does not satisfy concept {cname} (only int and float supported)")
-  of "Derefable":
-    if t.kind != tkRef:
-      raise newEtchError(&"type {t} does not satisfy concept {cname} (needs Ref[...])")
-  else:
-    discard
-
-proc resolveTy(t: EtchType, subst: var TySubst): EtchType =
-  case t.kind
-  of tkGeneric:
-    if t.name in subst: return subst[t.name]
-    else: return t
-  of tkRef: return tRef(resolveTy(t.inner, subst))
-  else: return t
-
-proc inferExprTypes(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType
-
+# Builtin function type inference
 proc inferCallBuiltinPrint(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
   if e.args.len != 1: raise newTypecheckError(e.pos, "print expects 1 argument")
   let t0 = inferExprTypes(prog, nil, sc, e.args[0], subst)
@@ -110,18 +76,9 @@ proc inferCallBuiltinSeed(prog: Program; sc: Scope; e: Expr; subst: var TySubst)
   e.typ = tVoid()
   return e.typ
 
+# Function call type checking and monomorphization
 proc inferCall(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  # monomorphize on demand
   if not prog.funs.hasKey(e.fname):
-    # builtins: print, new, deref are handled as special names
-    case e.fname
-      of "print": return inferCallBuiltinPrint(prog, sc, e, subst)
-      of "new": return inferCallBuiltinNew(prog, sc, e, subst)
-      of "deref": return inferCallBuiltinDeref(prog, sc, e, subst)
-      of "rand": return inferCallBuiltinRand(prog, sc, e, subst)
-      of "readFile": return inferCallBuiltinReadFile(prog, sc, e, subst)
-      of "inject": return inferCallBuiltinInject(prog, sc, e, subst)
-      of "seed": return inferCallBuiltinSeed(prog, sc, e, subst)
     raise newTypecheckError(e.pos, "unknown function: " & e.fname)
 
   let templ = prog.funs[e.fname]
@@ -193,7 +150,7 @@ proc inferCall(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType 
   e.fname = key
   return retT
 
-proc inferExprTypes(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
   case e.kind
   of ekInt: e.typ = tInt(); return e.typ
   of ekFloat: e.typ = tFloat(); return e.typ
@@ -251,7 +208,19 @@ proc inferExprTypes(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var T
     of boAnd, boOr:
       if lt.kind != tkBool or rt.kind != tkBool: raise newTypecheckError(e.pos, "and/or expects bool")
       e.typ = tBool(); return e.typ
-  of ekCall: return inferCall(prog, sc, e, subst)
+  of ekCall:
+    # Handle builtins first
+    case e.fname
+      of "print": return inferCallBuiltinPrint(prog, sc, e, subst)
+      of "new": return inferCallBuiltinNew(prog, sc, e, subst)
+      of "deref": return inferCallBuiltinDeref(prog, sc, e, subst)
+      of "rand": return inferCallBuiltinRand(prog, sc, e, subst)
+      of "readFile": return inferCallBuiltinReadFile(prog, sc, e, subst)
+      of "inject": return inferCallBuiltinInject(prog, sc, e, subst)
+      of "seed": return inferCallBuiltinSeed(prog, sc, e, subst)
+      else:
+        # Regular function call - handle monomorphization
+        return inferCall(prog, sc, e, subst)
   of ekNewRef:
     let t0 = inferExprTypes(prog, fd, sc, e.init, subst)
     e.refInner = t0
@@ -325,148 +294,3 @@ proc inferExprTypes(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var T
 
     e.typ = toType
     return e.typ
-
-proc typecheckStmt*(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TySubst) =
-  case s.kind
-  of skVar:
-    if s.vtype.kind == tkGeneric:
-      raise newTypecheckError(s.pos, "generic variable type not allowed at runtime scope")
-    if s.vinit.isSome():
-      # Two-phase approach: First check type compatibility assuming all variables exist,
-      # then check for undeclared variables if type check passes
-
-      # Phase 1: Create temporary scope with self-reference to check type compatibility
-      var tempScope = Scope(types: sc.types, flags: sc.flags)
-      tempScope.types[s.vname] = s.vtype  # Allow self-reference for type checking
-
-      var tempSubst = subst
-      let t0 = try:
-        inferExprTypes(prog, fd, tempScope, s.vinit.get(), tempSubst)
-      except EtchError as e:
-        # If we get an error during type inference, check if it's specifically about
-        # the variable being initialized (circular reference) vs other issues
-        if e.msg.contains(&"undeclared variable '{s.vname}'"):
-          raise newTypecheckError(s.pos, &"circular reference: variable '{s.vname}' cannot be used in its own initialization")
-        else:
-          # Re-raise the original error (could be other undeclared variable or other issue)
-          raise
-
-      # Phase 2: Check type compatibility
-      if not typeEq(t0, s.vtype):
-        if t0.kind == tkVoid:
-          raise newTypecheckError(s.pos, &"cannot assign void function result to variable '{s.vname}' of type {s.vtype}")
-        else:
-          raise newTypecheckError(s.pos, &"initialization type mismatch: {t0} vs {s.vtype}")
-
-    sc.types[s.vname] = s.vtype
-    sc.flags[s.vname] = s.vflag
-  of skAssign:
-    if not sc.types.hasKey(s.aname): raise newTypecheckError(s.pos, "unknown variable '" & s.aname & "'")
-    if sc.flags.hasKey(s.aname) and sc.flags[s.aname] == vfLet:
-      raise newTypecheckError(s.pos, &"cannot assign to immutable variable '{s.aname}'")
-    let t0 = inferExprTypes(prog, fd, sc, s.aval, subst)
-    if not typeEq(t0, sc.types[s.aname]):
-      if t0.kind == tkVoid:
-        raise newTypecheckError(s.pos, &"cannot assign void function result to variable '{s.aname}'")
-      else:
-        raise newTypecheckError(s.pos, "assignment type mismatch")
-  of skIf:
-    let ct = inferExprTypes(prog, fd, sc, s.cond, subst)
-    if ct.kind != tkBool: raise newTypecheckError(s.pos, "if condition must be bool")
-    var sThen = Scope(types: sc.types, flags: sc.flags) # shallow copy ok
-    for st in s.thenBody: typecheckStmt(prog, fd, sThen, st, subst)
-
-    # Typecheck elif chain
-    for elifBranch in s.elifChain:
-      let elifCondType = inferExprTypes(prog, fd, sc, elifBranch.cond, subst)
-      if elifCondType.kind != tkBool: raise newTypecheckError(s.pos, "elif condition must be bool")
-      var sElif = Scope(types: sc.types, flags: sc.flags)
-      for st in elifBranch.body: typecheckStmt(prog, fd, sElif, st, subst)
-
-    var sElse = Scope(types: sc.types, flags: sc.flags)
-    for st in s.elseBody: typecheckStmt(prog, fd, sElse, st, subst)
-  of skWhile:
-    let ct = inferExprTypes(prog, fd, sc, s.wcond, subst)
-    if ct.kind != tkBool: raise newTypecheckError(s.pos, "while condition must be bool")
-    var sBody = Scope(types: sc.types, flags: sc.flags)
-    for st in s.wbody: typecheckStmt(prog, fd, sBody, st, subst)
-  of skExpr:
-    discard inferExprTypes(prog, fd, sc, s.sexpr, subst)
-  of skReturn:
-    if fd == nil: return
-    if fd.ret.kind == tkVoid:
-      if s.re.isSome(): raise newTypecheckError(s.pos, "void function cannot return a value")
-    else:
-      if not s.re.isSome(): raise newTypecheckError(s.pos, "non-void function must return a value")
-      let rt = inferExprTypes(prog, fd, sc, s.re.get(), subst)
-      if not typeEq(rt, fd.ret): raise newTypecheckError(s.pos, &"return type mismatch: expected {fd.ret}, got {rt}")
-  of skComptime:
-    # Typecheck comptime block statements and add injected variables to main scope
-    var ctScope = Scope(types: sc.types, flags: sc.flags)
-    for stmt in s.cbody:
-      typecheckStmt(prog, fd, ctScope, stmt, subst)
-      # If this is a variable declaration, add it to the main scope (injected variables)
-      if stmt.kind == skVar:
-        sc.types[stmt.vname] = stmt.vtype
-
-proc collectReturnTypes*(prog: Program, fd: FunDecl, sc: Scope, statements: seq[Stmt], subst: var TySubst): seq[EtchType] =
-  ## Collect all return types from statements, recursively looking into control flow
-  result = @[]
-  for stmt in statements:
-    case stmt.kind:
-    of skReturn:
-      if stmt.re.isSome():
-        let returnType = inferExprTypes(prog, fd, sc, stmt.re.get(), subst)
-        result.add(returnType)
-      else:
-        result.add(tVoid())
-    of skIf:
-      # Collect from if branch
-      if stmt.thenBody.len > 0:
-        result.add(collectReturnTypes(prog, fd, sc, stmt.thenBody, subst))
-      # Collect from elif branches
-      for elifBranch in stmt.elifChain:
-        if elifBranch.body.len > 0:
-          result.add(collectReturnTypes(prog, fd, sc, elifBranch.body, subst))
-      # Collect from else branch
-      if stmt.elseBody.len > 0:
-        result.add(collectReturnTypes(prog, fd, sc, stmt.elseBody, subst))
-    of skWhile:
-      if stmt.wbody.len > 0:
-        result.add(collectReturnTypes(prog, fd, sc, stmt.wbody, subst))
-    of skComptime:
-      if stmt.cbody.len > 0:
-        result.add(collectReturnTypes(prog, fd, sc, stmt.cbody, subst))
-    else:
-      discard # Other statements don't contain returns
-
-proc inferReturnType*(returnTypes: seq[EtchType]): EtchType =
-  ## Infer a single return type from collected return types, or return void if no returns
-  if returnTypes.len == 0:
-    return tVoid()
-
-  # Check that all return types are the same
-  let firstType = returnTypes[0]
-  for i in 1..<returnTypes.len:
-    if not typeEq(firstType, returnTypes[i]):
-      raise newEtchError(&"conflicting return types: {firstType} and {returnTypes[i]}")
-
-  return firstType
-
-proc typecheck*(prog: Program) =
-  var subst: TySubst
-  # globals - first pass: collect all variable declarations for forward references
-  var gscope = Scope(types: initTable[string, EtchType](), flags: initTable[string, VarFlag]())
-
-  # First pass: add all global variable types to scope (without checking initializers)
-  for g in prog.globals:
-    if g.kind == skVar:
-      gscope.types[g.vname] = g.vtype
-      gscope.flags[g.vname] = g.vflag
-
-  # Second pass: typecheck all global statements with complete scope
-  for g in prog.globals:
-    typecheckStmt(prog, nil, gscope, g, subst)
-  # functions (generic templates are checked on use; body checked when instantiated)
-  # we still allow checking that main exists later
-  discard
