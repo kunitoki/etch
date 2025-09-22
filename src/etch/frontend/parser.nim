@@ -14,12 +14,12 @@ proc posOf(p: Parser, t: Token): Pos = Pos(line: t.line, col: t.col, filename: p
 
 proc friendlyTokenName(kind: TokKind, lex: string): string =
   case kind
-  of tkIdent: return &"identifier '{lex}'"
+  of tkBool: return &"boolean '{lex}'"
+  of tkChar: return &"char '{lex}'"
   of tkInt: return &"number '{lex}'"
   of tkFloat: return &"number '{lex}'"
   of tkString: return &"string \"{lex}\""
-  of tkChar: return &"char '{lex}'"
-  of tkBool: return &"boolean '{lex}'"
+  of tkIdent: return &"identifier '{lex}'"
   of tkKeyword: return &"keyword '{lex}'"
   of tkSymbol: return &"symbol '{lex}'"
   of tkEof: return "end of file"
@@ -142,10 +142,11 @@ proc parseCastExpr(p: Parser; t: Token): Expr =
   let castExpr = p.parseExpr()
   discard p.expect(tkSymbol, ")")
   let castType = case t.lex:
+    of "bool": tBool()
+    of "char": tChar()
     of "int": tInt()
     of "float": tFloat()
     of "string": tString()
-    of "bool": tBool()
     else: raise newParseError(p.posOf(t), "unknown cast type")
   return Expr(kind: ekCast, castType: castType, castExpr: castExpr, pos: p.posOf(t))
 
@@ -165,7 +166,7 @@ proc parseIdentifierExpr(p: Parser; t: Token): Expr =
   ## Parses identifier expressions (variables, function calls, or casts)
   if p.cur.kind == tkSymbol and p.cur.lex == "(":
     # Check if this is a cast (built-in type name)
-    if t.lex in ["int", "float", "string", "bool"]:
+    if t.lex in ["bool", "char", "int", "float", "string"]:
       return p.parseCastExpr(t)
     else:
       return p.parseFunctionCallExpr(t)
@@ -410,27 +411,6 @@ proc parseSimpleStmt(p: Parser): Stmt =
     discard p.expect(tkSymbol, ";")
     return Stmt(kind: skExpr, sexpr: e, pos: p.posOf(start))
 
-proc parseConcept(p: Parser; prog: Program) =
-  discard p.expect(tkKeyword, "concept")
-  let cname = p.expect(tkIdent).lex
-  discard p.expect(tkSymbol, "{")
-  var reqs: set[ConceptReq] = {}
-  # very tiny syntax: use tokens "add", "div", "cmp", "deref" inside body
-  while not (p.cur.kind == tkSymbol and p.cur.lex == "}"):
-    let t = p.expect(tkIdent)
-    case t.lex
-    of "add": reqs.incl crAdd
-    of "div": reqs.incl crDiv
-    of "cmp": reqs.incl crCmp
-    of "deref": reqs.incl crDeref
-    else:
-      let actualName = friendlyTokenName(t.kind, t.lex)
-      raise newParseError(Pos(line: t.line, col: t.col), &"unknown concept requirement, got {actualName}")
-    if p.cur.kind == tkSymbol and p.cur.lex == ";": discard p.eat()
-  discard p.expect(tkSymbol, "}")
-  let c = Concept(name: cname, reqs: reqs)
-  prog.concepts[cname] = c
-
 proc parseTyParams(p: Parser): seq[TyParam] =
   result = @[]
   if p.cur.kind == tkSymbol and p.cur.lex == "[":
@@ -492,13 +472,14 @@ proc parseFn(p: Parser; prog: Program) =
   prog.addFunction(fd)
 
 proc parseStmt*(p: Parser): Stmt =
-  case p.cur.kind
-  of tkKeyword:
+  if p.cur.kind == tkKeyword:
     case p.cur.lex
     of "let":
-      discard p.eat(); return p.parseVarDecl(vfLet)
+      discard p.eat();
+      return p.parseVarDecl(vfLet)
     of "var":
-      discard p.eat(); return p.parseVarDecl(vfVar)
+      discard p.eat();
+      return p.parseVarDecl(vfVar)
     of "if": return p.parseIf()
     of "while": return p.parseWhile()
     of "for": return p.parseFor()
@@ -506,27 +487,18 @@ proc parseStmt*(p: Parser): Stmt =
     of "return": return p.parseReturn()
     of "comptime": return p.parseComptime()
     else: discard # fallthrough to simple
-  else: discard
-  p.parseSimpleStmt()
+  return p.parseSimpleStmt()
 
 proc parseProgram*(toks: seq[Token], filename: string = "<unknown>"): Program =
   var p = Parser(toks: toks, i: 0, filename: filename)
   result = Program(
-    concepts: initTable[string, Concept](),
     funs: initTable[string, seq[FunDecl]](),
     funInstances: initTable[string, FunDecl](),
     globals: @[]
   )
-  # install built-in concept names (also allowed via explicit "concept" decl)
-  result.concepts["Addable"] = conceptAdd()
-  result.concepts["Divisible"] = conceptDiv()
-  result.concepts["Comparable"] = conceptCmp()
-  result.concepts["Derefable"] = conceptDeref()
 
   while p.cur.kind != tkEof:
-    if p.cur.kind == tkKeyword and p.cur.lex == "concept":
-      p.parseConcept(result)
-    elif p.cur.kind == tkKeyword and p.cur.lex == "fn":
+    if p.cur.kind == tkKeyword and p.cur.lex == "fn":
       p.parseFn(result)
     elif p.cur.kind == tkKeyword and (p.cur.lex == "let" or p.cur.lex == "var"):
       let st = p.parseStmt()

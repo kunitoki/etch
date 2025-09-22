@@ -21,7 +21,7 @@
     "types": {
       "patterns": [
         {
-          "match": "\\b(void|char|int|float|bool|string|array)\\b",
+          "match": "\\b(void|bool|char|int|float|string|array)\\b",
           "name": "storage.type.etchlang"
         }
       ]

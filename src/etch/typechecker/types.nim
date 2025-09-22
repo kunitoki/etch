@@ -21,21 +21,6 @@ proc typeEq*(a, b: EtchType): bool =
   else: true
 
 
-proc requireConcept*(concepts: Table[string, Concept], t: EtchType, cname: string) =
-  if not concepts.hasKey(cname):
-    raise newEtchError("unknown concept: " & cname)
-  # only int and ref[...] supported for now
-  case cname
-  of "Addable","Divisible","Comparable":
-    if t.kind notin {tkInt, tkFloat}:
-      raise newEtchError(&"type {t} does not satisfy concept {cname} (only int and float supported)")
-  of "Derefable":
-    if t.kind != tkRef:
-      raise newEtchError(&"type {t} does not satisfy concept {cname} (needs Ref[...])")
-  else:
-    discard
-
-
 proc resolveTy*(t: EtchType, subst: var TySubst): EtchType =
   if t.isNil:
     # Handle nil type gracefully - likely due to function without explicit return type

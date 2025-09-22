@@ -1,5 +1,5 @@
 # ast.nim
-# Core AST + type and concept model for Etch
+# Core AST + type for Etch
 
 import std/[tables, options]
 
@@ -8,19 +8,17 @@ type
     line*, col*: int
     filename*: string
 
-  TypeKind* = enum tkInt, tkFloat, tkString, tkChar, tkBool, tkVoid, tkRef, tkGeneric, tkArray
+  TypeKind* = enum
+    tkInt, tkFloat, tkString, tkChar, tkBool, tkVoid, tkRef, tkGeneric, tkArray
+
   EtchType* = ref object
     kind*: TypeKind
     name*: string           # for tkGeneric
     inner*: EtchType        # for tkRef and tkArray
+
   TypeEnv* = Table[string, EtchType]
 
-  ConceptReq* = enum crAdd, crDiv, crCmp, crDeref
-  Concept* = ref object
-    name*: string
-    reqs*: set[ConceptReq]
-
-  # Generic parameter: name with optional concept
+  # Generic parameter: name
   TyParam* = object
     name*: string
     koncept*: Option[string]
@@ -40,13 +38,18 @@ type
     pos*: Pos
     typ*: EtchType
     case kind*: ExprKind
-    of ekInt:    ival*: int64
-    of ekFloat:  fval*: float64
-    of ekString: sval*: string
-    of ekChar:   cval*: char
-    of ekBool:   bval*: bool
-    of ekNil:    discard  # nil needs no additional fields
-    of ekVar:    vname*: string
+    of ekInt:
+      ival*: int64
+    of ekFloat:
+      fval*: float64
+    of ekString:
+      sval*: string
+    of ekChar:
+      cval*: char
+    of ekBool:
+      bval*: bool
+    of ekVar:
+      vname*: string
     of ekUn:
       uop*: UnOp
       ue*: Expr
@@ -56,7 +59,7 @@ type
     of ekCall:
       fname*: string
       args*: seq[Expr]
-      instTypes*: seq[EtchType]   # monomorphized type args (filled by typer)
+      instTypes*: seq[EtchType]
     of ekNewRef:
       init*: Expr
       refInner*: EtchType
@@ -69,16 +72,21 @@ type
       indexExpr*: Expr
     of ekSlice:
       sliceExpr*: Expr
-      startExpr*: Option[Expr]  # None means start from 0
-      endExpr*: Option[Expr]    # None means until end
+      startExpr*: Option[Expr]
+      endExpr*: Option[Expr]
     of ekArrayLen:
-      lenExpr*: Expr  # Expression that should evaluate to an array
+      lenExpr*: Expr
     of ekCast:
-      castType*: EtchType  # Target type to cast to
-      castExpr*: Expr      # Expression to cast
+      castType*: EtchType
+      castExpr*: Expr
+    of ekNil:
+      discard
 
-  StmtKind* = enum skVar, skAssign, skIf, skWhile, skFor, skBreak, skExpr, skReturn, skComptime
-  VarFlag* = enum vfLet, vfVar
+  StmtKind* = enum
+    skVar, skAssign, skIf, skWhile, skFor, skBreak, skExpr, skReturn, skComptime
+
+  VarFlag* = enum
+    vfLet, vfVar
 
   Stmt* = ref object
     pos*: Pos
@@ -106,14 +114,14 @@ type
       farray*: Option[Expr]   # Some for array iteration
       finclusive*: bool       # true for .., false for ..<
       fbody*: seq[Stmt]
-    of skBreak:
-      discard  # break needs no additional fields
     of skExpr:
       sexpr*: Expr
     of skReturn:
       re*: Option[Expr]
     of skComptime:
       cbody*: seq[Stmt]
+    of skBreak:
+      discard
 
   Param* = object
     name*: string
@@ -128,53 +136,43 @@ type
     body*: seq[Stmt]
 
   Program* = ref object
-    concepts*: Table[string, Concept]
-    globals*: seq[Stmt]   # global let/var with init allowed
+    globals*: seq[Stmt]                   # global let/var with init allowed
     funs*: Table[string, seq[FunDecl]]    # generic templates (supports overloads)
     funInstances*: Table[string, FunDecl] # monomorphized instances
 
+proc tVoid*(): EtchType = EtchType(kind: tkVoid)
+proc tBool*(): EtchType = EtchType(kind: tkBool)
+proc tChar*(): EtchType = EtchType(kind: tkChar)
 proc tInt*(): EtchType = EtchType(kind: tkInt)
 proc tFloat*(): EtchType = EtchType(kind: tkFloat)
 proc tString*(): EtchType = EtchType(kind: tkString)
-proc tChar*(): EtchType = EtchType(kind: tkChar)
-proc tBool*(): EtchType = EtchType(kind: tkBool)
-proc tVoid*(): EtchType = EtchType(kind: tkVoid)
+proc tArray*(inner: EtchType): EtchType = EtchType(kind: tkArray, inner: inner)
 proc tRef*(inner: EtchType): EtchType = EtchType(kind: tkRef, inner: inner)
 proc tGeneric*(name: string): EtchType = EtchType(kind: tkGeneric, name: name)
-proc tArray*(inner: EtchType): EtchType = EtchType(kind: tkArray, inner: inner)
 
 proc `$`*(t: EtchType): string =
   case t.kind
+  of tkVoid: "void"
+  of tkBool: "bool"
+  of tkChar: "char"
   of tkInt: "int"
   of tkFloat: "float"
   of tkString: "string"
-  of tkChar: "char"
-  of tkBool: "bool"
-  of tkVoid: "void"
-  of tkRef: "Ref[" & $t.inner & "]"
-  of tkGeneric: t.name
   of tkArray: "array[" & $t.inner & "]"
+  of tkRef: "ref[" & $t.inner & "]"
+  of tkGeneric: t.name
 
 proc copyType*(t: EtchType): EtchType =
   case t.kind
-  of tkRef: tRef(copyType(t.inner))
-  of tkGeneric: tGeneric(t.name)
-  of tkArray: tArray(copyType(t.inner))
+  of tkVoid: tVoid()
+  of tkBool: tBool()
+  of tkChar: tChar()
   of tkInt: tInt()
   of tkFloat: tFloat()
   of tkString: tString()
-  of tkChar: tChar()
-  of tkBool: tBool()
-  of tkVoid: tVoid()
-
-proc conceptAdd*(): Concept =
-  Concept(name: "Addable", reqs: {crAdd})
-proc conceptDiv*(): Concept =
-  Concept(name: "Divisible", reqs: {crDiv})
-proc conceptCmp*(): Concept =
-  Concept(name: "Comparable", reqs: {crCmp})
-proc conceptDeref*(): Concept =
-  Concept(name: "Derefable", reqs: {crDeref})
+  of tkArray: tArray(copyType(t.inner))
+  of tkRef: tRef(copyType(t.inner))
+  of tkGeneric: tGeneric(t.name)
 
 # Function overload management helpers
 proc addFunction*(prog: Program, funDecl: FunDecl) =
@@ -192,9 +190,30 @@ proc getFunctionOverloads*(prog: Program, name: string): seq[FunDecl] =
     result = @[]
 
 proc generateOverloadSignature*(funDecl: FunDecl): string =
-  ## Generate a unique signature string for overload resolution
-  result = funDecl.name
+  ## Generate a unique signature string for overload resolution using compact name mangling
+  ## Format: funcName__paramTypes_returnType (inspired by JNI/C++ mangling but simplified)
+  result = funDecl.name & "__"
+
+  # Compact type encoding: v=void, b=bool, c=char, i=int, f=float, s=string, A=array, R=ref
+  proc encodeType(t: EtchType): string =
+    case t.kind
+    of tkVoid: "v"
+    of tkBool: "b"
+    of tkChar: "c"
+    of tkInt: "i"
+    of tkFloat: "f"
+    of tkString: "s"
+    of tkArray: "A" & encodeType(t.inner)
+    of tkRef: "R" & encodeType(t.inner)
+    of tkGeneric: "G" & $t.name.len & t.name
+
+  # Encode parameters
   for param in funDecl.params:
-    result.add("_" & $param.typ)
+    result.add(encodeType(param.typ))
+
+  # Add return type separator and return type
+  result.add("_")
   if funDecl.ret != nil:
-    result.add("_ret_" & $funDecl.ret)
+    result.add(encodeType(funDecl.ret))
+  else:
+    result.add("v")

@@ -13,7 +13,7 @@ type
 
 const keywords = [
   "fn","let","var","return","if","elif","else","while","for","break","in",
-  "true","false","int","float","string","char","bool","void","ref","concept",
+  "true","false","int","float","string","char","bool","void","ref",
   "comptime","new","and","or","array","nil"
 ].toSeq
 

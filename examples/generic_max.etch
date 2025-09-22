@@ -1,6 +1,3 @@
-// Generics + concepts demo
-concept Ordered { cmp; } // tiny syntax: 'cmp' marks need for comparisons
-
 fn max[T: Comparable](a: T, b: T) -> T {
   if a > b {
     return a;

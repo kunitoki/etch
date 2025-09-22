@@ -180,7 +180,6 @@ proc inferCall(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType 
   # build local substitution mapping for typarams
   var localSubst: TySubst
   for p in templ.typarams:
-    # if concept specified, we will verify after inference binds a concrete type
     discard
 
   # Count required parameters (those without defaults)
@@ -213,14 +212,6 @@ proc inferCall(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType 
       else:
         if not typeEq(pat, got): raise newTypecheckError(e.pos, &"type mismatch: expected {pat}, got {got}")
     unify(pt, ta)
-
-  # check concept constraints
-  for p in templ.typarams:
-    if p.koncept.isSome():
-      let c = p.koncept.get()
-      if not localSubst.hasKey(p.name):
-        raise newTypecheckError(e.pos, &"cannot resolve type parameter {p.name} for concept {c}")
-      requireConcept(prog.concepts, localSubst[p.name], c)
 
   # ret type resolution
   let retT = resolveTy(templ.ret, localSubst)
