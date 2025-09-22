@@ -4,11 +4,13 @@
 import std/[tables, strformat]
 import ../frontend/ast, ../errors
 
+
 type
   Scope* = ref object
     types*: Table[string, EtchType] # variables
     flags*: Table[string, VarFlag] # variable mutability
   TySubst* = Table[string, EtchType] # generic var -> concrete type
+
 
 proc typeEq*(a, b: EtchType): bool =
   if a.kind != b.kind: return false
@@ -17,6 +19,7 @@ proc typeEq*(a, b: EtchType): bool =
   of tkArray: return typeEq(a.inner, b.inner)
   of tkGeneric: return a.name == b.name
   else: true
+
 
 proc requireConcept*(concepts: Table[string, Concept], t: EtchType, cname: string) =
   if not concepts.hasKey(cname):
@@ -31,6 +34,7 @@ proc requireConcept*(concepts: Table[string, Concept], t: EtchType, cname: strin
       raise newEtchError(&"type {t} does not satisfy concept {cname} (needs Ref[...])")
   else:
     discard
+
 
 proc resolveTy*(t: EtchType, subst: var TySubst): EtchType =
   if t.isNil:

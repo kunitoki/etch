@@ -5,6 +5,7 @@ import std/[strformat, options]
 import ../frontend/ast, ../errors
 import types, expressions
 
+
 proc collectReturnTypes*(prog: Program, fd: FunDecl, sc: Scope, statements: seq[Stmt], subst: var TySubst): seq[EtchType] =
   ## Collect all return types from statements, recursively looking into control flow
   result = @[]
@@ -35,6 +36,7 @@ proc collectReturnTypes*(prog: Program, fd: FunDecl, sc: Scope, statements: seq[
         result.add(collectReturnTypes(prog, fd, sc, stmt.cbody, subst))
     else:
       discard # Other statements don't contain returns
+
 
 proc inferReturnType*(returnTypes: seq[EtchType]): EtchType =
   ## Infer a single return type from collected return types, or return void if no returns

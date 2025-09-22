@@ -5,6 +5,7 @@ import std/[strformat, options, sequtils, tables, strutils]
 import ../frontend/ast, ../errors
 import types
 
+
 # Convert BinOp to operator symbol string for user-defined operator lookup
 proc binOpToString(bop: BinOp): string =
   case bop
@@ -22,12 +23,15 @@ proc binOpToString(bop: BinOp): string =
   of boAnd: "and"  # These remain keywords, not symbols
   of boOr: "or"
 
+
 # Check if a function name represents an operator function (including mangled names)
 proc isOperatorFunction(name: string): bool =
   let baseName = if "_" in name: name.split("_")[0] else: name
   baseName in ["+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">="]
 
+
 proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType
+
 
 # Builtin function type inference
 proc inferCallBuiltinPrint(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
@@ -38,6 +42,7 @@ proc inferCallBuiltinPrint(prog: Program; sc: Scope; e: Expr; subst: var TySubst
   e.typ = tVoid()
   return e.typ
 
+
 proc inferCallBuiltinNew(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
   if e.args.len != 1: raise newTypecheckError(e.pos, "new expects 1 argument")
   let t0 = inferExprTypes(prog, nil, sc, e.args[0], subst)
@@ -45,12 +50,14 @@ proc inferCallBuiltinNew(prog: Program; sc: Scope; e: Expr; subst: var TySubst):
   e.typ = rt
   return rt
 
+
 proc inferCallBuiltinDeref(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
   if e.args.len != 1: raise newTypecheckError(e.pos, "deref expects 1 argument")
   let t0 = inferExprTypes(prog, nil, sc, e.args[0], subst)
   if t0.kind != tkRef: raise newTypecheckError(e.pos, "deref expects Ref[...]")
   e.typ = t0.inner
   return e.typ
+
 
 proc inferCallBuiltinRand(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
   if e.args.len < 1 or e.args.len > 2:
@@ -68,6 +75,7 @@ proc inferCallBuiltinRand(prog: Program; sc: Scope; e: Expr; subst: var TySubst)
   e.typ = tInt()
   return e.typ
 
+
 proc inferCallBuiltinReadFile(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
   if e.args.len != 1: raise newTypecheckError(e.pos, "readFile expects 1 argument")
   let pathType = inferExprTypes(prog, nil, sc, e.args[0], subst)
@@ -76,6 +84,7 @@ proc inferCallBuiltinReadFile(prog: Program; sc: Scope; e: Expr; subst: var TySu
   e.instTypes = @[]
   e.typ = tString()
   return e.typ
+
 
 proc inferCallBuiltinInject(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
   if e.args.len != 3: raise newTypecheckError(e.pos, "inject expects 3 arguments: name, type, value")
@@ -88,6 +97,7 @@ proc inferCallBuiltinInject(prog: Program; sc: Scope; e: Expr; subst: var TySubs
   e.typ = tVoid()
   return e.typ
 
+
 proc inferCallBuiltinSeed(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
   if e.args.len > 1: raise newTypecheckError(e.pos, "seed expects 0 or 1 argument")
   if e.args.len == 1:
@@ -97,6 +107,7 @@ proc inferCallBuiltinSeed(prog: Program; sc: Scope; e: Expr; subst: var TySubst)
   e.instTypes = @[]
   e.typ = tVoid()
   return e.typ
+
 
 # Function call type checking and monomorphization
 # Overload resolution helper
@@ -162,6 +173,7 @@ proc resolveOverload(prog: Program; sc: Scope; e: Expr; subst: var TySubst): Fun
         availableSignatures.add($param.typ)
       availableSignatures.add(")")
     raise newTypecheckError(e.pos, &"no matching overload for {e.fname} with arguments ({argTypes.join(\", \")}). Available: {availableSignatures}")
+
 
 proc inferCall(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
   let templ = resolveOverload(prog, sc, e, subst)
@@ -238,6 +250,7 @@ proc inferCall(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType 
   # mutate call to target the instance symbol (for codegen / VM)
   e.fname = key
   return retT
+
 
 proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
   case e.kind

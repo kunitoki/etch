@@ -5,6 +5,7 @@ import std/[tables]
 import ../frontend/ast
 import types, statements
 
+
 proc typecheck*(prog: Program) =
   var subst: TySubst
   # globals - first pass: collect all variable declarations for forward references
@@ -19,9 +20,7 @@ proc typecheck*(prog: Program) =
   # Second pass: typecheck all global statements with complete scope
   for g in prog.globals:
     typecheckStmt(prog, nil, gscope, g, subst)
-  # functions (generic templates are checked on use; body checked when instantiated)
-  # we still allow checking that main exists later
-  discard
+
 
 # Unified type inference that can work in different contexts
 proc inferTypeFromExpr*(expr: Expr): EtchType =

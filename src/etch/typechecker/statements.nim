@@ -5,7 +5,9 @@ import std/[strformat, options, tables, strutils]
 import ../frontend/ast, ../errors
 import types, expressions
 
+
 proc typecheckStmt*(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TySubst)
+
 
 proc typecheckVar(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TySubst) =
   if s.vtype.kind == tkGeneric:
@@ -133,10 +135,12 @@ proc typecheckFor(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TyS
   for stmt in s.fbody:
     typecheckStmt(prog, fd, loopScope, stmt, subst)
 
+
 proc typecheckBreak(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TySubst) =
   # Break statements don't need special type checking, just verify they're valid
   # (validation that break is inside a loop is done at parse time or runtime)
   discard
+
 
 proc typecheckStmt*(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TySubst) =
   case s.kind
