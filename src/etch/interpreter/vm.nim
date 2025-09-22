@@ -11,6 +11,7 @@ type
     fval*: float64
     bval*: bool
     sval*: string
+    cval*: char
     # Ref represented as reference to heap slot
     refId*: int
     # Array represented as sequence of values
@@ -45,6 +46,7 @@ type
 proc vInt(x: int64): V = V(kind: tkInt, ival: x)
 proc vFloat(x: float64): V = V(kind: tkFloat, fval: x)
 proc vString(x: string): V = V(kind: tkString, sval: x)
+proc vChar(x: char): V = V(kind: tkChar, cval: x)
 proc vBool(x: bool): V = V(kind: tkBool, bval: x)
 proc vRef(id: int): V = V(kind: tkRef, refId: id)
 proc vArray(elements: seq[V]): V = V(kind: tkArray, aval: elements)
@@ -99,6 +101,7 @@ proc setVar(vm: VM, name: string, value: V) =
 proc opLoadIntImpl(vm: VM, instr: Instruction) = vm.push(vInt(instr.arg))
 proc opLoadFloatImpl(vm: VM, instr: Instruction) = vm.push(vFloat(parseFloat(vm.program.constants[instr.arg])))
 proc opLoadStringImpl(vm: VM, instr: Instruction) = vm.push(vString(vm.program.constants[instr.arg]))
+proc opLoadCharImpl(vm: VM, instr: Instruction) = vm.push(vChar(vm.program.constants[instr.arg][0]))
 proc opLoadBoolImpl(vm: VM, instr: Instruction) = vm.push(vBool(instr.arg != 0))
 proc opLoadVarImpl(vm: VM, instr: Instruction) = vm.push(vm.getVar(instr.sarg))
 proc opStoreVarImpl(vm: VM, instr: Instruction) = vm.setVar(instr.sarg, vm.pop())
@@ -189,6 +192,7 @@ proc opEqImpl(vm: VM, instr: Instruction) =
     of tkFloat: a.fval == b.fval
     of tkBool: a.bval == b.bval
     of tkString: a.sval == b.sval
+    of tkChar: a.cval == b.cval
     else: false
   vm.push(vBool(res))
 
@@ -202,6 +206,7 @@ proc opNeImpl(vm: VM, instr: Instruction) =
     of tkFloat: a.fval != b.fval
     of tkBool: a.bval != b.bval
     of tkString: a.sval != b.sval
+    of tkChar: a.cval != b.cval
     else: true
   vm.push(vBool(res))
 
@@ -298,34 +303,54 @@ proc opMakeArrayImpl(vm: VM, instr: Instruction) =
 proc opArrayGetImpl(vm: VM, instr: Instruction) =
   let index = vm.pop()
   let array = vm.pop()
-  if array.kind != tkArray:
-    raise newException(ValueError, "Array get expects array")
   if index.kind != tkInt:
-    raise newException(ValueError, "Array index must be int")
-  if index.ival < 0 or index.ival >= array.aval.len:
-    raise newException(ValueError, &"Array index {index.ival} out of bounds")
-  vm.push(array.aval[index.ival])
+    raise newException(ValueError, "Index must be int")
+  case array.kind
+  of tkArray:
+    if index.ival < 0 or index.ival >= array.aval.len:
+      raise newException(ValueError, &"Array index {index.ival} out of bounds")
+    vm.push(array.aval[index.ival])
+  of tkString:
+    if index.ival < 0 or index.ival >= array.sval.len:
+      raise newException(ValueError, &"String index {index.ival} out of bounds")
+    vm.push(vChar(array.sval[index.ival]))
+  else:
+    raise newException(ValueError, "Indexing requires array or string type")
 
 proc opArraySliceImpl(vm: VM, instr: Instruction) =
   let endVal = vm.pop()
   let startVal = vm.pop()
   let array = vm.pop()
-  if array.kind != tkArray:
-    raise newException(ValueError, "Array slice expects array")
   let startIdx = if startVal.kind == tkInt and startVal.ival != -1: startVal.ival else: 0
-  let endIdx = if endVal.kind == tkInt and endVal.ival != -1: endVal.ival else: array.aval.len
-  let actualStart = max(0, min(startIdx, array.aval.len))
-  let actualEnd = max(actualStart, min(endIdx, array.aval.len))
-  if actualStart >= actualEnd:
-    vm.push(vArray(@[]))
+  case array.kind
+  of tkArray:
+    let endIdx = if endVal.kind == tkInt and endVal.ival != -1: endVal.ival else: array.aval.len
+    let actualStart = max(0, min(startIdx, array.aval.len))
+    let actualEnd = max(actualStart, min(endIdx, array.aval.len))
+    if actualStart >= actualEnd:
+      vm.push(vArray(@[]))
+    else:
+      vm.push(vArray(array.aval[actualStart..<actualEnd]))
+  of tkString:
+    let endIdx = if endVal.kind == tkInt and endVal.ival != -1: endVal.ival else: array.sval.len
+    let actualStart = max(0, min(startIdx, array.sval.len))
+    let actualEnd = max(actualStart, min(endIdx, array.sval.len))
+    if actualStart >= actualEnd:
+      vm.push(vString(""))
+    else:
+      vm.push(vString(array.sval[actualStart..<actualEnd]))
   else:
-    vm.push(vArray(array.aval[actualStart..<actualEnd]))
+    raise newException(ValueError, "Slicing requires array or string type")
 
 proc opArrayLenImpl(vm: VM, instr: Instruction) =
   let array = vm.pop()
-  if array.kind != tkArray:
-    raise newException(ValueError, "Array length expects array")
-  vm.push(vInt(array.aval.len.int64))
+  case array.kind
+  of tkArray:
+    vm.push(vInt(array.aval.len.int64))
+  of tkString:
+    vm.push(vInt(array.sval.len.int64))
+  else:
+    raise newException(ValueError, "Length operator requires array or string type")
 
 proc opCastImpl(vm: VM, instr: Instruction) =
   let source = vm.pop()
@@ -372,6 +397,7 @@ proc opCallImpl(vm: VM, instr: Instruction): bool =
     let arg = vm.pop()
     case arg.kind
     of tkString: echo arg.sval
+    of tkChar: echo arg.cval
     of tkInt: echo arg.ival
     of tkFloat: echo arg.fval
     of tkBool: echo if arg.bval: "true" else: "false"
@@ -477,6 +503,7 @@ proc executeInstruction*(vm: VM): bool =
   of opLoadInt: vm.opLoadIntImpl(instr)
   of opLoadFloat: vm.opLoadFloatImpl(instr)
   of opLoadString: vm.opLoadStringImpl(instr)
+  of opLoadChar: vm.opLoadCharImpl(instr)
   of opLoadBool: vm.opLoadBoolImpl(instr)
   of opLoadVar: vm.opLoadVarImpl(instr)
   of opStoreVar: vm.opStoreVarImpl(instr)
@@ -530,6 +557,8 @@ proc runBytecode*(vm: VM): int =
           vm.globals[globalName] = V(kind: tkBool, bval: gv.bval)
         of tkString:
           vm.globals[globalName] = V(kind: tkString, sval: gv.sval)
+        of tkChar:
+          vm.globals[globalName] = V(kind: tkChar, cval: gv.cval)
         else:
           vm.globals[globalName] = vInt(0)  # Default for unsupported types
       else:
@@ -578,6 +607,8 @@ proc convertVMValueToGlobalValue*(val: V): GlobalValue =
     GlobalValue(kind: tkBool, bval: val.bval)
   of tkString:
     GlobalValue(kind: tkString, sval: val.sval)
+  of tkChar:
+    GlobalValue(kind: tkChar, cval: val.cval)
   else:
     # Default for unsupported types
     GlobalValue(kind: tkInt, ival: 0)

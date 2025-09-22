@@ -1,0 +1,47 @@
+fn double_value(x: int) -> int {
+    return x * 2;
+}
+
+fn add_numbers(x: int, y: int) -> int {
+    return x + y;
+}
+
+fn multiply_by(x: int, factor: int) -> int {
+    return x * factor;
+}
+
+fn print_with_prefix(prefix: string, value: int) -> void {
+    print(prefix);
+    print(value);
+}
+
+fn get_length(arr: array[int]) -> int {
+    return #arr;
+}
+
+fn main() -> void {
+    let x: int = 10;
+    let y: int = 5;
+
+    // Test UFCS with no args (both syntaxes)
+    x.double_value().print_value();    // Should print 20
+    x.double_value.print_value;        // Should print 20
+
+    // Test UFCS with multiple arguments
+    x.add_numbers(y).print_value();    // Should print 15 (10 + 5)
+
+    // Test UFCS chaining with multiple args
+    x.add_numbers(y).multiply_by(3).print_value();  // Should print 45 ((10 + 5) * 3)
+
+    // Test UFCS with string first arg
+    "Result: ".print_with_prefix(x.double_value());  // Should print "Result: " then 20
+
+    // Test UFCS with arrays
+    let numbers: array[int] = [1, 2, 3, 4];
+    numbers.get_length().print_value();   // Should print 4
+}
+
+// Helper function that we expect to exist from basic test
+fn print_value(x: int) -> void {
+    print(x);
+}

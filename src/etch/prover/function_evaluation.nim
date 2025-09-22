@@ -1,7 +1,7 @@
 # prover/function_evaluation.nim
 # Function evaluation and constant folding for the safety prover
 
-import std/[tables, options, strformat]
+import std/[tables, options]
 import ../frontend/ast
 import types
 

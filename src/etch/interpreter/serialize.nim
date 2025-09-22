@@ -11,6 +11,7 @@ type
     fval*: float64
     bval*: bool
     sval*: string
+    cval*: char
 
   CompilerFlags* = object
     verbose*: bool
@@ -23,7 +24,7 @@ type
     localVars*: seq[string]
 
   OpCode* = enum
-    opLoadInt, opLoadFloat, opLoadString, opLoadBool, opLoadNil
+    opLoadInt, opLoadFloat, opLoadString, opLoadChar, opLoadBool, opLoadNil
     opLoadVar, opStoreVar
     opAdd, opSub, opMul, opDiv, opMod
     opEq, opNe, opLt, opLe, opGt, opGe
@@ -62,7 +63,7 @@ type
 
 const
   BYTECODE_MAGIC = "ETCH"
-  BYTECODE_VERSION = 6
+  BYTECODE_VERSION = 7
 
 proc serializeToBinary*(prog: BytecodeProgram): string =
   ## Serialize bytecode program to binary format for storage

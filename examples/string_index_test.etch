@@ -1,0 +1,7 @@
+fn main() -> void {
+  let s: string = "hello";
+  let c: char = s[0];
+  print(c);
+  let d: char = s[2];
+  print(d);
+}

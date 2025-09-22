@@ -1,0 +1,7 @@
+fn test_func(x: int) -> void {
+    print(x);
+}
+
+fn main() -> void {
+    test_func(42);
+}

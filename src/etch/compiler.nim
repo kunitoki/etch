@@ -1,7 +1,7 @@
 # compiler.nim
 # Etch compiler: compilation and execution orchestration
 
-import std/[os, tables, times, options]
+import std/[os, tables, times, options, strformat]
 import frontend/[ast, lexer, parser]
 import typechecker/[core, types, statements, inference]
 import interpreter/[vm, bytecode]
@@ -11,7 +11,7 @@ import comptime, errors
 proc verboseLog*(flags: CompilerFlags, msg: string) =
   ## Print verbose debug message if verbose flag is enabled
   if flags.verbose:
-    echo "[VERBOSE] ", msg
+    echo "[COMPILER] ", msg
 
 type
   CompilerResult* = object
@@ -53,20 +53,33 @@ proc shouldRecompile*(sourceFile, bytecodeFile: string, options: CompilerOptions
 
 proc ensureMainInst(prog: Program) =
   ## Ensure main function instance exists if main template is non-generic
-  if prog.funs.hasKey("main") and prog.funs["main"].typarams.len == 0:
-    let key = "main"
-    if not prog.funInstances.hasKey(key):
-      let f = prog.funs["main"]
-      prog.funInstances[key] = FunDecl(
-        name: key, typarams: @[], params: f.params, ret: f.ret, body: f.body)
+  let mainOverloads = prog.getFunctionOverloads("main")
+  if mainOverloads.len > 0:
+    # For main, we expect only one overload with no arguments
+    var mainFunc: FunDecl = nil
+    for overload in mainOverloads:
+      if overload.typarams.len == 0 and overload.params.len == 0:
+        mainFunc = overload
+        break
 
-proc ensureAllNonGenericInst(prog: Program) =
+    if mainFunc != nil:
+      let key = "main"
+      if not prog.funInstances.hasKey(key):
+        prog.funInstances[key] = FunDecl(
+          name: key, typarams: @[], params: mainFunc.params, ret: mainFunc.ret, body: mainFunc.body)
+
+proc ensureAllNonGenericInst(prog: Program, flags: CompilerFlags) =
   ## Instantiate all non-generic functions so they're available for comptime evaluation
-  for name, f in prog.funs:
-    if f.typarams.len == 0:  # Non-generic function
-      if not prog.funInstances.hasKey(name):
-        prog.funInstances[name] = FunDecl(
-          name: name, typarams: @[], params: f.params, ret: f.ret, body: f.body)
+  for name, overloads in prog.funs:
+    for f in overloads:
+      if f.typarams.len == 0 and f.name != "main":  # Non-generic function, skip main (handled separately)
+        # Generate unique key for overload
+        let key = generateOverloadSignature(f)
+        if flags.verbose:
+          echo &"[COMPILER] Creating function instance: {key} for {f.name}"
+        if not prog.funInstances.hasKey(key):
+          prog.funInstances[key] = FunDecl(
+            name: key, typarams: @[], params: f.params, ret: f.ret, body: f.body)
 
 proc evaluateGlobalVariables(prog: Program): Table[string, V] =
   ## Evaluate global variable initialization expressions using bytecode
@@ -82,6 +95,7 @@ proc evaluateGlobalVariables(prog: Program): Table[string, V] =
         # Store the evaluated value for subsequent globals
         globalVars[g.vname] = res
       except Exception as e:
+        # TODO - should we log this ? at least in verbose mode ?
         # If evaluation fails, store default value (silently)
         # The actual error will be caught by the compiler's type checker
         globalVars[g.vname] = V(kind: tkInt, ival: 0)
@@ -133,7 +147,7 @@ proc parseAndTypecheck*(options: CompilerOptions): (Program, string, Table[strin
 
   # Instantiate all non-generic functions so they're available for comptime evaluation
   verboseLog(flags, "Instantiating non-generic functions")
-  ensureAllNonGenericInst(prog)
+  ensureAllNonGenericInst(prog, flags)
 
   # Fold compile-time expressions BEFORE final type checking so injected variables are available
   verboseLog(flags, "Folding compile-time expressions")
@@ -144,14 +158,15 @@ proc parseAndTypecheck*(options: CompilerOptions): (Program, string, Table[strin
   var subst: Table[string, EtchType]
 
   # First handle template functions (non-generic functions that need return type inference)
-  for name, f in prog.funs:
-    if f.typarams.len == 0 and f.ret == nil:
-      var sc = Scope(types: initTable[string, EtchType]())
-      for p in f.params: sc.types[p.name] = p.typ
-      for v in prog.globals:
-        if v.kind == skVar: sc.types[v.vname] = v.vtype
-      let returnTypes = collectReturnTypes(prog, f, sc, f.body, subst)
-      f.ret = inferReturnType(returnTypes)
+  for name, overloads in prog.funs:
+    for f in overloads:
+      if f.typarams.len == 0 and f.ret == nil:
+        var sc = Scope(types: initTable[string, EtchType]())
+        for p in f.params: sc.types[p.name] = p.typ
+        for v in prog.globals:
+          if v.kind == skVar: sc.types[v.vname] = v.vtype
+        let returnTypes = collectReturnTypes(prog, f, sc, f.body, subst)
+        f.ret = inferReturnType(returnTypes)
 
   # Collect keys first to avoid modifying table while iterating
   var instanceKeys: seq[string] = @[]

@@ -1,8 +1,8 @@
 # prover/expression_analysis.nim
 # Expression analysis for the safety prover
 
-import std/[strformat, strutils, options, tables]
-import ../frontend/ast, ../errors, ../interpreter/vm, ../interpreter/serialize
+import std/[strformat, options, tables]
+import ../frontend/ast, ../errors, ../interpreter/serialize
 import types, binary_operations, function_evaluation
 
 proc verboseProverLog*(flags: CompilerFlags, msg: string) =
@@ -12,6 +12,9 @@ proc verboseProverLog*(flags: CompilerFlags, msg: string) =
 
 # Forward declaration for mutual recursion
 proc analyzeExpr*(e: Expr; env: Env, prog: Program = nil, flags: CompilerFlags = CompilerFlags()): Info
+
+proc analyzeBoolExpr*(e: Expr): Info =
+  infoBool(e.bval)
 
 proc analyzeIntExpr*(e: Expr): Info =
   infoConst(e.ival)
@@ -25,11 +28,13 @@ proc analyzeFloatExpr*(e: Expr): Info =
     Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
 
 proc analyzeStringExpr*(e: Expr): Info =
-  # string analysis not needed for safety
-  Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
+  # String literal - track length for bounds checking
+  let length = e.sval.len.int64
+  infoString(length, lengthKnown = true)
 
-proc analyzeBoolExpr*(e: Expr): Info =
-  infoBool(e.bval)
+proc analyzeCharExpr*(e: Expr): Info =
+  # char analysis not needed for safety, chars are always initialized
+  Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
 
 proc analyzeVarExpr*(e: Expr, env: Env): Info =
   if env.vals.hasKey(e.vname):
@@ -245,30 +250,32 @@ proc analyzeArrayExpr*(e: Expr, env: Env, prog: Program): Info =
   infoArray(e.elements.len.int64, sizeKnown = true)
 
 proc analyzeIndexExpr*(e: Expr, env: Env, prog: Program): Info =
-  # Array indexing - comprehensive bounds checking
+  # Array/String indexing - comprehensive bounds checking
   let arrayInfo = analyzeExpr(e.arrayExpr, env, prog)
   let indexInfo = analyzeExpr(e.indexExpr, env, prog)
 
   # Basic negative index check
   if indexInfo.known and indexInfo.cval < 0:
-    raise newProverError(e.indexExpr.pos, &"array index cannot be negative: {indexInfo.cval}")
+    raise newProverError(e.indexExpr.pos, &"index cannot be negative: {indexInfo.cval}")
 
-  # Comprehensive bounds checking when both array size and index are known
-  if indexInfo.known and arrayInfo.isArray and arrayInfo.arraySizeKnown:
-    if indexInfo.cval >= arrayInfo.arraySize:
-      raise newProverError(e.indexExpr.pos, &"array index {indexInfo.cval} out of bounds [0, {arrayInfo.arraySize-1}]")
+  # Array/String bounds checking
+  if arrayInfo.isArray or arrayInfo.isString:
+    # Comprehensive bounds checking when both array size and index are known
+    if indexInfo.known and arrayInfo.arraySizeKnown:
+      if indexInfo.cval >= arrayInfo.arraySize:
+        raise newProverError(e.indexExpr.pos, &"index {indexInfo.cval} out of bounds [0, {arrayInfo.arraySize-1}]")
 
-  # Range-based bounds checking when array size is known but index is in a range
-  elif arrayInfo.isArray and arrayInfo.arraySizeKnown:
-    if indexInfo.minv >= arrayInfo.arraySize or indexInfo.maxv >= arrayInfo.arraySize:
-      raise newProverError(e.indexExpr.pos, &"array index range [{indexInfo.minv}, {indexInfo.maxv}] extends beyond array bounds [0, {arrayInfo.arraySize-1}]")
+    # Range-based bounds checking when array size is known but index is in a range
+    elif arrayInfo.arraySizeKnown:
+      if indexInfo.minv >= arrayInfo.arraySize or indexInfo.maxv >= arrayInfo.arraySize:
+        raise newProverError(e.indexExpr.pos, &"index range [{indexInfo.minv}, {indexInfo.maxv}] extends beyond array bounds [0, {arrayInfo.arraySize-1}]")
 
-  # If array size is unknown but we have range info on index, check for negatives
-  elif not (arrayInfo.isArray and arrayInfo.arraySizeKnown):
+  # If size/length is unknown but we have range info on index, check for negatives
+  if not ((arrayInfo.isArray and arrayInfo.arraySizeKnown) or (arrayInfo.isString and arrayInfo.arraySizeKnown)):
     if indexInfo.maxv < 0:
-      raise newProverError(e.indexExpr.pos, &"array index range [{indexInfo.minv}, {indexInfo.maxv}] is entirely negative")
+      raise newProverError(e.indexExpr.pos, &"index range [{indexInfo.minv}, {indexInfo.maxv}] is entirely negative")
     elif indexInfo.minv < 0:
-      raise newProverError(e.indexExpr.pos, &"array index range [{indexInfo.minv}, {indexInfo.maxv}] includes negative values")
+      raise newProverError(e.indexExpr.pos, &"index range [{indexInfo.minv}, {indexInfo.maxv}] includes negative values")
 
   # Determine the result type information for nested arrays
   # If the result type is also an array, we need to analyze the specific inner array size
@@ -339,21 +346,42 @@ proc analyzeSliceExpr*(e: Expr, env: Env, prog: Program): Info =
       if startInfo.cval > endInfo.cval:
         raise newProverError(e.pos, &"invalid slice: start {startInfo.cval} > end {endInfo.cval}")
 
-  # Return array info for the slice (slices preserve array nature but might have different size)
+  # Advanced bounds checking when string length is known
+  elif arrayInfo.isString and arrayInfo.arraySizeKnown:
+    # Check start bounds
+    if hasStart and startInfo.known and startInfo.cval > arrayInfo.arraySize:
+      raise newProverError(e.startExpr.get.pos, &"slice start {startInfo.cval} beyond string length {arrayInfo.arraySize}")
+
+    # Check end bounds
+    if hasEnd and endInfo.known and endInfo.cval > arrayInfo.arraySize:
+      raise newProverError(e.endExpr.get.pos, &"slice end {endInfo.cval} beyond string length {arrayInfo.arraySize}")
+
+    # Check start <= end when both are known constants
+    if hasStart and hasEnd and startInfo.known and endInfo.known:
+      if startInfo.cval > endInfo.cval:
+        raise newProverError(e.pos, &"invalid slice: start {startInfo.cval} > end {endInfo.cval}")
+
+  # Return array/string info for the slice (slices preserve array/string nature but might have different size)
   if arrayInfo.isArray:
     # For slices, size is generally unknown unless we can compute it precisely
     infoArray(-1, sizeKnown = false)
+  elif arrayInfo.isString:
+    # For string slices, length is generally unknown unless we can compute it precisely
+    infoString(-1, lengthKnown = false)
   else:
     infoUnknown()
 
 proc analyzeArrayLenExpr*(e: Expr, env: Env, prog: Program): Info =
-  # Array length operator: #array -> int
+  # Array/String length operator: #array/#string -> int
   let arrayInfo = analyzeExpr(e.lenExpr, env, prog)
   if arrayInfo.isArray and arrayInfo.arraySizeKnown:
     # If we know the array size, return it as a constant
     infoConst(arrayInfo.arraySize)
+  elif arrayInfo.isString and arrayInfo.arraySizeKnown:
+    # If we know the string length, return it as a constant
+    infoConst(arrayInfo.arraySize)
   else:
-    # Array size is unknown at compile time, but we know it's non-negative
+    # Size/length is unknown at compile time, but we know it's non-negative
     Info(known: false, minv: 0, maxv: IMax, nonZero: false, initialized: true)
 
 proc analyzeNilExpr*(e: Expr): Info =
@@ -376,6 +404,7 @@ proc analyzeExpr*(e: Expr; env: Env, prog: Program = nil, flags: CompilerFlags =
   of ekInt: return analyzeIntExpr(e)
   of ekFloat: return analyzeFloatExpr(e)
   of ekString: return analyzeStringExpr(e)
+  of ekChar: return analyzeCharExpr(e)
   of ekBool: return analyzeBoolExpr(e)
   of ekVar: return analyzeVarExpr(e, env)
   of ekUn: return analyzeUnaryExpr(e, env, prog, flags)

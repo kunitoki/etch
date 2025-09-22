@@ -2,8 +2,8 @@
 # Main prover coordination and public interface
 
 import std/[tables]
-import ../frontend/ast, ../errors, ../interpreter/vm, ../interpreter/serialize
-import types, expression_analysis, statement_analysis
+import ../frontend/ast, ../errors, ../interpreter/serialize
+import types, statement_analysis
 
 proc verboseProverLog*(flags: CompilerFlags, msg: string) =
   ## Print verbose debug message if verbose flag is enabled

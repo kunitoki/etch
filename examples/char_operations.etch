@@ -1,0 +1,22 @@
+fn main() -> void {
+  // Test char equality
+  let a: char = 'a';
+  let b: char = 'b';
+  let a2: char = 'a';
+
+  if a == a2 {
+    print("Equal chars work!");
+  }
+
+  if a != b {
+    print("Different chars work!");
+  }
+
+  // Test char from string indexing
+  let text: string = "abc";
+  let first: char = text[0];
+
+  if first == a {
+    print("String indexing returns correct char!");
+  }
+}

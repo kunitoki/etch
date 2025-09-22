@@ -1,0 +1,23 @@
+fn add_five(x: int) -> int {
+    return x + 5;
+}
+
+fn multiply_three(x: int) -> int {
+    return x * 3;
+}
+
+fn print_value(x: int) -> void {
+    print(x);
+}
+
+fn main() -> void {
+    let x: int = 2;
+
+    // Test precedence: UFCS should have high precedence like array access
+    // This should be equivalent to: print_value(multiply_three(add_five(x)))
+    x.add_five().multiply_three().print_value();  // Should print 21 ((2 + 5) * 3)
+
+    // Test mixed with arithmetic - UFCS should bind tighter than +
+    // This should be: print_value(add_five(x) + 10)
+    (x.add_five() + 10).print_value();  // Should print 17 (7 + 10)
+}

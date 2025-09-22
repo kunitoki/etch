@@ -1,4 +1,4 @@
-examples/nested_bounds_test.etch:11:28: error: array index 3 out of bounds [0, 2]
+examples/nested_bounds_test.etch:11:28: error: index 3 out of bounds [0, 2]
   10 |     // Invalid access - this should fail at compile time
   11 |     let d: int = matrix[1][3];  // Out of bounds - inner array [3, 4, 5] only has indices 0, 1, 2
                                   ^

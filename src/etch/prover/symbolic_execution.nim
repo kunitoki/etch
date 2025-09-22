@@ -2,7 +2,7 @@
 # Integrated symbolic execution for enhanced precision in safety analysis
 
 import std/[tables, options]
-import ../frontend/ast, ../interpreter/vm
+import ../frontend/ast
 import types
 
 const MAX_LOOP_ITERATIONS* = 1000  # Prevent infinite symbolic execution
@@ -277,9 +277,9 @@ proc symbolicExecuteWhile*(stmt: Stmt, state: SymbolicState, prog: Program = nil
       else:
         # Condition is true - execute body
         for bodyStmt in stmt.wbody:
-          let result = symbolicExecuteStmt(bodyStmt, state, prog)
-          if result != erContinue:
-            return result
+          let res = symbolicExecuteStmt(bodyStmt, state, prog)
+          if res != erContinue:
+            return res
 
         iterations += 1
         state.iterationCount = iterations
@@ -295,8 +295,8 @@ proc executeSymbolically*(statements: seq[Stmt], initialState: SymbolicState = n
   let state = if initialState != nil: initialState else: newSymbolicState()
 
   for stmt in statements:
-    let result = symbolicExecuteStmt(stmt, state, prog)
-    case result
+    let res = symbolicExecuteStmt(stmt, state, prog)
+    case res
     of erContinue:
       continue  # Keep executing
     of erComplete, erRuntimeHit, erIterationLimit:

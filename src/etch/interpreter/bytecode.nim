@@ -58,6 +58,10 @@ proc compileStringExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationC
   let idx = prog.addConstant(e.sval)
   prog.emit(opLoadString, idx, pos = e.pos, ctx = ctx)
 
+proc compileCharExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
+  let idx = prog.addConstant($e.cval)
+  prog.emit(opLoadChar, idx, pos = e.pos, ctx = ctx)
+
 proc compileBoolExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
   prog.emit(opLoadBool, if e.bval: 1 else: 0, pos = e.pos, ctx = ctx)
 
@@ -162,6 +166,7 @@ proc compileExpr*(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContex
   of ekInt: prog.compileIntExpr(e, ctx)
   of ekFloat: prog.compileFloatExpr(e, ctx)
   of ekString: prog.compileStringExpr(e, ctx)
+  of ekChar: prog.compileCharExpr(e, ctx)
   of ekBool: prog.compileBoolExpr(e, ctx)
   of ekVar: prog.compileVarExpr(e, ctx)
   of ekUn: prog.compileUnaryExpr(e, ctx)
@@ -269,6 +274,8 @@ proc evaluateConstantExpr(expr: Expr): GlobalValue =
     return GlobalValue(kind: tkBool, bval: expr.bval)
   of ekString:
     return GlobalValue(kind: tkString, sval: expr.sval)
+  of ekChar:
+    return GlobalValue(kind: tkChar, cval: expr.cval)
   of ekBin:
     # Handle simple binary arithmetic operations
     let left = evaluateConstantExpr(expr.lhs)

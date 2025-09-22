@@ -2,11 +2,11 @@
 # Compile-time evaluation and injection helpers for Etch
 
 import std/[tables, options]
-import frontend/ast, interpreter/vm
+import frontend/ast
 
 proc foldComptime*(prog: Program; root: var Program) =
   # Process comptime blocks and handle inject statements
-  
+
   proc foldExpr(e: var Expr) =
     case e.kind
     of ekBin:

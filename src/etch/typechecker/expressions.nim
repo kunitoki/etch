@@ -1,7 +1,7 @@
 # expressions.nim
 # Expression type inference for the type checker
 
-import std/[strformat, options, sequtils, tables]
+import std/[strformat, options, sequtils, tables, strutils]
 import ../frontend/ast, ../errors
 import types
 
@@ -11,7 +11,7 @@ proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var 
 proc inferCallBuiltinPrint(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
   if e.args.len != 1: raise newTypecheckError(e.pos, "print expects 1 argument")
   let t0 = inferExprTypes(prog, nil, sc, e.args[0], subst)
-  if not (t0.kind in {tkBool, tkInt, tkFloat, tkString}): raise newTypecheckError(e.pos, "print supports bool/int/float/string")
+  if not (t0.kind in {tkBool, tkInt, tkFloat, tkString, tkChar}): raise newTypecheckError(e.pos, "print supports bool/int/float/string/char")
   e.instTypes = @[]
   e.typ = tVoid()
   return e.typ
@@ -77,11 +77,72 @@ proc inferCallBuiltinSeed(prog: Program; sc: Scope; e: Expr; subst: var TySubst)
   return e.typ
 
 # Function call type checking and monomorphization
-proc inferCall(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  if not prog.funs.hasKey(e.fname):
+# Overload resolution helper
+proc resolveOverload(prog: Program; sc: Scope; e: Expr; subst: var TySubst): FunDecl =
+  ## Resolve function overload based on argument types
+
+  # Check if this is already a mangled function instance name
+  if prog.funInstances.hasKey(e.fname):
+    return prog.funInstances[e.fname]
+
+  let overloads = prog.getFunctionOverloads(e.fname)
+  if overloads.len == 0:
     raise newTypecheckError(e.pos, "unknown function: " & e.fname)
 
-  let templ = prog.funs[e.fname]
+  # First pass: infer argument types
+  var argTypes: seq[EtchType] = @[]
+  for arg in e.args:
+    let argType = inferExprTypes(prog, nil, sc, arg, subst)
+    argTypes.add(argType)
+
+  # Find exact matches first
+  var exactMatches: seq[FunDecl] = @[]
+  for overload in overloads:
+    # Check parameter count considering default parameters
+    var requiredParams = 0
+    for p in overload.params:
+      if p.defaultValue.isNone:
+        requiredParams += 1
+
+    if argTypes.len >= requiredParams and argTypes.len <= overload.params.len:
+      # Check if argument types match exactly
+      var isExactMatch = true
+      for i, argType in argTypes:
+        let paramType = overload.params[i].typ
+        if paramType.kind != tkGeneric and not typeEq(argType, paramType):
+          isExactMatch = false
+          break
+      if isExactMatch:
+        exactMatches.add(overload)
+
+  if exactMatches.len == 1:
+    return exactMatches[0]
+  elif exactMatches.len > 1:
+    raise newTypecheckError(e.pos, &"ambiguous function call: multiple exact matches for {e.fname}")
+  else:
+    # If no exact matches, try generic matches (for now, just take the first one)
+    # TODO: Implement more sophisticated overload resolution with generics
+    for overload in overloads:
+      var requiredParams = 0
+      for p in overload.params:
+        if p.defaultValue.isNone:
+          requiredParams += 1
+      if argTypes.len >= requiredParams and argTypes.len <= overload.params.len:
+        return overload
+
+    # No suitable overload found
+    var availableSignatures = ""
+    for i, overload in overloads:
+      if i > 0: availableSignatures.add("; ")
+      availableSignatures.add(overload.name & "(")
+      for j, param in overload.params:
+        if j > 0: availableSignatures.add(", ")
+        availableSignatures.add($param.typ)
+      availableSignatures.add(")")
+    raise newTypecheckError(e.pos, &"no matching overload for {e.fname} with arguments ({argTypes.join(\", \")}). Available: {availableSignatures}")
+
+proc inferCall(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  let templ = resolveOverload(prog, sc, e, subst)
   # build local substitution mapping for typarams
   var localSubst: TySubst
   for p in templ.typarams:
@@ -132,12 +193,18 @@ proc inferCall(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType 
   e.instTypes = templ.typarams.mapIt(localSubst.getOrDefault(it.name, tGeneric(it.name)))
   e.typ = retT
 
-  # Create a monomorphized instance key: name<types>
-  var key = templ.name & "<"
-  for i, tv in templ.typarams:
-    if i>0: key.add ","
-    key.add $resolveTy(tGeneric(tv.name), localSubst)
-  key.add ">"
+  # Create a monomorphized instance key: name<types> or overload signature for non-generic overloads
+  var key = ""
+  if templ.typarams.len == 0:
+    # Non-generic function - use overload signature for uniqueness
+    key = generateOverloadSignature(templ)
+  else:
+    # Generic function - use traditional generic signature: name<types>
+    key = templ.name & "<"
+    for i, tv in templ.typarams:
+      if i>0: key.add ","
+      key.add $resolveTy(tGeneric(tv.name), localSubst)
+    key.add ">"
   if not prog.funInstances.hasKey(key):
     # clone templ with all types resolved
     let inst = FunDecl(name: key, typarams: @[], params: @[], ret: retT, body: @[])
@@ -155,6 +222,7 @@ proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var 
   of ekInt: e.typ = tInt(); return e.typ
   of ekFloat: e.typ = tFloat(); return e.typ
   of ekString: e.typ = tString(); return e.typ
+  of ekChar: e.typ = tChar(); return e.typ
   of ekBool: e.typ = tBool(); return e.typ
   of ekNil:
     # nil has a special type that can be compared to any reference type
@@ -199,7 +267,7 @@ proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var 
         raise newTypecheckError(e.pos, &"comparison type mismatch: {lt} vs {rt}")
       else:
         # Only allow comparison operators on comparable types
-        if lt.kind notin {tkInt, tkFloat, tkString, tkBool, tkRef}:
+        if lt.kind notin {tkInt, tkFloat, tkString, tkChar, tkBool, tkRef}:
           raise newTypecheckError(e.pos, &"comparison not supported for type {lt}")
         # Only equality operators allowed for references
         if lt.kind == tkRef and e.bop notin {boEq, boNe}:
@@ -246,16 +314,19 @@ proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var 
   of ekIndex:
     let arrayType = inferExprTypes(prog, fd, sc, e.arrayExpr, subst)
     let indexType = inferExprTypes(prog, fd, sc, e.indexExpr, subst)
-    if arrayType.kind != tkArray:
-      raise newTypecheckError(e.pos, &"indexing requires array type, got {arrayType}")
+    if arrayType.kind notin {tkArray, tkString}:
+      raise newTypecheckError(e.pos, &"indexing requires array or string type, got {arrayType}")
     if indexType.kind != tkInt:
-      raise newTypecheckError(e.indexExpr.pos, &"array index must be int, got {indexType}")
-    e.typ = arrayType.inner
+      raise newTypecheckError(e.indexExpr.pos, &"index must be int, got {indexType}")
+    if arrayType.kind == tkString:
+      e.typ = tChar()
+    else:
+      e.typ = arrayType.inner
     return e.typ
   of ekSlice:
     let arrayType = inferExprTypes(prog, fd, sc, e.sliceExpr, subst)
-    if arrayType.kind != tkArray:
-      raise newTypecheckError(e.pos, &"slicing requires array type, got {arrayType}")
+    if arrayType.kind notin {tkArray, tkString}:
+      raise newTypecheckError(e.pos, &"slicing requires array or string type, got {arrayType}")
     # Check start expression if present
     if e.startExpr.isSome:
       let startType = inferExprTypes(prog, fd, sc, e.startExpr.get, subst)
@@ -270,10 +341,10 @@ proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var 
     e.typ = arrayType
     return e.typ
   of ekArrayLen:
-    # Array length operator: #array -> int
+    # Array/String length operator: #array/#string -> int
     let arrayType = inferExprTypes(prog, fd, sc, e.lenExpr, subst)
-    if arrayType.kind != tkArray:
-      raise newTypecheckError(e.pos, &"length operator # requires array type, got {arrayType}")
+    if arrayType.kind notin {tkArray, tkString}:
+      raise newTypecheckError(e.pos, &"length operator # requires array or string type, got {arrayType}")
     e.typ = tInt()
     return e.typ
   of ekCast:

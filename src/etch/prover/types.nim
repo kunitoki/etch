@@ -20,10 +20,11 @@ type
     isBool*: bool
     initialized*: bool
 
-    # Array size tracking
+    # Array/String size tracking (strings are array[char])
     isArray*: bool
-    arraySize*: int64  # -1 if unknown size
-    arraySizeKnown*: bool
+    isString*: bool
+    arraySize*: int64  # -1 if unknown size (for arrays) or length (for strings)
+    arraySizeKnown*: bool  # true if size/length is known
 
 type Env* = ref object
   vals*: Table[string, Info]
@@ -46,6 +47,9 @@ proc infoUninitialized*(): Info = Info(known: false, minv: IMin, maxv: IMax, ini
 proc infoArray*(size: int64, sizeKnown: bool = true): Info =
   Info(known: false, minv: IMin, maxv: IMax, initialized: true, isArray: true, arraySize: size, arraySizeKnown: sizeKnown)
 
+proc infoString*(length: int64, lengthKnown: bool = true): Info =
+  Info(known: false, minv: IMin, maxv: IMax, initialized: true, isString: true, arraySize: length, arraySizeKnown: lengthKnown)
+
 proc meet*(a, b: Info): Info =
   result = Info()
   result.known = a.known and b.known and a.cval == b.cval
@@ -56,9 +60,10 @@ proc meet*(a, b: Info): Info =
   result.nonNil = a.nonNil and b.nonNil
   result.isBool = a.isBool and b.isBool
   result.initialized = a.initialized and b.initialized
-  # Array info meet
+  # Array/String info meet
   result.isArray = a.isArray and b.isArray
-  if result.isArray:
+  result.isString = a.isString and b.isString
+  if result.isArray or result.isString:
     result.arraySizeKnown = a.arraySizeKnown and b.arraySizeKnown and a.arraySize == b.arraySize
     result.arraySize = (if result.arraySizeKnown: a.arraySize else: -1)
 
@@ -73,9 +78,10 @@ proc union*(a, b: Info): Info =
   result.nonNil = a.nonNil and b.nonNil    # Only nonNil if both are nonNil
   result.isBool = a.isBool and b.isBool
   result.initialized = a.initialized and b.initialized
-  # Array info union - be conservative
+  # Array/String info union - be conservative
   result.isArray = a.isArray and b.isArray
-  if result.isArray:
-    # For union, if array sizes differ, we don't know the size
+  result.isString = a.isString and b.isString
+  if result.isArray or result.isString:
+    # For union, if sizes/lengths differ, we don't know the size
     result.arraySizeKnown = a.arraySizeKnown and b.arraySizeKnown and a.arraySize == b.arraySize
     result.arraySize = (if result.arraySizeKnown: a.arraySize else: -1)

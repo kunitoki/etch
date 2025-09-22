@@ -1,0 +1,5 @@
+examples/string_bounds_test.etch:3:19: error: index 5 out of bounds [0, 4]
+  2 |   let s: string = "hello";
+  3 |   let c: char = s[5];  // Out of bounds - should be caught by prover
+                        ^
+  4 |   print(c);

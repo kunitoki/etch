@@ -1,0 +1,5 @@
+fn main() -> void {
+  let s: string = "hello";
+  let c: char = s[5];  // Out of bounds - should be caught by prover
+  print(c);
+}

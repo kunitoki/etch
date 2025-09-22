@@ -18,6 +18,7 @@ proc friendlyTokenName(kind: TokKind, lex: string): string =
   of tkInt: return &"number '{lex}'"
   of tkFloat: return &"number '{lex}'"
   of tkString: return &"string \"{lex}\""
+  of tkChar: return &"char '{lex}'"
   of tkBool: return &"boolean '{lex}'"
   of tkKeyword: return &"keyword '{lex}'"
   of tkSymbol: return &"symbol '{lex}'"
@@ -48,6 +49,7 @@ proc parseType(p: Parser): EtchType =
     if t.lex == "int": discard p.eat; return tInt()
     if t.lex == "float": discard p.eat; return tFloat()
     if t.lex == "string": discard p.eat; return tString()
+    if t.lex == "char": discard p.eat; return tChar()
     if t.lex == "bool": discard p.eat; return tBool()
     if t.lex == "void": discard p.eat; return tVoid()
     if t.lex == "ref":
@@ -80,6 +82,7 @@ proc getOperatorPrecedence(op: string): int =
   of "*","/","%": 6
   of "@": 7  # deref has high precedence
   of "[": 8  # array indexing/slicing has highest precedence
+  of ".": 8  # UFCS method calls have same precedence as array indexing
   else: 0
 
 proc binOp(op: string): BinOp =
@@ -100,7 +103,7 @@ proc binOp(op: string): BinOp =
   else: raise newEtchError("unknown operator: " & op)
 
 proc parseLiteralExpr(p: Parser; t: Token): Expr =
-  ## Parses literal expressions (int, float, string, bool)
+  ## Parses literal expressions (int, float, string, char, bool)
   case t.kind
   of tkInt:
     return Expr(kind: ekInt, ival: parseInt(t.lex), pos: p.posOf(t))
@@ -108,6 +111,8 @@ proc parseLiteralExpr(p: Parser; t: Token): Expr =
     return Expr(kind: ekFloat, fval: parseFloat(t.lex), pos: p.posOf(t))
   of tkString:
     return Expr(kind: ekString, sval: t.lex, pos: p.posOf(t))
+  of tkChar:
+    return Expr(kind: ekChar, cval: t.lex[0], pos: p.posOf(t))
   of tkBool:
     return Expr(kind: ekBool, bval: t.lex == "true", pos: p.posOf(t))
   else:
@@ -204,10 +209,10 @@ proc parseAtomicExpr(p: Parser): Expr =
   ## Parses atomic expressions (null denotation - expressions that don't need a left operand)
   let t = p.eat()
   case t.kind
-  of tkInt, tkFloat, tkString, tkBool:
+  of tkInt, tkFloat, tkString, tkChar, tkBool:
     return p.parseLiteralExpr(t)
   of tkKeyword:
-    if t.lex in ["int", "float", "string", "bool"] and p.cur.kind == tkSymbol and p.cur.lex == "(":
+    if t.lex in ["int", "float", "string", "char", "bool"] and p.cur.kind == tkSymbol and p.cur.lex == "(":
       return p.parseCastExpr(t)
     else:
       return p.parseBuiltinKeywordExpr(t)
@@ -245,6 +250,25 @@ proc parseArrayAccessOrSlice(p: Parser; left: Expr; t: Token): Expr =
       discard p.expect(tkSymbol, "]")
       return Expr(kind: ekIndex, arrayExpr: left, indexExpr: firstExpr, pos: p.posOf(t))
 
+proc parseUFCSCall(p: Parser; obj: Expr; t: Token): Expr =
+  ## Parses UFCS method calls: obj.method() or obj.method
+  ## Transforms into method(obj, args...)
+  let methodName = p.expect(tkIdent).lex
+
+  var args: seq[Expr] = @[obj]  # object becomes first argument
+
+  # Check if followed by parentheses for arguments
+  if p.cur.kind == tkSymbol and p.cur.lex == "(":
+    discard p.eat()  # consume "("
+    if not (p.cur.kind == tkSymbol and p.cur.lex == ")"):
+      args.add p.parseExpr()
+      while p.cur.kind == tkSymbol and p.cur.lex == ",":
+        discard p.eat()
+        args.add p.parseExpr()
+    discard p.expect(tkSymbol, ")")
+
+  return Expr(kind: ekCall, fname: methodName, args: args, pos: p.posOf(t))
+
 proc parseInfixExpr(p: Parser; left: Expr; t: Token): Expr =
   ## Parses infix expressions (left denotation - expressions that need a left operand)
   let op = t.lex
@@ -253,13 +277,15 @@ proc parseInfixExpr(p: Parser; left: Expr; t: Token): Expr =
     return Expr(kind: ekBin, bop: binOp(op), lhs: left, rhs: right, pos: p.posOf(t))
   if op == "[":
     return p.parseArrayAccessOrSlice(left, t)
+  if op == ".":
+    return p.parseUFCSCall(left, t)
   raise newEtchError(&"unexpected operator: {op}")
 
 proc parseExpr*(p: Parser; rbp=0): Expr =
   var left = p.parseAtomicExpr()
   while true:
     let t = p.cur
-    if (t.kind == tkSymbol and t.lex in ["+","-","*","/","%","==","!=","<",">","<=",">=","["]) or
+    if (t.kind == tkSymbol and t.lex in ["+","-","*","/","%","==","!=","<",">","<=",">=","[","."]) or
        (t.kind == tkKeyword and t.lex in ["and", "or"]):
       if getOperatorPrecedence(t.lex) <= rbp: break
       discard p.eat()
@@ -428,7 +454,7 @@ proc parseFn(p: Parser; prog: Program) =
 
   let body = p.parseBlock()
   let fd = FunDecl(name: name, typarams: tps, params: ps, ret: rt, body: body)
-  prog.funs[name] = fd
+  prog.addFunction(fd)
 
 proc parseStmt*(p: Parser): Stmt =
   case p.cur.kind
@@ -450,7 +476,7 @@ proc parseProgram*(toks: seq[Token], filename: string = "<unknown>"): Program =
   var p = Parser(toks: toks, i: 0, filename: filename)
   result = Program(
     concepts: initTable[string, Concept](),
-    funs: initTable[string, FunDecl](),
+    funs: initTable[string, seq[FunDecl]](),
     funInstances: initTable[string, FunDecl](),
     globals: @[]
   )

@@ -33,9 +33,13 @@ proc requireConcept*(concepts: Table[string, Concept], t: EtchType, cname: strin
     discard
 
 proc resolveTy*(t: EtchType, subst: var TySubst): EtchType =
+  if t.isNil:
+    # Handle nil type gracefully - likely due to function without explicit return type
+    return tVoid()
   case t.kind
   of tkGeneric:
     if t.name in subst: return subst[t.name]
     else: return t
   of tkRef: return tRef(resolveTy(t.inner, subst))
-  else: return t
+  of tkArray: return tArray(resolveTy(t.inner, subst))
+  of tkInt, tkFloat, tkString, tkChar, tkBool, tkVoid: return t

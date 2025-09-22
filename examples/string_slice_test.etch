@@ -1,0 +1,9 @@
+fn main() -> void {
+  let s: string = "hello world";
+  let s1: string = s[0:5];   // "hello"
+  print(s1);
+  let s2: string = s[6:11];  // "world"
+  print(s2);
+  let s3: string = s[1:4];   // "ell"
+  print(s3);
+}

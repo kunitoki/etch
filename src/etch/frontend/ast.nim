@@ -8,7 +8,7 @@ type
     line*, col*: int
     filename*: string
 
-  TypeKind* = enum tkInt, tkFloat, tkString, tkBool, tkVoid, tkRef, tkGeneric, tkArray
+  TypeKind* = enum tkInt, tkFloat, tkString, tkChar, tkBool, tkVoid, tkRef, tkGeneric, tkArray
   EtchType* = ref object
     kind*: TypeKind
     name*: string           # for tkGeneric
@@ -33,7 +33,7 @@ type
   UnOp* = enum uoNot, uoNeg
 
   ExprKind* = enum
-    ekInt, ekFloat, ekString, ekBool, ekVar, ekBin, ekUn,
+    ekInt, ekFloat, ekString, ekChar, ekBool, ekVar, ekBin, ekUn,
     ekCall, ekNewRef, ekDeref, ekArray, ekIndex, ekSlice, ekArrayLen, ekCast, ekNil
 
   Expr* = ref object
@@ -43,6 +43,7 @@ type
     of ekInt:    ival*: int64
     of ekFloat:  fval*: float64
     of ekString: sval*: string
+    of ekChar:   cval*: char
     of ekBool:   bval*: bool
     of ekNil:    discard  # nil needs no additional fields
     of ekVar:    vname*: string
@@ -120,12 +121,13 @@ type
   Program* = ref object
     concepts*: Table[string, Concept]
     globals*: seq[Stmt]   # global let/var with init allowed
-    funs*: Table[string, FunDecl]    # generic templates
+    funs*: Table[string, seq[FunDecl]]    # generic templates (supports overloads)
     funInstances*: Table[string, FunDecl] # monomorphized instances
 
 proc tInt*(): EtchType = EtchType(kind: tkInt)
 proc tFloat*(): EtchType = EtchType(kind: tkFloat)
 proc tString*(): EtchType = EtchType(kind: tkString)
+proc tChar*(): EtchType = EtchType(kind: tkChar)
 proc tBool*(): EtchType = EtchType(kind: tkBool)
 proc tVoid*(): EtchType = EtchType(kind: tkVoid)
 proc tRef*(inner: EtchType): EtchType = EtchType(kind: tkRef, inner: inner)
@@ -137,6 +139,7 @@ proc `$`*(t: EtchType): string =
   of tkInt: "int"
   of tkFloat: "float"
   of tkString: "string"
+  of tkChar: "char"
   of tkBool: "bool"
   of tkVoid: "void"
   of tkRef: "Ref[" & $t.inner & "]"
@@ -151,6 +154,7 @@ proc copyType*(t: EtchType): EtchType =
   of tkInt: tInt()
   of tkFloat: tFloat()
   of tkString: tString()
+  of tkChar: tChar()
   of tkBool: tBool()
   of tkVoid: tVoid()
 
@@ -162,3 +166,26 @@ proc conceptCmp*(): Concept =
   Concept(name: "Comparable", reqs: {crCmp})
 proc conceptDeref*(): Concept =
   Concept(name: "Derefable", reqs: {crDeref})
+
+# Function overload management helpers
+proc addFunction*(prog: Program, funDecl: FunDecl) =
+  ## Add a function declaration, supporting overloads
+  if prog.funs.hasKey(funDecl.name):
+    prog.funs[funDecl.name].add(funDecl)
+  else:
+    prog.funs[funDecl.name] = @[funDecl]
+
+proc getFunctionOverloads*(prog: Program, name: string): seq[FunDecl] =
+  ## Get all overloads for a function name
+  if prog.funs.hasKey(name):
+    result = prog.funs[name]
+  else:
+    result = @[]
+
+proc generateOverloadSignature*(funDecl: FunDecl): string =
+  ## Generate a unique signature string for overload resolution
+  result = funDecl.name
+  for param in funDecl.params:
+    result.add("_" & $param.typ)
+  if funDecl.ret != nil:
+    result.add("_ret_" & $funDecl.ret)

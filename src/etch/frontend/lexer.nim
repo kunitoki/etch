@@ -5,7 +5,7 @@ import std/[strformat, sequtils, strutils]
 
 type
   TokKind* = enum
-    tkIdent, tkInt, tkFloat, tkString, tkBool, tkKeyword, tkSymbol, tkEof
+    tkIdent, tkInt, tkFloat, tkString, tkChar, tkBool, tkKeyword, tkSymbol, tkEof
   Token* = object
     kind*: TokKind
     lex*: string
@@ -13,7 +13,7 @@ type
 
 const keywords = [
   "fn","let","var","return","if","elif","else","while",
-  "true","false","int","float","string","bool","void","ref","concept",
+  "true","false","int","float","string","char","bool","void","ref","concept",
   "comptime","new","and","or","array","nil"
 ].toSeq
 
@@ -44,7 +44,7 @@ proc lex*(src: string): seq[Token] =
       continue
 
     # single symbol
-    if src[i] in "+-*/%(){}<>=;:,[]@!#":
+    if src[i] in "+-*/%(){}<>=;:,[]@!#.":
       result.add Token(kind: tkSymbol, lex: $src[i], line: line, col: col)
       inc i; inc col
       continue
@@ -92,6 +92,37 @@ proc lex*(src: string): seq[Token] =
         raise newException(ValueError, &"Unterminated string at {line}:{col}")
       inc m # skip closing quote
       result.add Token(kind: tkString, lex: content, line: line, col: col)
+      col += m-i+1; i = m
+      continue
+
+    # character literal
+    if src[i] == '\'':
+      inc i; inc col # skip opening quote
+      m = i
+      var content = ""
+      if m < src.len and src[m] != '\'':
+        if src[m] == '\\' and m+1 < src.len:
+          # simple escape handling
+          inc m
+          case src[m]
+          of 'n': content.add '\n'
+          of 't': content.add '\t'
+          of 'r': content.add '\r'
+          of '\\': content.add '\\'
+          of '\'': content.add '\''
+          else: content.add src[m]
+          inc m
+        else:
+          content.add src[m]
+          inc m
+      if m >= src.len:
+        raise newException(ValueError, &"Unterminated char at {line}:{col}")
+      if src[m] != '\'':
+        raise newException(ValueError, &"Expected closing quote for char at {line}:{col}")
+      if content.len != 1:
+        raise newException(ValueError, &"Char literal must contain exactly one character at {line}:{col}")
+      inc m # skip closing quote
+      result.add Token(kind: tkChar, lex: content, line: line, col: col)
       col += m-i+1; i = m
       continue
 

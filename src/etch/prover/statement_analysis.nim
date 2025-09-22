@@ -2,7 +2,7 @@
 # Statement analysis and control flow for the safety prover
 
 import std/[strformat, tables, options, strutils]
-import ../frontend/ast, ../errors, ../interpreter/vm, ../interpreter/serialize
+import ../frontend/ast, ../errors, ../interpreter/serialize
 import types, expression_analysis, symbolic_execution
 
 proc verboseProverLog*(flags: CompilerFlags, msg: string) =
