@@ -4,26 +4,11 @@
 import std/[tables, options]
 import ast, vm
 
-
 proc foldComptime*(prog: Program; root: var Program) =
-  # Walk all instantiated functions and replace ekComptime with literals by bytecode evaluation.
+  # Process comptime blocks and handle inject statements
   
   proc foldExpr(e: var Expr) =
     case e.kind
-    of ekComptime:
-      # eval inner using bytecode
-      let val = evalExprWithBytecode(prog, e.inner)
-      case val.kind
-      of tkInt:
-        e = Expr(kind: ekInt, ival: val.ival, typ: e.typ, pos: e.pos)
-      of tkFloat:
-        e = Expr(kind: ekFloat, fval: val.fval, typ: e.typ, pos: e.pos)
-      of tkBool:
-        e = Expr(kind: ekBool, bval: val.bval, typ: e.typ, pos: e.pos)
-      of tkString:
-        e = Expr(kind: ekString, sval: val.sval, typ: e.typ, pos: e.pos)
-      else:
-        discard
     of ekBin:
       foldExpr(e.lhs); foldExpr(e.rhs)
     of ekUn:
@@ -83,10 +68,66 @@ proc foldComptime*(prog: Program; root: var Program) =
       if s.re.isSome:
         var x = s.re.get; foldExpr(x); s.re = some(x)
     of skComptime:
-      # Execute comptime block at compile time using bytecode
-      # For now, we'll keep the existing comptime block as-is
-      # TODO: Implement comptime block execution via bytecode
-      for i in 0..<s.cbody.len: foldStmt(s.cbody[i])
+      # Execute comptime block at compile time and handle inject calls
+      # First fold all statements normally to resolve variables
+      for i in 0..<s.cbody.len:
+        foldStmt(s.cbody[i])
+
+      # Then process statements to find inject calls and create variable declarations
+      var injectedVars: seq[Stmt] = @[]
+
+      # Create a simple evaluation scope for comptime variables
+      var comptimeScope: Table[string, Expr] = initTable[string, Expr]()
+
+      for stmt in s.cbody:
+        if stmt.kind == skVar and stmt.vinit.isSome:
+          # This is a variable declaration in comptime - add to our scope
+          comptimeScope[stmt.vname] = stmt.vinit.get()
+        elif stmt.kind == skExpr and stmt.sexpr.kind == ekCall and stmt.sexpr.fname == "inject":
+          # This is an inject call - convert it to a variable declaration
+          if stmt.sexpr.args.len == 3:
+            # Extract the arguments: name, type_str, value_expr
+            let nameExpr = stmt.sexpr.args[0]
+            let typeExpr = stmt.sexpr.args[1]
+            var valueExpr = stmt.sexpr.args[2]
+
+            # The name should be a string literal
+            if nameExpr.kind == ekString and typeExpr.kind == ekString:
+              let varName = nameExpr.sval
+              let typeStr = typeExpr.sval
+
+              # Parse the type string and create the appropriate type
+              var varType: EtchType
+              case typeStr:
+                of "string": varType = tString()
+                of "int": varType = tInt()
+                of "bool": varType = tBool()
+                of "float": varType = tFloat()
+                else: varType = tString() # default to string
+
+              # If the value is a variable reference, substitute it
+              if valueExpr.kind == ekVar and comptimeScope.hasKey(valueExpr.vname):
+                valueExpr = comptimeScope[valueExpr.vname]
+
+              # Fold the value expression
+              foldExpr(valueExpr)
+
+              # Create a variable declaration
+              let varDecl = Stmt(
+                kind: skVar,
+                vname: varName,
+                vtype: varType,
+                vinit: some(valueExpr),
+                pos: stmt.pos
+              )
+              injectedVars.add(varDecl)
+
+      # Replace the comptime body with the injected variables
+      s.cbody = injectedVars
+
+  # Process global variables first
+  for i in 0..<root.globals.len:
+    var g = root.globals[i]; foldStmt(g); root.globals[i] = g
 
   for _, f in pairs(root.funInstances):
     for i in 0..<f.body.len:

@@ -1,0 +1,6 @@
+fn main() -> void {
+    let large: int = rand(9223372036854775800);
+    let small: int = rand(1000);
+    let result: int = large + small;
+    print(result);
+}

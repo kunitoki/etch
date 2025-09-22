@@ -52,6 +52,14 @@ proc ensureMainInst(prog: Program) =
       prog.funInstances[key] = FunDecl(
         name: key, typarams: @[], params: f.params, ret: f.ret, body: f.body)
 
+proc ensureAllNonGenericInst(prog: Program) =
+  ## Instantiate all non-generic functions so they're available for comptime evaluation
+  for name, f in prog.funs:
+    if f.typarams.len == 0:  # Non-generic function
+      if not prog.funInstances.hasKey(name):
+        prog.funInstances[name] = FunDecl(
+          name: name, typarams: @[], params: f.params, ret: f.ret, body: f.body)
+
 proc compileProgramWithGlobals(prog: Program, sourceHash: string, evaluatedGlobals: Table[string, V], sourceFile: string = "", includeDebugInfo: bool = false): BytecodeProgram =
   ## Compile an AST program to bytecode with pre-evaluated global values
   # Start with standard compilation
@@ -78,6 +86,9 @@ proc parseAndTypecheck*(sourceFile: string, includeDebugInfo: bool): (Program, s
 
   # Force monomorphization for main if it is non-generic:
   ensureMainInst(prog)
+
+  # Instantiate all non-generic functions so they're available for comptime evaluation
+  ensureAllNonGenericInst(prog)
 
   # Fold compile-time expressions BEFORE final type checking so injected variables are available
   foldComptime(prog, prog)

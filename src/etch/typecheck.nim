@@ -64,14 +64,6 @@ proc inferCallBuiltinDeref(prog: Program; sc: Scope; e: Expr; subst: var TySubst
   e.typ = t0.inner
   return e.typ
 
-proc inferCallBuiltinComptime(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  if e.args.len != 1: raise newTypecheckError(e.pos, "comptime expects 1 argument")
-  let t0 = inferExprTypes(prog, nil, sc, e.args[0], subst)
-  let comptimeExpr = Expr(kind: ekComptime, pos: e.pos, typ: t0, inner: e.args[0])
-  # Replace the original expression with the new comptime expression
-  e[] = comptimeExpr[]
-  return t0
-
 proc inferCallBuiltinRand(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
   if e.args.len < 1 or e.args.len > 2:
     raise newTypecheckError(e.pos, "rand expects 1 or 2 arguments")
@@ -126,7 +118,6 @@ proc inferCall(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType 
       of "print": return inferCallBuiltinPrint(prog, sc, e, subst)
       of "new": return inferCallBuiltinNew(prog, sc, e, subst)
       of "deref": return inferCallBuiltinDeref(prog, sc, e, subst)
-      of "comptime": return inferCallBuiltinComptime(prog, sc, e, subst)
       of "rand": return inferCallBuiltinRand(prog, sc, e, subst)
       of "readFile": return inferCallBuiltinReadFile(prog, sc, e, subst)
       of "inject": return inferCallBuiltinInject(prog, sc, e, subst)
@@ -261,9 +252,6 @@ proc inferExprTypes(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var T
       if lt.kind != tkBool or rt.kind != tkBool: raise newTypecheckError(e.pos, "and/or expects bool")
       e.typ = tBool(); return e.typ
   of ekCall: return inferCall(prog, sc, e, subst)
-  of ekComptime:
-    let t0 = inferExprTypes(prog, fd, sc, e.inner, subst)
-    e.typ = t0; return t0
   of ekNewRef:
     let t0 = inferExprTypes(prog, fd, sc, e.init, subst)
     e.refInner = t0

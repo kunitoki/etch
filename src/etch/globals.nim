@@ -17,8 +17,9 @@ proc evaluateGlobalVariables*(prog: Program): Table[string, V] =
         let res = evalExprWithBytecode(prog, g.vinit.get(), globalVars)
         # Store the evaluated value for subsequent globals
         globalVars[g.vname] = res
-      except:
-        # If evaluation fails, store default value
+      except Exception as e:
+        # If evaluation fails, store default value (silently)
+        # The actual error will be caught by the compiler's type checker
         globalVars[g.vname] = V(kind: tkInt, ival: 0)
     elif g.kind == skVar:
       # Default initialization for variables without initializers

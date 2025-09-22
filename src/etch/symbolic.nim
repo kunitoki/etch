@@ -312,9 +312,6 @@ proc symbolicEvaluateExpr*(expr: Expr, state: SymbolicState, prog: Program = nil
       # Other function calls - conservatively unknown
       state.hitRuntimeBoundary = true
       return symUnknown()
-  of ekComptime:
-    # Comptime expressions should be evaluated - for now treat as regular expression
-    return symbolicEvaluateExpr(expr.inner, state, prog)
   else:
     # Other expression types (arrays, refs, etc.) - not tracked symbolically for now
     return symUnknown()

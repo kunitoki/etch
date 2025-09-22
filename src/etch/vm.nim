@@ -1,7 +1,7 @@
 # vm.nim
 # Simple AST interpreter acting as Etch VM (used both at runtime and for comptime eval)
 
-import std/[tables, options, strformat, strutils, math, times, random]
+import std/[tables, strformat, strutils, random]
 import ast, bytecode
 
 type
@@ -52,13 +52,6 @@ proc vArray(elements: seq[V]): V = V(kind: tkArray, aval: elements)
 proc alloc(vm: VM; v: V): V =
   vm.heap.add HeapCell(alive: true, val: v)
   vRef(vm.heap.high)
-
-proc loadVar(fr: Frame; name: string): V =
-  if not fr.vars.hasKey(name): raise newException(ValueError, "VM unknown var " & name)
-  fr.vars[name]
-
-#proc storeVar(fr: Frame; name: string; v: V) =
-#  fr.vars[name] = v
 
 proc truthy(v: V): bool =
   case v.kind
@@ -615,21 +608,40 @@ proc evalExprWithBytecode*(prog: Program, expr: Expr, globals: Table[string, V] 
 
   # Create compilation context
   var ctx = CompilationContext(
-    currentFunction: "__eval_expr__",
+    currentFunction: "",
     localVars: @[],
     sourceFile: "",
     includeDebugInfo: false,
     astProgram: prog
   )
 
+  # First, compile all functions from the program so they're available for calls
+  for name, funDecl in pairs(prog.funInstances):
+    ctx.currentFunction = funDecl.name
+    let startAddr = bytecodeProgram.instructions.len
+    bytecodeProgram.functions[funDecl.name] = startAddr
+
+    # Compile function body
+    for stmt in funDecl.body:
+      compileStmt(bytecodeProgram, stmt, ctx)
+
+    # Functions should end with opReturn, but make sure
+    if bytecodeProgram.instructions.len == 0 or bytecodeProgram.instructions[^1].op != opReturn:
+      # For void functions, push a dummy value
+      if funDecl.ret.kind == tkVoid:
+        emit(bytecodeProgram, opLoadInt, 0, ctx = ctx)
+      emit(bytecodeProgram, opReturn, ctx = ctx)
+
+  # Now compile the expression as a separate function
+  ctx.currentFunction = "__eval_expr__"
+  let exprAddr = bytecodeProgram.instructions.len
+  bytecodeProgram.functions["__eval_expr__"] = exprAddr
+
   # Compile the expression
   compileExpr(bytecodeProgram, expr, ctx)
 
   # Add return instruction to get the result
   emit(bytecodeProgram, opReturn, ctx = ctx)
-
-  # Create a temporary function entry point
-  bytecodeProgram.functions["__eval_expr__"] = 0
 
   # Create VM and execute
   var vm = newBytecodeVM(bytecodeProgram)
@@ -638,8 +650,8 @@ proc evalExprWithBytecode*(prog: Program, expr: Expr, globals: Table[string, V] 
   for name, value in globals:
     vm.globals[name] = value
 
-  # Execute the expression
-  vm.pc = 0
+  # Execute the expression function
+  vm.pc = exprAddr
   try:
     while vm.executeInstruction():
       discard
@@ -649,5 +661,7 @@ proc evalExprWithBytecode*(prog: Program, expr: Expr, globals: Table[string, V] 
       return vm.stack[^1]
     else:
       return vInt(0)  # Default value if no result
-  except:
+  except Exception as e:
+    # Error in global evaluation - return default value silently
+    # The actual error will be caught by the compiler's type checker
     return vInt(0)  # Default value on error

@@ -88,7 +88,6 @@ proc compileExpr*(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContex
 proc compileUnaryExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext)
 proc compileBinaryExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext)
 proc compileCallExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext)
-proc compileComptimeExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext)
 proc compileNewRefExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext)
 proc compileDerefExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext)
 proc compileArrayExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext)
@@ -130,9 +129,6 @@ proc compileCallExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationCon
       prog.compileExpr(e.args[i], ctx)
 
   prog.emit(opCall, totalArgCount, e.fname, e.pos, ctx)
-
-proc compileComptimeExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
-  prog.compileExpr(e.inner, ctx)
 
 proc compileNewRefExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
   prog.compileExpr(e.init, ctx)
@@ -190,7 +186,6 @@ proc compileExpr*(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContex
   of ekUn: prog.compileUnaryExpr(e, ctx)
   of ekBin: prog.compileBinaryExpr(e, ctx)
   of ekCall: prog.compileCallExpr(e, ctx)
-  of ekComptime: prog.compileComptimeExpr(e, ctx)
   of ekNewRef: prog.compileNewRefExpr(e, ctx)
   of ekDeref: prog.compileDerefExpr(e, ctx)
   of ekArray: prog.compileArrayExpr(e, ctx)

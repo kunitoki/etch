@@ -34,7 +34,7 @@ type
 
   ExprKind* = enum
     ekInt, ekFloat, ekString, ekBool, ekVar, ekBin, ekUn,
-    ekCall, ekComptime, ekNewRef, ekDeref, ekArray, ekIndex, ekSlice, ekArrayLen, ekCast, ekNil
+    ekCall, ekNewRef, ekDeref, ekArray, ekIndex, ekSlice, ekArrayLen, ekCast, ekNil
 
   Expr* = ref object
     pos*: Pos
@@ -56,8 +56,6 @@ type
       fname*: string
       args*: seq[Expr]
       instTypes*: seq[EtchType]   # monomorphized type args (filled by typer)
-    of ekComptime:
-      inner*: Expr
     of ekNewRef:
       init*: Expr
       refInner*: EtchType

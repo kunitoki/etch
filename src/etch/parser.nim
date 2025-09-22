@@ -117,10 +117,6 @@ proc inferTypeFromExpr(expr: Expr): EtchType =
     else:
       # Unknown function call - requires type annotation
       return nil
-  of ekComptime:
-    # For comptime expressions, we cannot infer the type until after evaluation
-    # at compile time. Signal that type annotation is needed for now.
-    return nil
   else:
     # For other expressions (variables, etc.), we cannot infer the type
     # without a type checker - return nil to indicate type annotation is required
@@ -199,16 +195,11 @@ proc parseLiteralExpr(p: Parser; t: Token): Expr =
     raise newEtchError("not a literal token")
 
 proc parseBuiltinKeywordExpr(p: Parser; t: Token): Expr =
-  ## Parses built-in keyword expressions (true, false, nil, comptime, new)
+  ## Parses built-in keyword expressions (true, false, nil, new)
   case t.lex
   of "true": return Expr(kind: ekBool, bval: true, pos: p.posOf(t))
   of "false": return Expr(kind: ekBool, bval: false, pos: p.posOf(t))
   of "nil": return Expr(kind: ekNil, pos: p.posOf(t))
-  of "comptime":
-    discard p.expect(tkSymbol, "(")
-    let e = p.parseExpr()
-    discard p.expect(tkSymbol, ")")
-    return Expr(kind: ekComptime, inner: e, pos: p.posOf(t))
   of "new":
     discard p.expect(tkSymbol, "(")
     let e = p.parseExpr()
@@ -386,11 +377,6 @@ proc parseVarDecl(p: Parser; vflag: VarFlag): Stmt =
     if ty == nil:
       ty = inferTypeFromExpr(ini.get())
       if ty == nil:
-        # Special case: if the initializer is a comptime expression, allow it to pass
-        # with a placeholder type that will be resolved after comptime folding
-        if ini.get().kind == ekComptime:
-          ty = EtchType(kind: tkGeneric, name: "__comptime_infer__")  # placeholder
-        else:
           raise newParseError(p.posOf(tname), &"cannot infer type for variable '{tname.lex}', please provide explicit type annotation")
   elif ty == nil:
     # No type annotation and no initializer

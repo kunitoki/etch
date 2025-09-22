@@ -8,8 +8,8 @@ fn add[T: Addable](a: T, b: T) -> T {
 }
 
 fn main() -> void {
-  // comptime: evaluated by the VM during compilation and folded to a literal
-  let k: int = comptime( 2 + 3 );
+  // constant folding: evaluated at compile time automatically
+  let k: int = 2 + 3;
   acc = add(g, k);      // safe: constants prove no overflow
   print(acc);           // 6
 
