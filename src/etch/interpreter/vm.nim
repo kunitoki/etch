@@ -118,6 +118,12 @@ proc opAddImpl(vm: VM, instr: Instruction) =
     vm.push(vInt(a.ival + b.ival))
   elif a.kind == tkFloat:
     vm.push(vFloat(a.fval + b.fval))
+  elif a.kind == tkString:
+    # String concatenation
+    vm.push(vString(a.sval & b.sval))
+  elif a.kind == tkArray:
+    # Array concatenation
+    vm.push(vArray(a.aval & b.aval))
   else:
     raise newException(ValueError, "Unsupported types in addition")
 

@@ -1,0 +1,5 @@
+examples/array_concat_type_error_test.etch:16:34: error: array concatenation requires matching element types, got array[int] + array[string]
+  15 |     // This line should fail at compile time with a type error
+  16 |     let mixed: array[int] = nums + strs;  // Type error: cannot concat array[int] + array[string]
+                                        ^
+  17 |

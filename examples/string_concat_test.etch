@@ -1,0 +1,70 @@
+fn main() -> void {
+    print("=== String Concatenation Tests ===");
+
+    // Basic string concatenation
+    let first: string = "Hello";
+    let second: string = " ";
+    let third: string = "World!";
+    let message: string = first + second + third;  // "Hello World!"
+    print("Triple string concat result:");
+    print(message);
+    print("Length should be 12:");
+    print(#message);
+    print("First char should be 'H':");
+    print(message[0]);
+    print("Last char should be '!':");
+    print(message[11]);
+
+    // Concatenating with empty strings
+    let empty: string = "";
+    let text: string = "test";
+    let result1: string = empty + text;  // "test"
+    let result2: string = text + empty;  // "test"
+    print("Empty + text result:");
+    print(result1);
+    print("Text + empty result:");
+    print(result2);
+    print("Both lengths should be 4:");
+    print(#result1);
+    print(#result2);
+
+    // Single character concatenation
+    let char_a: string = "A";
+    let char_b: string = "B";
+    let combined: string = char_a + char_b;  // "AB"
+    print("Single char concat result:");
+    print(combined);
+    print("Length should be 2:");
+    print(#combined);
+    print("First char should be 'A':");
+    print(combined[0]);
+    print("Second char should be 'B':");
+    print(combined[1]);
+
+    // String slicing and concatenation
+    let original: string = "Programming";
+    let prefix: string = original[:4];      // "Prog"
+    let suffix: string = original[7:];      // "ming"
+    let rebuilt: string = prefix + "ram" + suffix;  // "Programming"
+    print("Original string:");
+    print(original);
+    print("Prefix ([:4]):");
+    print(prefix);
+    print("Suffix ([7:]):");
+    print(suffix);
+    print("Rebuilt string:");
+    print(rebuilt);
+    print("Original length:");
+    print(#original);
+    print("Rebuilt length (should match):");
+    print(#rebuilt);
+    print("Rebuilt should equal original:");
+    print("First chars match:");
+    print(original[0]);
+    print(rebuilt[0]);
+    print("Last chars match:");
+    print(original[10]);
+    print(rebuilt[10]);
+
+    print("=== All String Concatenation Tests Complete ===");
+}

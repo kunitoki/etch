@@ -1,0 +1,44 @@
+=== String Concatenation Tests ===
+Triple string concat result:
+Hello World!
+Length should be 12:
+12
+First char should be 'H':
+H
+Last char should be '!':
+!
+Empty + text result:
+test
+Text + empty result:
+test
+Both lengths should be 4:
+4
+4
+Single char concat result:
+AB
+Length should be 2:
+2
+First char should be 'A':
+A
+Second char should be 'B':
+B
+Original string:
+Programming
+Prefix ([:4]):
+Prog
+Suffix ([7:]):
+ming
+Rebuilt string:
+Programming
+Original length:
+11
+Rebuilt length (should match):
+11
+Rebuilt should equal original:
+First chars match:
+P
+P
+Last chars match:
+g
+g
+=== All String Concatenation Tests Complete ===

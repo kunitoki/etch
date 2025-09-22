@@ -5,10 +5,47 @@ import ../frontend/ast, ../errors
 import types
 
 proc analyzeBinaryAddition*(e: Expr, a: Info, b: Info): Info =
+  # Handle string concatenation - detect by operand types
+  if a.isString and b.isString:
+    if a.arraySizeKnown and b.arraySizeKnown:
+      let totalLength = a.arraySize + b.arraySize
+      return infoString(totalLength, lengthKnown = true)
+    else:
+      # Unknown length, but still a valid string
+      return infoString(-1, lengthKnown = false)
+
+  # Handle array concatenation - detect by operand types
+  if a.isArray and b.isArray:
+    if a.arraySizeKnown and b.arraySizeKnown:
+      let totalSize = a.arraySize + b.arraySize
+      return infoArray(totalSize, sizeKnown = true)
+    else:
+      # Unknown size, but still a valid array
+      return infoArray(-1, sizeKnown = false)
+
+  # Handle string concatenation with type fallback
+  if e.typ != nil and e.typ.kind == tkString:
+    if a.arraySizeKnown and b.arraySizeKnown:
+      let totalLength = a.arraySize + b.arraySize
+      return infoString(totalLength, lengthKnown = true)
+    else:
+      # Unknown length, but still a valid string
+      return infoString(-1, lengthKnown = false)
+
+  # Handle array concatenation with type fallback
+  if e.typ != nil and e.typ.kind == tkArray:
+    if a.arraySizeKnown and b.arraySizeKnown:
+      let totalSize = a.arraySize + b.arraySize
+      return infoArray(totalSize, sizeKnown = true)
+    else:
+      # Unknown size, but still a valid array
+      return infoArray(-1, sizeKnown = false)
+
   # Skip overflow checks for float operations
   if e.typ != nil and e.typ.kind == tkFloat:
     return Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
 
+  # Integer addition - original logic
   if a.known and b.known:
     let s = a.cval + b.cval
     # overflow check at compile-time must not overflow Nim; use bigints? assume safe here with int64

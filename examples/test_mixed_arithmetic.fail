@@ -1,4 +1,4 @@
-examples/test_mixed_arithmetic.etch:6:27: error: arithmetic operation requires matching types, got int and float. Use explicit casts like int(x) or float(x)
+examples/test_mixed_arithmetic.etch:6:27: error: + operator requires matching types (int, float, string, or array), got int and float. Use explicit casts like int(x) or float(x)
   5 |     // This should fail - mixed types without explicit cast
   6 |     let result: float = x + y;
                                 ^

@@ -307,7 +307,22 @@ proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var 
 
     # Built-in operator handling
     case e.bop
-    of boAdd, boSub, boMul, boDiv, boMod:
+    of boAdd:
+      if lt.kind == tkInt and rt.kind == tkInt:
+        e.typ = tInt(); return e.typ
+      elif lt.kind == tkFloat and rt.kind == tkFloat:
+        e.typ = tFloat(); return e.typ
+      elif lt.kind == tkString and rt.kind == tkString:
+        # String concatenation (strings are array[char])
+        e.typ = tString(); return e.typ
+      elif lt.kind == tkArray and rt.kind == tkArray:
+        # Array concatenation - types must match
+        if not typeEq(lt.inner, rt.inner):
+          raise newTypecheckError(e.pos, &"array concatenation requires matching element types, got array[{lt.inner}] + array[{rt.inner}]")
+        e.typ = tArray(lt.inner); return e.typ
+      else:
+        raise newTypecheckError(e.pos, &"+ operator requires matching types (int, float, string, or array), got {lt} and {rt}. Use explicit casts like int(x) or float(x)")
+    of boSub, boMul, boDiv, boMod:
       if lt.kind == tkInt and rt.kind == tkInt:
         e.typ = tInt(); return e.typ
       elif lt.kind == tkFloat and rt.kind == tkFloat:

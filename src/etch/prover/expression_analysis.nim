@@ -361,15 +361,42 @@ proc analyzeSliceExpr*(e: Expr, env: Env, prog: Program): Info =
       if startInfo.cval > endInfo.cval:
         raise newProverError(e.pos, &"invalid slice: start {startInfo.cval} > end {endInfo.cval}")
 
-  # Return array/string info for the slice (slices preserve array/string nature but might have different size)
+  # Calculate slice size when possible
   if arrayInfo.isArray:
-    # For slices, size is generally unknown unless we can compute it precisely
-    infoArray(-1, sizeKnown = false)
+    # Try to calculate array slice size when bounds and original size are known
+    if arrayInfo.arraySizeKnown:
+      let startVal = if hasStart and startInfo.known: startInfo.cval else: 0
+      let endVal = if hasEnd and endInfo.known: endInfo.cval else: arrayInfo.arraySize
+
+      # Ensure bounds are valid
+      if (not hasStart or startInfo.known) and (not hasEnd or endInfo.known):
+        let actualStart = max(0, startVal)
+        let actualEnd = min(arrayInfo.arraySize, endVal)
+        if actualEnd >= actualStart:
+          let sliceSize = actualEnd - actualStart
+          return infoArray(sliceSize, sizeKnown = true)
+
+    # Fall back to unknown size
+    return infoArray(-1, sizeKnown = false)
+
   elif arrayInfo.isString:
-    # For string slices, length is generally unknown unless we can compute it precisely
-    infoString(-1, lengthKnown = false)
+    # Try to calculate string slice length when bounds and original length are known
+    if arrayInfo.arraySizeKnown:
+      let startVal = if hasStart and startInfo.known: startInfo.cval else: 0
+      let endVal = if hasEnd and endInfo.known: endInfo.cval else: arrayInfo.arraySize
+
+      # Ensure bounds are valid
+      if (not hasStart or startInfo.known) and (not hasEnd or endInfo.known):
+        let actualStart = max(0, startVal)
+        let actualEnd = min(arrayInfo.arraySize, endVal)
+        if actualEnd >= actualStart:
+          let sliceLength = actualEnd - actualStart
+          return infoString(sliceLength, lengthKnown = true)
+
+    # Fall back to unknown length
+    return infoString(-1, lengthKnown = false)
   else:
-    infoUnknown()
+    return infoUnknown()
 
 proc analyzeArrayLenExpr*(e: Expr, env: Env, prog: Program): Info =
   # Array/String length operator: #array/#string -> int
