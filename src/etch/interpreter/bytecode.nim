@@ -296,9 +296,15 @@ proc evaluateConstantExpr(expr: Expr): GlobalValue =
     return GlobalValue(kind: tkInt, ival: 0)
 
 
-proc compileProgram*(astProg: Program, sourceHash: string, sourceFile: string = ""): BytecodeProgram =
-  ## Compile an AST program to bytecode (backward compatibility)
-  let flags = CompilerFlags()
+proc verboseLog*(flags: CompilerFlags, msg: string) =
+  ## Print verbose debug message if verbose flag is enabled
+  if flags.verbose:
+    echo "[BYTECODE] ", msg
+
+proc compileProgram*(astProg: Program, sourceHash: string, sourceFile: string = "", flags: CompilerFlags = CompilerFlags()): BytecodeProgram =
+  ## Compile an AST program to bytecode
+  verboseLog(flags, "Starting bytecode generation")
+
   result = BytecodeProgram(
     instructions: @[],
     constants: @[],
@@ -320,8 +326,10 @@ proc compileProgram*(astProg: Program, sourceHash: string, sourceFile: string = 
   )
 
   # Compile global variables
+  verboseLog(flags, "Compiling " & $astProg.globals.len & " global variables")
   for g in astProg.globals:
     if g.kind == skVar:
+      verboseLog(flags, "Compiling global variable: " & g.vname)
       result.globals.add(g.vname)
       ctx.localVars.add(g.vname)
 
@@ -336,7 +344,9 @@ proc compileProgram*(astProg: Program, sourceHash: string, sourceFile: string = 
       result.compileStmt(g, ctx)
 
   # Compile function instances
+  verboseLog(flags, "Compiling " & $astProg.funInstances.len & " function instances")
   for name, fn in astProg.funInstances:
+    verboseLog(flags, "Compiling function: " & name)
     ctx.currentFunction = name
     ctx.localVars = @[]
 

@@ -13,7 +13,7 @@ type
     sval*: string
 
   CompilerFlags* = object
-    discard
+    verbose*: bool
 
   DebugInfo* = object
     line*: int
@@ -80,8 +80,11 @@ proc serializeToBinary*(prog: BytecodeProgram): string =
     hashBytes = hashBytes[0..<32]
   stream.write(hashBytes)
 
-  # Compiler flags (placeholder for future use)
-  stream.write(uint8(0))
+  # Compiler flags
+  var flags: uint8 = 0
+  if prog.compilerFlags.verbose:
+    flags = flags or 1
+  stream.write(flags)
 
   # Source file name
   let sourceFileBytes = prog.sourceFile
@@ -201,9 +204,11 @@ proc deserializeFromBinary*(data: string): BytecodeProgram =
   # Read source hash
   result.sourceHash = stream.readStr(32).strip(chars = {'\0'})
 
-  # Read compiler flags (currently unused)
-  let _ = stream.readUint8()
-  result.compilerFlags = CompilerFlags()
+  # Read compiler flags
+  let flags = stream.readUint8()
+  result.compilerFlags = CompilerFlags(
+    verbose: (flags and 1) != 0
+  )
 
   # Read source file
   let sourceFileLen = stream.readUint32()

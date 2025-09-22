@@ -2,12 +2,17 @@
 # Statement analysis and control flow for the safety prover
 
 import std/[strformat, tables, options, strutils]
-import ../frontend/ast, ../errors, ../interpreter/vm
+import ../frontend/ast, ../errors, ../interpreter/vm, ../interpreter/serialize
 import types, expression_analysis, symbolic_execution
 
-proc evaluateCondition*(cond: Expr, env: Env, prog: Program = nil): ConditionResult =
+proc verboseProverLog*(flags: CompilerFlags, msg: string) =
+  ## Print verbose debug message if verbose flag is enabled
+  if flags.verbose:
+    echo "[PROVER] ", msg
+
+proc evaluateCondition*(cond: Expr, env: Env, prog: Program = nil, flags: CompilerFlags = CompilerFlags()): ConditionResult =
   ## Unified condition evaluation for dead code detection
-  let condInfo = analyzeExpr(cond, env, prog)
+  let condInfo = analyzeExpr(cond, env, prog, flags)
 
   # Check for constant conditions - if all values are known, we can evaluate
   if condInfo.known:
@@ -58,48 +63,76 @@ proc isObviousConstant*(expr: Expr): bool =
     return false
 
 # Forward declaration - will be implemented later
-proc proveStmt*(s: Stmt; env: Env, prog: Program = nil, fnContext: string = "")
+proc proveStmt*(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags = CompilerFlags(), fnContext: string = "")
 
-proc proveStmt*(s: Stmt; env: Env, prog: Program = nil, fnContext: string = "") =
+proc proveStmt*(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags = CompilerFlags(), fnContext: string = "") =
+  let stmtKindStr = case s.kind
+    of skVar: "variable declaration"
+    of skAssign: "assignment"
+    of skIf: "if statement"
+    of skWhile: "while loop"
+    of skExpr: "expression statement"
+    of skReturn: "return statement"
+    else: $s.kind
+
+  verboseProverLog(flags, "Analyzing " & stmtKindStr & (if fnContext != "": " in " & fnContext else: ""))
+
   case s.kind
   of skVar:
+    verboseProverLog(flags, "Declaring variable: " & s.vname)
     if s.vinit.isSome():
-      let info = analyzeExpr(s.vinit.get(), env, prog)
+      verboseProverLog(flags, "Variable " & s.vname & " has initializer")
+      let info = analyzeExpr(s.vinit.get(), env, prog, flags)
       env.vals[s.vname] = info
       env.nils[s.vname] = not info.nonNil
       env.exprs[s.vname] = s.vinit.get()  # Store original expression
+      if info.known:
+        verboseProverLog(flags, "Variable " & s.vname & " initialized with constant value: " & $info.cval)
+      else:
+        verboseProverLog(flags, "Variable " & s.vname & " initialized with range [" & $info.minv & ".." & $info.maxv & "]")
     else:
+      verboseProverLog(flags, "Variable " & s.vname & " declared without initializer (uninitialized)")
       # Variable is declared but not initialized
       env.vals[s.vname] = infoUninitialized()
       env.nils[s.vname] = true
   of skAssign:
+    verboseProverLog(flags, "Assignment to variable: " & s.aname)
     # Check if the variable being assigned to exists
     if not env.vals.hasKey(s.aname):
       raise newProverError(s.pos, &"assignment to undeclared variable '{s.aname}'")
 
-    let info = analyzeExpr(s.aval, env, prog)
+    let info = analyzeExpr(s.aval, env, prog, flags)
     # Assignment initializes the variable
     var newInfo = info
     newInfo.initialized = true
     env.vals[s.aname] = newInfo
     env.exprs[s.aname] = s.aval  # Store original expression
     if info.nonNil: env.nils[s.aname] = false
+    if info.known:
+      verboseProverLog(flags, "Variable " & s.aname & " assigned constant value: " & $info.cval)
+    else:
+      verboseProverLog(flags, "Variable " & s.aname & " assigned range [" & $info.minv & ".." & $info.maxv & "]")
   of skIf:
-    let condResult = evaluateCondition(s.cond, env, prog)
+    let condResult = evaluateCondition(s.cond, env, prog, flags)
+    verboseProverLog(flags, "If condition evaluation result: " & $condResult)
 
     case condResult
     of crAlwaysTrue:
+      verboseProverLog(flags, "Condition is always true - analyzing only then branch")
       # Check if this is an obvious constant condition that should trigger error
       if isObviousConstant(s.cond) and s.elseBody.len > 0:
         raise newProverError(s.pos, "unreachable code (condition is always true)")
       # Only analyze then branch
       var thenEnv = Env(vals: env.vals, nils: env.nils, exprs: env.exprs)
-      for st in s.thenBody: proveStmt(st, thenEnv, prog, fnContext)
+      verboseProverLog(flags, "Analyzing " & $s.thenBody.len & " statements in then branch")
+      for st in s.thenBody: proveStmt(st, thenEnv, prog, flags, fnContext)
       # Copy then results back to main env
       for k, v in thenEnv.vals: env.vals[k] = v
       for k, v in thenEnv.exprs: env.exprs[k] = v
+      verboseProverLog(flags, "Then branch analysis complete")
       return
     of crAlwaysFalse:
+      verboseProverLog(flags, "Condition is always false - skipping then branch")
       # Check if this is an obvious constant condition that should trigger error
       if isObviousConstant(s.cond) and s.thenBody.len > 0 and s.elseBody.len == 0:
         raise newProverError(s.pos, "unreachable code (condition is always false)")
@@ -109,14 +142,14 @@ proc proveStmt*(s: Stmt; env: Env, prog: Program = nil, fnContext: string = "") 
       # Process elif chain
       for i, elifBranch in s.elifChain:
         var elifEnv = Env(vals: env.vals, nils: env.nils, exprs: env.exprs)
-        let elifCondResult = evaluateCondition(elifBranch.cond, env, prog)
+        let elifCondResult = evaluateCondition(elifBranch.cond, env, prog, flags)
         if elifCondResult != crAlwaysFalse:
-          for st in elifBranch.body: proveStmt(st, elifEnv, prog, fnContext)
+          for st in elifBranch.body: proveStmt(st, elifEnv, prog, flags, fnContext)
           elifEnvs.add(elifEnv)
 
       # Process else branch
       var elseEnv = Env(vals: env.vals, nils: env.nils, exprs: env.exprs)
-      for st in s.elseBody: proveStmt(st, elseEnv, prog, fnContext)
+      for st in s.elseBody: proveStmt(st, elseEnv, prog, flags, fnContext)
 
       # Merge results from all executed branches
       if elifEnvs.len > 0:
@@ -159,10 +192,12 @@ proc proveStmt*(s: Stmt; env: Env, prog: Program = nil, fnContext: string = "") 
           env.exprs[k] = v
       return
     of crUnknown:
+      verboseProverLog(flags, "Condition result is unknown at compile time - analyzing all branches")
       discard # Continue with normal analysis
 
     # Normal case: condition is not known at compile time
     # Process then branch (condition could be true)
+    verboseProverLog(flags, "Analyzing control flow with condition refinement")
     var thenEnv = Env(vals: env.vals, nils: env.nils, exprs: env.exprs)
     let condInfo = analyzeExpr(s.cond, env, prog)
     if not (condInfo.known and condInfo.cval == 0):
@@ -198,7 +233,7 @@ proc proveStmt*(s: Stmt; env: Env, prog: Program = nil, fnContext: string = "") 
               # In then branch: x < rhsInfo.cval means x <= rhsInfo.cval - 1
               thenEnv.vals[s.cond.lhs.vname].maxv = min(thenEnv.vals[s.cond.lhs.vname].maxv, rhsInfo.cval - 1)
         else: discard
-      for st in s.thenBody: proveStmt(st, thenEnv, prog, fnContext)
+      for st in s.thenBody: proveStmt(st, thenEnv, prog, flags, fnContext)
 
     # Process elif chain
     var elifEnvs: seq[Env] = @[]
@@ -214,7 +249,7 @@ proc proveStmt*(s: Stmt; env: Env, prog: Program = nil, fnContext: string = "") 
               elifEnv.vals[elifBranch.cond.lhs.vname].nonZero = true
         else: discard
 
-      for st in elifBranch.body: proveStmt(st, elifEnv)
+      for st in elifBranch.body: proveStmt(st, elifEnv, prog, flags)
       elifEnvs.add(elifEnv)
 
     # Process else branch
@@ -252,7 +287,7 @@ proc proveStmt*(s: Stmt; env: Env, prog: Program = nil, fnContext: string = "") 
             elseEnv.vals[s.cond.lhs.vname].minv = max(elseEnv.vals[s.cond.lhs.vname].minv, rhsInfo.cval)
       else: discard
 
-    for st in s.elseBody: proveStmt(st, elseEnv)
+    for st in s.elseBody: proveStmt(st, elseEnv, prog, flags)
 
     # Join - merge variable states from all branches
     # For complete initialization analysis, we need to check all possible paths
@@ -359,7 +394,7 @@ proc proveStmt*(s: Stmt; env: Env, prog: Program = nil, fnContext: string = "") 
 
       # Analyze loop body with traditional method
       for st in s.wbody:
-        proveStmt(st, loopEnv, prog, fnContext)
+        proveStmt(st, loopEnv, prog, flags, fnContext)
 
       # Enhanced merge: if symbolic execution determined a variable was initialized,
       # trust that result even if traditional analysis is conservative
@@ -407,4 +442,4 @@ proc proveStmt*(s: Stmt; env: Env, prog: Program = nil, fnContext: string = "") 
   of skComptime:
     # Comptime blocks may contain injected statements after folding
     for injectedStmt in s.cbody:
-      proveStmt(injectedStmt, env, prog, fnContext)
+      proveStmt(injectedStmt, env, prog, flags, fnContext)

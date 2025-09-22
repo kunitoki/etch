@@ -13,7 +13,7 @@ fn main() -> void {
   acc = add(g, k);      // safe: constants prove no overflow
   print(acc);           // 6
 
-  // division safety: prove non-zero via assumeNonZero or constant
+  // division safety: prove non-zero via constant
   let d: int = 1;
   d = add (d, -g);
   if d != 0 {

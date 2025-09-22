@@ -660,7 +660,7 @@ proc evalExprWithBytecode*(prog: Program, expr: Expr, globals: Table[string, V] 
       return vm.stack[^1]
     else:
       return vInt(0)  # Default value if no result
-  except Exception as e:
+  except: # Exception as e:
     # Error in global evaluation - return default value silently
     # The actual error will be caught by the compiler's type checker
     return vInt(0)  # Default value on error

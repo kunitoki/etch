@@ -10,7 +10,7 @@ test file:
 
 # Run a specific example file
 go file:
-    nim r src/etch.nim --run {{file}}
+    nim r src/etch.nim --run {{file}} --verbose
 
 # Build the project
 build:

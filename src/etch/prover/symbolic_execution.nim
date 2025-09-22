@@ -243,15 +243,15 @@ proc symbolicExecuteStmt*(stmt: Stmt, state: SymbolicState, prog: Program = nil)
       if condValue.cval != 0:
         # Execute then branch
         for thenStmt in stmt.thenBody:
-          let result = symbolicExecuteStmt(thenStmt, state, prog)
-          if result != erContinue:
-            return result
+          let res = symbolicExecuteStmt(thenStmt, state, prog)
+          if res != erContinue:
+            return res
       else:
         # Execute else branch
         for elseStmt in stmt.elseBody:
-          let result = symbolicExecuteStmt(elseStmt, state, prog)
-          if result != erContinue:
-            return result
+          let res = symbolicExecuteStmt(elseStmt, state, prog)
+          if res != erContinue:
+            return res
     else:
       # Condition is unknown - can't continue symbolic execution
       state.hitRuntimeBoundary = true

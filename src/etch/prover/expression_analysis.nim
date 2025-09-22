@@ -2,11 +2,16 @@
 # Expression analysis for the safety prover
 
 import std/[strformat, strutils, options, tables]
-import ../frontend/ast, ../errors, ../interpreter/vm
+import ../frontend/ast, ../errors, ../interpreter/vm, ../interpreter/serialize
 import types, binary_operations, function_evaluation
 
+proc verboseProverLog*(flags: CompilerFlags, msg: string) =
+  ## Print verbose debug message if verbose flag is enabled
+  if flags.verbose:
+    echo "[PROVER] ", msg
+
 # Forward declaration for mutual recursion
-proc analyzeExpr*(e: Expr; env: Env, prog: Program = nil): Info
+proc analyzeExpr*(e: Expr; env: Env, prog: Program = nil, flags: CompilerFlags = CompilerFlags()): Info
 
 proc analyzeIntExpr*(e: Expr): Info =
   infoConst(e.ival)
@@ -34,8 +39,8 @@ proc analyzeVarExpr*(e: Expr, env: Env): Info =
     return info
   raise newProverError(e.pos, &"use of undeclared variable '{e.vname}'")
 
-proc analyzeUnaryExpr*(e: Expr, env: Env, prog: Program): Info =
-  let i0 = analyzeExpr(e.ue, env, prog)
+proc analyzeUnaryExpr*(e: Expr, env: Env, prog: Program, flags: CompilerFlags = CompilerFlags()): Info =
+  let i0 = analyzeExpr(e.ue, env, prog, flags)
   case e.uop
   of uoNeg:
     if i0.known: return infoConst(-i0.cval)
@@ -44,9 +49,9 @@ proc analyzeUnaryExpr*(e: Expr, env: Env, prog: Program): Info =
   of uoNot:
     return infoBool(false) # boolean domain is tiny; not needed for arithmetic safety
 
-proc analyzeBinaryExpr*(e: Expr, env: Env, prog: Program): Info =
-  let a = analyzeExpr(e.lhs, env, prog)
-  let b = analyzeExpr(e.rhs, env, prog)
+proc analyzeBinaryExpr*(e: Expr, env: Env, prog: Program, flags: CompilerFlags = CompilerFlags()): Info =
+  let a = analyzeExpr(e.lhs, env, prog, flags)
+  let b = analyzeExpr(e.rhs, env, prog, flags)
   case e.bop
   of boAdd: return analyzeBinaryAddition(e, a, b)
   of boSub: return analyzeBinarySubtraction(e, a, b)
@@ -96,19 +101,9 @@ proc analyzeRandCall*(e: Expr, env: Env, prog: Program): Info =
 
 proc analyzeBuiltinCall*(e: Expr, env: Env, prog: Program): Info =
   # recognize trusted builtins affecting nonNil/nonZero
-  if e.fname.startsWith("print"):
+  if e.fname == "print":
     # analyze arguments for safety even though print returns void
     for arg in e.args: discard analyzeExpr(arg, env, prog)
-    return infoUnknown()
-  if e.fname == "assumeNonZero":
-    # treat as assertion
-    if e.args.len == 1:
-      var i0 = analyzeExpr(e.args[0], env, prog)
-      i0.nonZero = true
-      return i0
-  if e.fname == "assumeNonNil":
-    if e.args.len == 1 and e.args[0].kind == ekVar:
-      env.nils[e.args[0].vname] = false
     return infoUnknown()
   if e.fname == "rand":
     return analyzeRandCall(e, env, prog)
@@ -365,15 +360,26 @@ proc analyzeNilExpr*(e: Expr): Info =
   # nil reference - always known and not non-nil
   Info(known: false, nonNil: false, initialized: true)
 
-proc analyzeExpr*(e: Expr; env: Env, prog: Program = nil): Info =
+proc analyzeExpr*(e: Expr; env: Env, prog: Program = nil, flags: CompilerFlags = CompilerFlags()): Info =
+  let exprKindStr = case e.kind
+    of ekInt: "integer literal"
+    of ekVar: "variable reference"
+    of ekBin: "binary operation"
+    of ekCall: "function call"
+    of ekIndex: "array index"
+    of ekDeref: "dereference"
+    else: $e.kind
+
+  verboseProverLog(flags, "Analyzing " & exprKindStr & (if e.kind == ekVar: " '" & e.vname & "'" else: ""))
+
   case e.kind
   of ekInt: return analyzeIntExpr(e)
   of ekFloat: return analyzeFloatExpr(e)
   of ekString: return analyzeStringExpr(e)
   of ekBool: return analyzeBoolExpr(e)
   of ekVar: return analyzeVarExpr(e, env)
-  of ekUn: return analyzeUnaryExpr(e, env, prog)
-  of ekBin: return analyzeBinaryExpr(e, env, prog)
+  of ekUn: return analyzeUnaryExpr(e, env, prog, flags)
+  of ekBin: return analyzeBinaryExpr(e, env, prog, flags)
   of ekCall: return analyzeCallExpr(e, env, prog)
   of ekNewRef: return analyzeNewRefExpr(e, env, prog)
   of ekDeref: return analyzeDerefExpr(e, env, prog)
