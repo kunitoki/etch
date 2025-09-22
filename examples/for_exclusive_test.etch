@@ -1,0 +1,10 @@
+fn main() -> void {
+    // Test exclusive range for loop
+    print("Testing exclusive range for loop:");
+
+    for i in 1 ..< 5 {
+        print(i);
+    }
+
+    print("Done");
+}

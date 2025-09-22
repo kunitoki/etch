@@ -357,6 +357,32 @@ proc parseWhile(p: Parser): Stmt =
   let b = p.parseBlock()
   Stmt(kind: skWhile, wcond: c, wbody: b, pos: p.posOf(k))
 
+proc parseFor(p: Parser): Stmt =
+  let k = p.expect(tkKeyword, "for")
+  let varname = p.expect(tkIdent).lex
+  discard p.expect(tkKeyword, "in")
+
+  # Parse the iteration target
+  let firstExpr = p.parseExpr()
+
+  # Check if this is a range (..) or (..<) or array iteration
+  if p.cur.kind == tkSymbol and (p.cur.lex == ".." or p.cur.lex == "..<"):
+    # Range iteration: for x in start..end or for x in start..<end
+    let isInclusive = p.cur.lex == ".."
+    discard p.eat()  # consume ".." or "..<"
+    let endExpr = p.parseExpr()
+    let body = p.parseBlock()
+    Stmt(kind: skFor, fvar: varname, fstart: some(firstExpr), fend: some(endExpr), farray: none(Expr), finclusive: isInclusive, fbody: body, pos: p.posOf(k))
+  else:
+    # Array iteration: for x in array
+    let body = p.parseBlock()
+    Stmt(kind: skFor, fvar: varname, fstart: none(Expr), fend: none(Expr), farray: some(firstExpr), finclusive: true, fbody: body, pos: p.posOf(k))
+
+proc parseBreak(p: Parser): Stmt =
+  let k = p.expect(tkKeyword, "break")
+  discard p.expect(tkSymbol, ";")
+  Stmt(kind: skBreak, pos: p.posOf(k))
+
 proc parseReturn(p: Parser): Stmt =
   let k = p.expect(tkKeyword, "return")
   var e: Option[Expr] = none(Expr)
@@ -475,6 +501,8 @@ proc parseStmt*(p: Parser): Stmt =
       discard p.eat(); return p.parseVarDecl(vfVar)
     of "if": return p.parseIf()
     of "while": return p.parseWhile()
+    of "for": return p.parseFor()
+    of "break": return p.parseBreak()
     of "return": return p.parseReturn()
     of "comptime": return p.parseComptime()
     else: discard # fallthrough to simple

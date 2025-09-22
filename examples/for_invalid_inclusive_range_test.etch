@@ -1,0 +1,10 @@
+fn main() -> void {
+    // Test invalid inclusive range - should be caught by prover
+    print("Testing invalid inclusive range:");
+
+    for x in 5..4 {
+        print("This should never execute");
+    }
+
+    print("End test");
+}

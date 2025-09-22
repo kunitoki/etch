@@ -50,6 +50,9 @@ proc infoArray*(size: int64, sizeKnown: bool = true): Info =
 proc infoString*(length: int64, lengthKnown: bool = true): Info =
   Info(known: false, minv: IMin, maxv: IMax, initialized: true, isString: true, arraySize: length, arraySizeKnown: lengthKnown)
 
+proc infoRange*(minv, maxv: int64): Info =
+  Info(known: false, minv: minv, maxv: maxv, initialized: true, nonZero: minv > 0 or maxv < 0)
+
 proc meet*(a, b: Info): Info =
   result = Info()
   result.known = a.known and b.known and a.cval == b.cval

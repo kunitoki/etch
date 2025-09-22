@@ -1,0 +1,10 @@
+fn main() -> void {
+    // Simple for loop test
+    print("Testing simple for loop:");
+
+    for i in 1..5 {
+        print(i);
+    }
+
+    print("Done");
+}

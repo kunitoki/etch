@@ -97,12 +97,55 @@ proc typecheckComptime(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: va
       sc.types[stmt.vname] = stmt.vtype
 
 
+proc typecheckFor(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TySubst) =
+  # Create new scope for loop body with loop variable
+  var loopScope = Scope(types: sc.types, flags: sc.flags)
+
+  if s.farray.isSome():
+    # Array iteration: for x in array
+    let arrayType = inferExprTypes(prog, fd, sc, s.farray.get(), subst)
+
+    if arrayType.kind == tkArray:
+      # Loop variable has the array element type
+      loopScope.types[s.fvar] = arrayType.inner
+    elif arrayType.kind == tkString:
+      # String iteration - loop variable is char
+      loopScope.types[s.fvar] = tChar()
+    else:
+      raise newTypecheckError(s.farray.get().pos, "for loop can only iterate over arrays or strings, got " & $arrayType)
+  else:
+    # Range iteration: for x in start..end
+    let startType = inferExprTypes(prog, fd, sc, s.fstart.get(), subst)
+    let endType = inferExprTypes(prog, fd, sc, s.fend.get(), subst)
+
+    # Both start and end must be integers
+    if startType.kind != tkInt:
+      raise newTypecheckError(s.fstart.get().pos, "for loop start expression must be int, got " & $startType)
+    if endType.kind != tkInt:
+      raise newTypecheckError(s.fend.get().pos, "for loop end expression must be int, got " & $endType)
+
+    # Loop variable is int
+    loopScope.types[s.fvar] = tInt()
+
+  loopScope.flags[s.fvar] = vfLet  # Loop variable is immutable within loop body
+
+  # Type check loop body
+  for stmt in s.fbody:
+    typecheckStmt(prog, fd, loopScope, stmt, subst)
+
+proc typecheckBreak(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TySubst) =
+  # Break statements don't need special type checking, just verify they're valid
+  # (validation that break is inside a loop is done at parse time or runtime)
+  discard
+
 proc typecheckStmt*(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TySubst) =
   case s.kind
   of skVar: typecheckVar(prog, fd, sc, s, subst)
   of skAssign: typecheckAssign(prog, fd, sc, s, subst)
   of skIf: typecheckIf(prog, fd, sc, s, subst)
   of skWhile: typecheckWhile(prog, fd, sc, s, subst)
+  of skFor: typecheckFor(prog, fd, sc, s, subst)
+  of skBreak: typecheckBreak(prog, fd, sc, s, subst)
   of skExpr: discard inferExprTypes(prog, fd, sc, s.sexpr, subst)
   of skReturn: typecheckReturn(prog, fd, sc, s, subst)
   of skComptime: typecheckComptime(prog, fd, sc, s, subst)

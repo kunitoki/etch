@@ -62,6 +62,15 @@ proc foldComptime*(prog: Program; root: var Program) =
     of skWhile:
       foldExpr(s.wcond)
       for i in 0..<s.wbody.len: foldStmt(s.wbody[i])
+    of skFor:
+      if s.farray.isSome():
+        var x = s.farray.get(); foldExpr(x); s.farray = some(x)
+      else:
+        var start = s.fstart.get(); foldExpr(start); s.fstart = some(start)
+        var endVal = s.fend.get(); foldExpr(endVal); s.fend = some(endVal)
+      for i in 0..<s.fbody.len: foldStmt(s.fbody[i])
+    of skBreak:
+      discard  # break statements don't need folding
     of skExpr:
       var x = s.sexpr; foldExpr(x); s.sexpr = x
     of skReturn:

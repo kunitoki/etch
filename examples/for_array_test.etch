@@ -1,0 +1,12 @@
+fn main() -> void {
+    // For loop with array iteration
+    var nums: array[int] = [10, 20, 30, 40, 50];
+
+    print("Testing for loop with array:");
+
+    for x in nums {
+        print(x);
+    }
+
+    print("Done");
+}

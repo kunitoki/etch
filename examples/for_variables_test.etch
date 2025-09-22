@@ -1,0 +1,21 @@
+fn main() -> void {
+    // For loop with variables
+    var start: int = 3;
+    var end: int = 7;
+
+    print("Testing for loop with variables:");
+
+    for x in start..end {
+        print(x);
+    }
+
+    for x in 6..end {
+        print(x);
+    }
+
+    for x in end..8 {
+        print(x);
+    }
+
+    print("End test");
+}

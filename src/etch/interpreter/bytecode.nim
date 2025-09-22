@@ -6,11 +6,15 @@ import ../frontend/ast, serialize
 export serialize
 
 type
+  LoopContext = object
+    breakJumps*: seq[int]  # Instructions that need to be patched to jump out of loop
+
   CompilationContext* = object
     currentFunction*: string
     localVars*: seq[string]  # Variables in current scope
     sourceFile*: string
     astProgram*: Program  # Reference to the AST program for default parameter lookup
+    loopStack*: seq[LoopContext]  # Stack of nested loops for break handling
 
 proc hashSourceAndFlags*(source: string, flags: CompilerFlags): string =
   ## Generate a hash of the source code + compiler flags for cache validation
@@ -232,11 +236,126 @@ proc compileWhileStmt(prog: var BytecodeProgram, s: Stmt, ctx: var CompilationCo
   let jumpToEnd = prog.instructions.len
   prog.emit(opJumpIfFalse, pos = s.pos, ctx = ctx)  # Will patch this
 
+  # Push loop context for break statements
+  ctx.loopStack.add(LoopContext(breakJumps: @[]))
+
   for stmt in s.wbody:
     prog.compileStmt(stmt, ctx)
 
   prog.emit(opJump, loopStart, pos = s.pos, ctx = ctx)  # Jump back to condition
   prog.instructions[jumpToEnd].arg = prog.instructions.len
+
+  # Patch all break jumps in this loop
+  let loopContext = ctx.loopStack.pop()
+  for breakJump in loopContext.breakJumps:
+    prog.instructions[breakJump].arg = prog.instructions.len
+
+proc compileForStmt(prog: var BytecodeProgram, s: Stmt, ctx: var CompilationContext) =
+  ctx.localVars.add(s.fvar)
+
+  if s.farray.isSome():
+    # Array iteration: for x in array
+    let arrayTempVar = "__array_temp"
+    let indexTempVar = "__index_temp"
+    ctx.localVars.add(arrayTempVar)
+    ctx.localVars.add(indexTempVar)
+
+    # Store array in temp variable
+    prog.compileExpr(s.farray.get(), ctx)
+    prog.emit(opStoreVar, 0, arrayTempVar, s.pos, ctx)
+
+    # Initialize index to 0
+    prog.emit(opLoadInt, 0, pos = s.pos, ctx = ctx)
+    prog.emit(opStoreVar, 0, indexTempVar, s.pos, ctx)
+
+    let loopStart = prog.instructions.len
+
+    # Check condition: index < array.len
+    prog.emit(opLoadVar, 0, indexTempVar, s.pos, ctx)
+    prog.emit(opLoadVar, 0, arrayTempVar, s.pos, ctx)
+    prog.emit(opArrayLen, pos = s.pos, ctx = ctx)
+    prog.emit(opLt, pos = s.pos, ctx = ctx)
+
+    let jumpToEnd = prog.instructions.len
+    prog.emit(opJumpIfFalse, pos = s.pos, ctx = ctx)  # Will patch this
+
+    # Load array element into loop variable: x = array[index]
+    prog.emit(opLoadVar, 0, arrayTempVar, s.pos, ctx)
+    prog.emit(opLoadVar, 0, indexTempVar, s.pos, ctx)
+    prog.emit(opArrayGet, pos = s.pos, ctx = ctx)
+    prog.emit(opStoreVar, 0, s.fvar, s.pos, ctx)
+
+    # Push loop context for break statements
+    ctx.loopStack.add(LoopContext(breakJumps: @[]))
+
+    # Execute loop body
+    for stmt in s.fbody:
+      prog.compileStmt(stmt, ctx)
+
+    # Increment index
+    prog.emit(opLoadVar, 0, indexTempVar, s.pos, ctx)
+    prog.emit(opLoadInt, 1, pos = s.pos, ctx = ctx)
+    prog.emit(opAdd, pos = s.pos, ctx = ctx)
+    prog.emit(opStoreVar, 0, indexTempVar, s.pos, ctx)
+
+    prog.emit(opJump, loopStart, pos = s.pos, ctx = ctx)  # Jump back to condition
+    prog.instructions[jumpToEnd].arg = prog.instructions.len
+
+    # Patch all break jumps in this loop
+    let loopContext = ctx.loopStack.pop()
+    for breakJump in loopContext.breakJumps:
+      prog.instructions[breakJump].arg = prog.instructions.len
+
+  else:
+    # Range iteration: for x in start..end or for x in start..<end
+    # Initialize loop variable with start value
+    prog.compileExpr(s.fstart.get(), ctx)
+    prog.emit(opStoreVar, 0, s.fvar, s.pos, ctx)
+
+    let loopStart = prog.instructions.len
+
+    # Check condition: loop_var <= end_value (inclusive) or loop_var < end_value (exclusive)
+    prog.emit(opLoadVar, 0, s.fvar, s.pos, ctx)
+    prog.compileExpr(s.fend.get(), ctx)
+    if s.finclusive:
+      prog.emit(opLe, pos = s.pos, ctx = ctx)  # inclusive: <=
+    else:
+      prog.emit(opLt, pos = s.pos, ctx = ctx)  # exclusive: <
+
+    let jumpToEnd = prog.instructions.len
+    prog.emit(opJumpIfFalse, pos = s.pos, ctx = ctx)  # Will patch this
+
+    # Push loop context for break statements
+    ctx.loopStack.add(LoopContext(breakJumps: @[]))
+
+    # Execute loop body
+    for stmt in s.fbody:
+      prog.compileStmt(stmt, ctx)
+
+    # Increment loop variable
+    prog.emit(opLoadVar, 0, s.fvar, s.pos, ctx)
+    prog.emit(opLoadInt, 1, pos = s.pos, ctx = ctx)
+    prog.emit(opAdd, pos = s.pos, ctx = ctx)
+    prog.emit(opStoreVar, 0, s.fvar, s.pos, ctx)
+
+    prog.emit(opJump, loopStart, pos = s.pos, ctx = ctx)  # Jump back to condition
+    prog.instructions[jumpToEnd].arg = prog.instructions.len
+
+    # Patch all break jumps in this loop
+    let loopContext = ctx.loopStack.pop()
+    for breakJump in loopContext.breakJumps:
+      prog.instructions[breakJump].arg = prog.instructions.len
+
+proc compileBreakStmt(prog: var BytecodeProgram, s: Stmt, ctx: var CompilationContext) =
+  if ctx.loopStack.len == 0:
+    # This should be caught by type checker, but handle gracefully
+    prog.emit(opLoadInt, 0, pos = s.pos, ctx = ctx)  # No-op
+    return
+
+  # Add a jump instruction that will be patched later
+  let breakJump = prog.instructions.len
+  prog.emit(opJump, 0, pos = s.pos, ctx = ctx)  # Will be patched to jump out of loop
+  ctx.loopStack[^1].breakJumps.add(breakJump)
 
 proc compileExprStmt(prog: var BytecodeProgram, s: Stmt, ctx: var CompilationContext) =
   prog.compileExpr(s.sexpr, ctx)
@@ -258,6 +377,8 @@ proc compileStmt*(prog: var BytecodeProgram, s: Stmt, ctx: var CompilationContex
   of skAssign: prog.compileAssignStmt(s, ctx)
   of skIf: prog.compileIfStmt(s, ctx)
   of skWhile: prog.compileWhileStmt(s, ctx)
+  of skFor: prog.compileForStmt(s, ctx)
+  of skBreak: prog.compileBreakStmt(s, ctx)
   of skExpr: prog.compileExprStmt(s, ctx)
   of skReturn: prog.compileReturnStmt(s, ctx)
   of skComptime: prog.compileComptimeStmt(s, ctx)
@@ -329,7 +450,8 @@ proc compileProgram*(astProg: Program, sourceHash: string, sourceFile: string = 
     currentFunction: "global",
     localVars: @[],
     sourceFile: sourceFile,
-    astProgram: astProg
+    astProgram: astProg,
+    loopStack: @[]
   )
 
   # Compile global variables

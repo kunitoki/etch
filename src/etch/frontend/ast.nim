@@ -77,7 +77,7 @@ type
       castType*: EtchType  # Target type to cast to
       castExpr*: Expr      # Expression to cast
 
-  StmtKind* = enum skVar, skAssign, skIf, skWhile, skExpr, skReturn, skComptime
+  StmtKind* = enum skVar, skAssign, skIf, skWhile, skFor, skBreak, skExpr, skReturn, skComptime
   VarFlag* = enum vfLet, vfVar
 
   Stmt* = ref object
@@ -99,6 +99,15 @@ type
     of skWhile:
       wcond*: Expr
       wbody*: seq[Stmt]
+    of skFor:
+      fvar*: string
+      fstart*: Option[Expr]   # None for array iteration
+      fend*: Option[Expr]     # None for array iteration
+      farray*: Option[Expr]   # Some for array iteration
+      finclusive*: bool       # true for .., false for ..<
+      fbody*: seq[Stmt]
+    of skBreak:
+      discard  # break needs no additional fields
     of skExpr:
       sexpr*: Expr
     of skReturn:

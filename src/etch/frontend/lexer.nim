@@ -12,7 +12,7 @@ type
     line*, col*: int
 
 const keywords = [
-  "fn","let","var","return","if","elif","else","while",
+  "fn","let","var","return","if","elif","else","while","for","break","in",
   "true","false","int","float","string","char","bool","void","ref","concept",
   "comptime","new","and","or","array","nil"
 ].toSeq
@@ -37,8 +37,14 @@ proc lex*(src: string): seq[Token] =
       continue
 
     var m: int
+    # 3-char symbol
+    if i+2 < src.len and src.substr(i, i+2) == "..<":
+      result.add Token(kind: tkSymbol, lex: "..<", line: line, col: col)
+      inc i, 3; inc col, 3
+      continue
+
     # 2-char symbol
-    if i+1 < src.len and (src.substr(i, i+1) in ["->","==","!=", "<=",">="]):
+    if i+1 < src.len and (src.substr(i, i+1) in ["->","==","!=", "<=",">=",".."]):
       result.add Token(kind: tkSymbol, lex: src.substr(i, i+1), line: line, col: col)
       inc i, 2; inc col, 2
       continue
@@ -56,8 +62,8 @@ proc lex*(src: string): seq[Token] =
     while m < src.len and src[m].isDigit:
       had = true; inc m
 
-    # check for decimal point
-    if had and m < src.len and src[m] == '.':
+    # check for decimal point (but not if it's part of ..)
+    if had and m < src.len and src[m] == '.' and not (m+1 < src.len and src[m+1] == '.'):
       inc m
       isFloat = true
       while m < src.len and src[m].isDigit:

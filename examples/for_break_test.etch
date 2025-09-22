@@ -1,0 +1,13 @@
+fn main() -> void {
+    // For loop with break statement
+    print("Testing for loop with break:");
+
+    for i in 1..10 {
+        if i == 5 {
+            break;
+        }
+        print(i);
+    }
+
+    print("Loop exited at 5");
+}

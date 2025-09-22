@@ -1,0 +1,12 @@
+fn main() -> void {
+    // For loop with array iteration
+    var nums: string = "ABCDEFG";
+
+    print("Testing for loop with string:");
+
+    for x in nums {
+        print(x);
+    }
+
+    print("Done");
+}
