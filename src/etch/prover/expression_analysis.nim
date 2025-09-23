@@ -13,8 +13,10 @@ proc verboseProverLog*(flags: CompilerFlags, msg: string) =
     echo "[PROVER] ", msg
 
 
-# Forward declaration for mutual recursion
+# Forward declarations for mutual recursion
 proc analyzeExpr*(e: Expr; env: Env, prog: Program = nil, flags: CompilerFlags = CompilerFlags()): Info
+proc analyzeBinaryExpr*(e: Expr, env: Env, prog: Program, flags: CompilerFlags = CompilerFlags()): Info
+proc analyzeCallExpr*(e: Expr, env: Env, prog: Program, flags: CompilerFlags = CompilerFlags()): Info
 
 
 proc analyzeBoolExpr*(e: Expr): Info =
@@ -149,32 +151,28 @@ proc analyzeBuiltinCall*(e: Expr, env: Env, prog: Program): Info =
   return infoUnknown()
 
 
-proc analyzeUserDefinedCall*(e: Expr, env: Env, prog: Program): Info =
-  # User-defined function call - perform call-site safety analysis
+proc analyzeUserDefinedCall*(e: Expr, env: Env, prog: Program, flags: CompilerFlags = CompilerFlags()): Info =
+  # User-defined function call - comprehensive call-site safety analysis
   let fn = prog.funInstances[e.fname]
+
+  verboseProverLog(flags, &"Analyzing user-defined function call: {e.fname}")
 
   # Analyze arguments to get their safety information
   var argInfos: seq[Info] = @[]
-  for arg in e.args:
-    argInfos.add analyzeExpr(arg, env, prog)
+  for i, arg in e.args:
+    let argInfo = analyzeExpr(arg, env, prog, flags)
+    argInfos.add argInfo
+    verboseProverLog(flags, &"Argument {i}: {(if argInfo.known: $argInfo.cval else: \"[\" & $argInfo.minv & \"..\" & $argInfo.maxv & \"]\")}")
 
   # Add default parameter information
   for i in e.args.len..<fn.params.len:
     if fn.params[i].defaultValue.isSome:
-      let defaultInfo = analyzeExpr(fn.params[i].defaultValue.get, env, prog)
+      let defaultInfo = analyzeExpr(fn.params[i].defaultValue.get, env, prog, flags)
       argInfos.add defaultInfo
+      verboseProverLog(flags, &"Default param {i}: {(if defaultInfo.known: $defaultInfo.cval else: \"[\" & $defaultInfo.minv & \"..\" & $defaultInfo.maxv & \"]\")}")
     else:
       # This shouldn't happen if type checking is correct
       argInfos.add infoUnknown()
-
-  # Now perform call-site safety analysis on the function body
-  # Create environment with actual argument information and global variables
-  var callEnv = Env(vals: env.vals, nils: env.nils, exprs: env.exprs)
-
-  # Set up parameter environment with actual call-site information
-  for i in 0..<min(argInfos.len, fn.params.len):
-    callEnv.vals[fn.params[i].name] = argInfos[i]
-    callEnv.nils[fn.params[i].name] = not argInfos[i].nonNil
 
   # Check if all arguments are compile-time constants for potential constant folding
   var allArgsConstant = true
@@ -185,62 +183,190 @@ proc analyzeUserDefinedCall*(e: Expr, env: Env, prog: Program): Info =
 
   # If all arguments are constants, try to evaluate simple pure functions at compile time
   if allArgsConstant:
+    verboseProverLog(flags, "All arguments are constants - attempting compile-time evaluation")
     let evalResult = tryEvaluatePureFunction(e, argInfos, fn, prog)
     if evalResult.isSome:
+      verboseProverLog(flags, &"Function evaluated at compile-time to: {evalResult.get}")
       return infoConst(evalResult.get)
 
-  # Analyze function body with call-site specific argument information
-  # This will catch safety violations like division by zero with actual arguments
-  # We need to analyze the function body with the actual argument values
+  # Create function call environment with parameter mappings
+  # Start with global environment but override with parameter mappings
+  var callEnv = Env(vals: initTable[string, Info](), nils: initTable[string, bool](), exprs: initTable[string, Expr]())
 
-  # We'll implement a simple version here that focuses on division by zero detection
-  # For more complex cases, this would need the full statement analysis
+  # Copy global variables from calling environment
+  # First collect parameter names
+  var paramNames: seq[string] = @[]
+  for param in fn.params:
+    paramNames.add(param.name)
 
-  # Recursive function to check expressions for division by zero with actual arguments
-  proc checkExpressionForDivision(expr: Expr) =
+  for k, v in env.vals:
+    if k notin paramNames:  # Don't copy if it's a parameter name
+      callEnv.vals[k] = v
+  for k, v in env.nils:
+    if k notin paramNames:
+      callEnv.nils[k] = v
+  for k, v in env.exprs:
+    if k notin paramNames:
+      callEnv.exprs[k] = v
+
+  # Set up parameter environment with actual call-site information
+  for i in 0..<min(argInfos.len, fn.params.len):
+    let paramName = fn.params[i].name
+    callEnv.vals[paramName] = argInfos[i]
+    callEnv.nils[paramName] = not argInfos[i].nonNil
+    # Store the original argument expression if it's simple enough
+    if i < e.args.len:
+      callEnv.exprs[paramName] = e.args[i]
+    verboseProverLog(flags, &"Parameter '{paramName}' mapped to: {(if argInfos[i].known: $argInfos[i].cval else: \"[\" & $argInfos[i].minv & \"..\" & $argInfos[i].maxv & \"]\")}")
+
+  # Perform comprehensive safety analysis on function body
+  let fnContext = &"function {functionNameFromSignature(e.fname)}"
+  verboseProverLog(flags, &"Starting comprehensive analysis of function body with {fn.body.len} statements")
+
+  # Recursive helper to analyze expressions for all safety violations
+  proc checkExpressionSafety(expr: Expr) =
     case expr.kind
     of ekBin:
-      if expr.bop == boDiv:
-        # This is a division - check the divisor with actual arguments
-        if expr.rhs.kind == ekVar:
-          # Find the parameter index for the divisor variable
-          for i, param in fn.params:
-            if param.name == expr.rhs.vname:
-              if i < argInfos.len:
-                let divisorInfo = argInfos[i]
-                if divisorInfo.known and divisorInfo.cval == 0:
-                  raise newProverError(expr.pos, "division by zero")
-                elif not divisorInfo.nonZero:
-                  raise newProverError(expr.pos, "cannot prove divisor is non-zero")
-              break
-      # Recursively check both sides of binary operations
-      checkExpressionForDivision(expr.lhs)
-      checkExpressionForDivision(expr.rhs)
-    of ekCall:
-      # Check arguments of nested calls
-      for arg in expr.args:
-        checkExpressionForDivision(arg)
-    else:
-      discard # Other expression types don't contain divisions
+      # Check both operands first
+      checkExpressionSafety(expr.lhs)
+      checkExpressionSafety(expr.rhs)
 
-  # Check the function body for division operations
-  for stmt in fn.body:
+      # Then check the binary operation itself
+      case expr.bop
+      of boDiv, boMod:
+        let divisorInfo = analyzeExpr(expr.rhs, callEnv, prog, flags)
+        if divisorInfo.known and divisorInfo.cval == 0:
+          raise newProverError(expr.pos, &"division by zero in {fnContext}")
+        elif not divisorInfo.nonZero:
+          raise newProverError(expr.pos, &"cannot prove divisor is non-zero in {fnContext}")
+      of boAdd, boSub, boMul:
+        # Check for potential overflow/underflow
+        # The binary operations module already does overflow checks
+        discard analyzeBinaryExpr(expr, callEnv, prog, flags)
+      else:
+        discard
+    of ekIndex:
+      # Array bounds checking
+      checkExpressionSafety(expr.arrayExpr)
+      checkExpressionSafety(expr.indexExpr)
+      let indexInfo = analyzeExpr(expr.indexExpr, callEnv, prog, flags)
+      if indexInfo.known and indexInfo.cval < 0:
+        raise newProverError(expr.pos, &"negative array index in {fnContext}")
+      # Additional bounds checking is done by the recursive call to analyzeExpr
+      discard analyzeExpr(expr, callEnv, prog, flags)
+    of ekSlice:
+      # Slice bounds checking
+      if expr.startExpr.isSome:
+        checkExpressionSafety(expr.startExpr.get)
+      if expr.endExpr.isSome:
+        checkExpressionSafety(expr.endExpr.get)
+      checkExpressionSafety(expr.sliceExpr)
+      discard analyzeExpr(expr, callEnv, prog, flags)
+    of ekDeref:
+      # Nil dereference checking
+      let refInfo = analyzeExpr(expr.refExpr, callEnv, prog, flags)
+      if not refInfo.nonNil:
+        raise newProverError(expr.pos, &"cannot prove reference is non-nil before dereference in {fnContext}")
+    of ekVar:
+      # Variable initialization checking
+      if callEnv.vals.hasKey(expr.vname):
+        let varInfo = callEnv.vals[expr.vname]
+        if not varInfo.initialized:
+          raise newProverError(expr.pos, &"use of uninitialized variable '{expr.vname}' in {fnContext}")
+      else:
+        raise newProverError(expr.pos, &"use of undeclared variable '{expr.vname}' in {fnContext}")
+    of ekCall:
+      # Recursive function calls
+      for arg in expr.args:
+        checkExpressionSafety(arg)
+      # Check the function call itself
+      discard analyzeExpr(expr, callEnv, prog, flags)
+    else:
+      # For other expression types, just analyze normally
+      discard analyzeExpr(expr, callEnv, prog, flags)
+
+  # Check all statements in the function body
+  for i, stmt in fn.body:
+    verboseProverLog(flags, &"Analyzing statement {i + 1}/{fn.body.len}: {stmt.kind}")
+
     case stmt.kind
+    of skExpr:
+      checkExpressionSafety(stmt.sexpr)
     of skReturn:
       if stmt.re.isSome:
-        checkExpressionForDivision(stmt.re.get)
+        checkExpressionSafety(stmt.re.get)
+    of skVar:
+      if stmt.vinit.isSome:
+        checkExpressionSafety(stmt.vinit.get)
+        # Update environment for variable initialization
+        let initInfo = analyzeExpr(stmt.vinit.get, callEnv, prog, flags)
+        callEnv.vals[stmt.vname] = initInfo
+        callEnv.nils[stmt.vname] = not initInfo.nonNil
+        callEnv.exprs[stmt.vname] = stmt.vinit.get
+      else:
+        callEnv.vals[stmt.vname] = infoUninitialized()
+        callEnv.nils[stmt.vname] = true
+    of skAssign:
+      checkExpressionSafety(stmt.aval)
+      # Update environment for assignment
+      let assignInfo = analyzeExpr(stmt.aval, callEnv, prog, flags)
+      var newInfo = assignInfo
+      newInfo.initialized = true
+      callEnv.vals[stmt.aname] = newInfo
+      callEnv.exprs[stmt.aname] = stmt.aval
+      if assignInfo.nonNil:
+        callEnv.nils[stmt.aname] = false
+    of skIf:
+      # Check condition
+      checkExpressionSafety(stmt.cond)
+      # For now, we'll do a simplified analysis of if statements
+      # A complete implementation would need to handle control flow
+      for thenStmt in stmt.thenBody:
+        case thenStmt.kind
+        of skExpr:
+          checkExpressionSafety(thenStmt.sexpr)
+        of skReturn:
+          if thenStmt.re.isSome:
+            checkExpressionSafety(thenStmt.re.get)
+        else:
+          # Simplified analysis - more complex control flow requires full statement analysis
+          discard
+      # Check else branch
+      for elseStmt in stmt.elseBody:
+        case elseStmt.kind
+        of skExpr:
+          checkExpressionSafety(elseStmt.sexpr)
+        of skReturn:
+          if elseStmt.re.isSome:
+            checkExpressionSafety(elseStmt.re.get)
+        else:
+          discard
     else:
-      # For now, only handle simple return statements
-      # More complex control flow would require full statement analysis
+      # For other statement types, we'll skip detailed analysis for now
+      # A complete implementation would recursively analyze all statement types
+      verboseProverLog(flags, &"Simplified analysis for {stmt.kind} in {fnContext}")
       discard
 
+  verboseProverLog(flags, &"Function {fnContext} analysis completed successfully")
+
+  # Try to determine return value information by looking at return statements
+  # This is a simplified approach - a more complete implementation would track
+  # all possible return paths and merge their info
+  for stmt in fn.body:
+    if stmt.kind == skReturn and stmt.re.isSome:
+      let returnInfo = analyzeExpr(stmt.re.get, callEnv, prog, flags)
+      verboseProverLog(flags, &"Function return value: {(if returnInfo.known: $returnInfo.cval else: \"[\" & $returnInfo.minv & \"..\" & $returnInfo.maxv & \"]\")}")
+      return returnInfo
+
+  # No return statement found or void return
+  verboseProverLog(flags, &"Function {fnContext} has no explicit return value")
   return infoUnknown()
 
 
-proc analyzeCallExpr*(e: Expr, env: Env, prog: Program): Info =
+proc analyzeCallExpr*(e: Expr, env: Env, prog: Program, flags: CompilerFlags = CompilerFlags()): Info =
   # User-defined function call - perform call-site safety analysis
   if prog != nil and prog.funInstances.hasKey(e.fname):
-    return analyzeUserDefinedCall(e, env, prog)
+    return analyzeUserDefinedCall(e, env, prog, flags)
   else:
     return analyzeBuiltinCall(e, env, prog)
 
@@ -554,7 +680,7 @@ proc analyzeExpr*(e: Expr; env: Env, prog: Program = nil, flags: CompilerFlags =
   of ekVar: return analyzeVarExpr(e, env)
   of ekUn: return analyzeUnaryExpr(e, env, prog, flags)
   of ekBin: return analyzeBinaryExpr(e, env, prog, flags)
-  of ekCall: return analyzeCallExpr(e, env, prog)
+  of ekCall: return analyzeCallExpr(e, env, prog, flags)
   of ekNewRef: return analyzeNewRefExpr(e, env, prog)
   of ekDeref: return analyzeDerefExpr(e, env, prog)
   of ekArray: return analyzeArrayExpr(e, env, prog)

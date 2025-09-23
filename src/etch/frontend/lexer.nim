@@ -2,6 +2,7 @@
 # PEG (npeg) based tokenizer for Etch
 
 import std/[strformat, sequtils, strutils]
+import ../errors, ast
 
 type
   TokKind* = enum
@@ -35,6 +36,34 @@ proc lex*(src: string): seq[Token] =
     # Skip // comment
     if i+1 < src.len and src[i] == '/' and src[i+1] == '/':
       while i < src.len and src[i] != '\n': inc i
+      continue
+
+    # Skip /* */ multiline comment
+    if i+1 < src.len and src[i] == '/' and src[i+1] == '*':
+      let comment_start_line = line
+      let comment_start_col = col
+      inc i, 2 # skip /*
+      inc col, 2
+      var found_end = false
+      while i+1 < src.len:
+        # Check for nested comment start
+        if src[i] == '/' and src[i+1] == '*':
+          let pos = Pos(line: line, col: col, filename: "")
+          raise newParseError(pos, "Nested multiline comments are not supported")
+        if src[i] == '*' and src[i+1] == '/':
+          inc i, 2 # skip */
+          inc col, 2
+          found_end = true
+          break
+        if src[i] == '\n':
+          inc line
+          col = 1
+        else:
+          inc col
+        inc i
+      if not found_end:
+        let pos = Pos(line: comment_start_line, col: comment_start_col, filename: "")
+        raise newParseError(pos, "Unterminated multiline comment")
       continue
 
     var m: int
@@ -96,7 +125,8 @@ proc lex*(src: string): seq[Token] =
           content.add src[m]
           inc m
       if m >= src.len:
-        raise newException(ValueError, &"Unterminated string at {line}:{col}")
+        let pos = Pos(line: line, col: col, filename: "")
+        raise newParseError(pos, "Unterminated string literal")
       inc m # skip closing quote
       result.add Token(kind: tkString, lex: content, line: line, col: col)
       col += m-i+1; i = m
@@ -123,11 +153,14 @@ proc lex*(src: string): seq[Token] =
           content.add src[m]
           inc m
       if m >= src.len:
-        raise newException(ValueError, &"Unterminated char at {line}:{col}")
+        let pos = Pos(line: line, col: col, filename: "")
+        raise newParseError(pos, "Unterminated character literal")
       if src[m] != '\'':
-        raise newException(ValueError, &"Expected closing quote for char at {line}:{col}")
+        let pos = Pos(line: line, col: col, filename: "")
+        raise newParseError(pos, "Expected closing quote for character literal")
       if content.len != 1:
-        raise newException(ValueError, &"Char literal must contain exactly one character at {line}:{col}")
+        let pos = Pos(line: line, col: col, filename: "")
+        raise newParseError(pos, "Character literal must contain exactly one character")
       inc m # skip closing quote
       result.add Token(kind: tkChar, lex: content, line: line, col: col)
       col += m-i+1; i = m

@@ -1,0 +1,5 @@
+examples/comments_nested_immediate_test.etch:2:8: error: Nested multiline comments are not supported
+  1 | fn main() -> void {
+  2 |     /* /* immediate nested comment */ should error */
+             ^
+  3 |     let x: int = 42;

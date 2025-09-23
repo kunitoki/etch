@@ -1,4 +1,4 @@
-examples/unsafe_rand_test.etch:2:14: error: cannot prove divisor is non-zero
+examples/unsafe_rand_test.etch:2:14: error: cannot prove divisor is non-zero in function divide
   1 | fn divide(x: int, y: int) -> int {
   2 |     return x / y;
                    ^

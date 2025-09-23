@@ -1,0 +1,19 @@
+// Single line comment
+fn main() -> void {
+    /* This is a multiline comment
+       that spans multiple lines
+       and should be completely ignored */
+
+    let x: int = 42;
+
+    /* Another comment */ print(x); /* inline comment */
+
+    /*
+     * Block comment with asterisks
+     * like in C/C++
+     */
+
+    print(x * 2); // Mixed with single line comments
+
+    /* Comments without nesting work fine */
+}

@@ -2,7 +2,7 @@
 # Core AST + type for Etch
 
 
-import std/[tables, options]
+import std/[tables, options, strutils]
 
 
 const
@@ -285,3 +285,85 @@ proc generateOverloadSignature*(funDecl: FunDecl): string =
     result.add(encodeType(funDecl.ret))
   else:
     result.add("v")
+
+
+proc functionNameFromSignature*(mangledName: string): string =
+  if "__" notin mangledName:
+    result = mangledName  # Not mangled, return as-is
+  else:
+    result = mangledName.split("__")[0]
+
+
+proc demangleFunctionSignature*(mangledName: string): string =
+  ## Demangle function signatures from their internal representation to human-readable form
+  ## Format: funcName__paramTypes_returnType -> funcName(paramTypes) -> returnType
+  if "__" notin mangledName:
+    return mangledName  # Not mangled, return as-is
+
+  let parts = mangledName.split("__")
+  if parts.len != 2:
+    return mangledName  # Invalid format, return as-is
+
+  let funcName = parts[0]
+  let signature = parts[1]
+
+  if "_" notin signature:
+    return mangledName  # Invalid format, return as-is
+
+  let sigParts = signature.split("_")
+  if sigParts.len != 2:
+    return mangledName  # Invalid format, return as-is
+
+  let paramTypes = sigParts[0]
+  let returnType = sigParts[1]
+
+  proc decodeType(encoded: string, pos: var int): string =
+    if pos >= encoded.len:
+      return "?"
+
+    let c = encoded[pos]
+    pos += 1
+
+    case c
+    of 'v': "void"
+    of 'b': "bool"
+    of 'c': "char"
+    of 'i': "int"
+    of 'f': "float"
+    of 's': "string"
+    of 'A': "array[" & decodeType(encoded, pos) & "]"
+    of 'R': "ref " & decodeType(encoded, pos)
+    of 'O': "option[" & decodeType(encoded, pos) & "]"
+    of 'E': "result[" & decodeType(encoded, pos) & "]"
+    of 'G':
+      # Generic type: G<length><name>
+      if pos >= encoded.len:
+        return "generic"
+      var lenStr = ""
+      while pos < encoded.len and encoded[pos].isDigit:
+        lenStr.add(encoded[pos])
+        pos += 1
+      if lenStr.len == 0:
+        return "generic"
+      let nameLen = parseInt(lenStr)
+      if pos + nameLen > encoded.len:
+        return "generic"
+      let name = encoded[pos..<pos + nameLen]
+      pos += nameLen
+      name
+    else: "unknown"
+
+  proc decodeAllTypes(encoded: string): seq[string] =
+    var pos = 0
+    var types: seq[string] = @[]
+    while pos < encoded.len:
+      types.add(decodeType(encoded, pos))
+    types
+
+  let params = decodeAllTypes(paramTypes)
+  let retTypeStr = if returnType == "v": "void" else: decodeAllTypes(returnType)[0]
+
+  if params.len == 0:
+    return funcName & "() -> " & retTypeStr
+  else:
+    return funcName & "(" & params.join(", ") & ") -> " & retTypeStr

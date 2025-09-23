@@ -150,7 +150,7 @@ proc analyzeBinaryMultiplication*(e: Expr, a: Info, b: Info): Info =
           let maxAllowed = IMax div absB
           if absA > maxAllowed:
             raise newProverError(e.pos, "multiplication range would overflow")
-        except OverflowError:
+        except:
           # Even our division overflowed, this definitely would overflow
           raise newProverError(e.pos, "multiplication range would overflow")
 

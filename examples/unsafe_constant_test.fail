@@ -1,4 +1,4 @@
-examples/unsafe_constant_test.etch:2:14: error: division by zero
+examples/unsafe_constant_test.etch:2:14: error: division by zero in function divide
   1 | fn divide(x: int, y: int) -> int {
   2 |     return x / y;
                    ^

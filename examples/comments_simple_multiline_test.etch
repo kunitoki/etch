@@ -1,0 +1,5 @@
+fn main() -> void {
+    /* This is a simple multiline comment */
+    let x: int = 42;
+    print(x);
+}
