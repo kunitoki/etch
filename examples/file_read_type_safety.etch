@@ -1,0 +1,20 @@
+// Test: Type safety with file data and invalid casts
+// Shows that invalid type casts are prevented at compile time
+
+fn main() -> void {
+    // Read a valid number
+    let content: string = readFile("examples/data/file_safe_numbers.txt");
+    let maybeNumber: option[int] = parseInt(content);
+    let number: int = match maybeNumber {
+        some(num) => {
+            num;
+        }
+        none => {
+            0;
+        }
+    };
+
+    // These should fail - invalid cast attempts
+    let bad_cast: bool = bool(number);  // int to bool not allowed
+    print(bad_cast);
+}

@@ -1,0 +1,28 @@
+fn processNumberInput(input: string) -> string {
+    let parsed: option[int] = parseInt(input);
+
+    if isSome(parsed) {
+        return "Successfully parsed a number!";
+    } else {
+        return "Failed to parse number";
+    }
+}
+
+fn main() -> void {
+    // Practical example showing monad checking in control flow
+    let input1: string = "42";
+    let input2: string = "not a number";
+
+    print(processNumberInput(input1));  // Should succeed
+    print(processNumberInput(input2));  // Should fail
+
+    // Example with multiple checks
+    let maybeFloat: option[float] = parseFloat("3.14");
+    let maybeBool: option[bool] = parseBool("true");
+
+    if isSome(maybeFloat) and isSome(maybeBool) {
+        print("Both parsing operations succeeded!");
+    }
+
+    print("Practical monad usage test complete!");
+}

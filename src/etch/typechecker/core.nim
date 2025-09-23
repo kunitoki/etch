@@ -101,6 +101,26 @@ proc inferTypeFromExpr*(expr: Expr): EtchType =
     else:
       # Unknown function call - requires type annotation
       return nil
+  of ekOptionSome:
+    # some(value) has type option[T] where T is the type of value
+    let innerType = inferTypeFromExpr(expr.someExpr)
+    if innerType != nil:
+      return tOption(innerType)
+    else:
+      return nil
+  of ekOptionNone:
+    # none cannot be type-inferred without context - requires type annotation
+    return nil
+  of ekResultOk:
+    # ok(value) has type result[T] where T is the type of value
+    let innerType = inferTypeFromExpr(expr.okExpr)
+    if innerType != nil:
+      return tResult(innerType)
+    else:
+      return nil
+  of ekResultErr:
+    # error(msg) cannot be type-inferred without context - requires type annotation
+    return nil
   else:
     # For other expressions (variables, etc.), we cannot infer the type
     # without a type checker - return nil to indicate type annotation is required

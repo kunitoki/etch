@@ -1,14 +1,17 @@
 # prover/core.nim
 # Main prover coordination and public interface
 
+
 import std/[tables]
 import ../frontend/ast, ../errors, ../interpreter/serialize
 import types, statement_analysis
+
 
 proc verboseProverLog*(flags: CompilerFlags, msg: string) =
   ## Print verbose debug message if verbose flag is enabled
   if flags.verbose:
     echo "[PROVER] ", msg
+
 
 proc prove*(prog: Program, filename: string = "<unknown>", flags: CompilerFlags = CompilerFlags()) =
   verboseProverLog(flags, "Starting safety proof analysis for " & filename)

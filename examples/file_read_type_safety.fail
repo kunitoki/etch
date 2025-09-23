@@ -1,0 +1,5 @@
+examples/file_read_type_safety.etch:18:26: error: invalid cast from int to bool
+  17 |     // These should fail - invalid cast attempts
+  18 |     let bad_cast: bool = bool(number);  // int to bool not allowed
+                                ^
+  19 |     print(bad_cast);

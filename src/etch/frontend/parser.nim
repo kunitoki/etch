@@ -39,8 +39,9 @@ proc expect(p: Parser, kind: TokKind, lex: string = ""): Token =
 # Forward declarations
 proc parseExpr*(p: Parser; rbp=0): Expr
 proc parseStmt*(p: Parser): Stmt
-
-# Note: inferTypeFromExpr is now provided by the typecheck module
+proc parseMatchExpr(p: Parser; t: Token): Expr
+proc parsePattern(p: Parser): Pattern
+proc parseBlock(p: Parser): seq[Stmt]
 
 # --- Type parsing ---
 proc parseType(p: Parser): EtchType =
@@ -64,6 +65,18 @@ proc parseType(p: Parser): EtchType =
       let inner = p.parseType()
       discard p.expect(tkSymbol, "]")
       return tArray(inner)
+    if t.lex == "option":
+      discard p.expect(tkKeyword, "option")
+      discard p.expect(tkSymbol, "[")
+      let inner = p.parseType()
+      discard p.expect(tkSymbol, "]")
+      return tOption(inner)
+    if t.lex == "result":
+      discard p.expect(tkIdent, "result")
+      discard p.expect(tkSymbol, "[")
+      let inner = p.parseType()
+      discard p.expect(tkSymbol, "]")
+      return tResult(inner)
     # generic type name
     discard p.eat
     return tGeneric(t.lex)
@@ -129,9 +142,84 @@ proc parseBuiltinKeywordExpr(p: Parser; t: Token): Expr =
     let e = p.parseExpr()
     discard p.expect(tkSymbol, ")")
     return Expr(kind: ekNewRef, init: e, pos: p.posOf(t))
+  of "some":
+    discard p.expect(tkSymbol, "(")
+    let e = p.parseExpr()
+    discard p.expect(tkSymbol, ")")
+    return Expr(kind: ekOptionSome, someExpr: e, pos: p.posOf(t))
+  of "none":
+    return Expr(kind: ekOptionNone, pos: p.posOf(t))
+  of "ok":
+    discard p.expect(tkSymbol, "(")
+    let e = p.parseExpr()
+    discard p.expect(tkSymbol, ")")
+    return Expr(kind: ekResultOk, okExpr: e, pos: p.posOf(t))
+  of "error":
+    discard p.expect(tkSymbol, "(")
+    let e = p.parseExpr()
+    discard p.expect(tkSymbol, ")")
+    return Expr(kind: ekResultErr, errExpr: e, pos: p.posOf(t))
+  of "match":
+    return p.parseMatchExpr(t)
   else:
     # Allow keyword names as identifiers for simplicity except reserved control words
     return Expr(kind: ekVar, vname: t.lex, pos: p.posOf(t))
+
+proc parseMatchExpr(p: Parser; t: Token): Expr =
+  ## Parses match expressions: match expr { pattern => body, ... }
+  let matchExpr = p.parseExpr()
+  discard p.expect(tkSymbol, "{")
+
+  var cases: seq[MatchCase] = @[]
+
+  while p.cur.kind != tkSymbol or p.cur.lex != "}":
+    # Parse pattern
+    let pattern = p.parsePattern()
+    discard p.expect(tkSymbol, "=>")
+
+    # Parse body: either { block } or single expression
+    let body =
+      if p.cur.kind == tkSymbol and p.cur.lex == "{":
+        # Full block with braces
+        p.parseBlock()
+      else:
+        # Single expression - wrap in statement sequence
+        let expr = p.parseExpr()
+        @[Stmt(kind: skExpr, sexpr: expr, pos: expr.pos)]
+    cases.add(MatchCase(pattern: pattern, body: body))
+
+    # Skip optional comma or semicolon
+    if p.cur.kind == tkSymbol and (p.cur.lex == "," or p.cur.lex == ";"):
+      discard p.eat()
+
+  discard p.expect(tkSymbol, "}")
+  return Expr(kind: ekMatch, matchExpr: matchExpr, cases: cases, pos: p.posOf(t))
+
+proc parsePattern(p: Parser): Pattern =
+  ## Parses match patterns: some(x), none, ok(x), error(x), _
+  let t = p.eat()
+  case t.lex
+  of "some":
+    discard p.expect(tkSymbol, "(")
+    let bindName = p.expect(tkIdent).lex
+    discard p.expect(tkSymbol, ")")
+    return Pattern(kind: pkSome, bindName: bindName)
+  of "none":
+    return Pattern(kind: pkNone)
+  of "ok":
+    discard p.expect(tkSymbol, "(")
+    let bindName = p.expect(tkIdent).lex
+    discard p.expect(tkSymbol, ")")
+    return Pattern(kind: pkOk, bindName: bindName)
+  of "error":
+    discard p.expect(tkSymbol, "(")
+    let bindName = p.expect(tkIdent).lex
+    discard p.expect(tkSymbol, ")")
+    return Pattern(kind: pkErr, bindName: bindName)
+  of "_":
+    return Pattern(kind: pkWildcard)
+  else:
+    raise newParseError(p.posOf(t), "expected pattern (some, none, ok, error, or _)")
 
 proc parseCastExpr(p: Parser; t: Token): Expr =
   ## Parses cast expressions: type(expr)

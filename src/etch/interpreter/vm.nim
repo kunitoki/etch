@@ -16,6 +16,9 @@ type
     refId*: int
     # Array represented as sequence of values
     aval*: seq[V]
+    # Option/Result represented as wrapped value with presence flag
+    hasValue*: bool        # true for Some/Ok, false for None/Err
+    wrappedVal*: ref V     # the actual value for Some/Ok, or error msg for Err
 
   HeapCell = ref object
     alive: bool
@@ -50,6 +53,23 @@ proc vChar(x: char): V = V(kind: tkChar, cval: x)
 proc vBool(x: bool): V = V(kind: tkBool, bval: x)
 proc vRef(id: int): V = V(kind: tkRef, refId: id)
 proc vArray(elements: seq[V]): V = V(kind: tkArray, aval: elements)
+
+proc vOptionSome(val: V): V =
+  var refVal = new(V)
+  refVal[] = val
+  V(kind: tkOption, hasValue: true, wrappedVal: refVal)
+
+proc vOptionNone(): V = V(kind: tkOption, hasValue: false)
+
+proc vResultOk(val: V): V =
+  var refVal = new(V)
+  refVal[] = val
+  V(kind: tkResult, hasValue: true, wrappedVal: refVal)
+
+proc vResultErr(err: V): V =
+  var refVal = new(V)
+  refVal[] = err
+  V(kind: tkResult, hasValue: false, wrappedVal: refVal)
 
 proc alloc(vm: VM; v: V): V =
   vm.heap.add HeapCell(alive: true, val: v)
@@ -119,10 +139,8 @@ proc opAddImpl(vm: VM, instr: Instruction) =
   elif a.kind == tkFloat:
     vm.push(vFloat(a.fval + b.fval))
   elif a.kind == tkString:
-    # String concatenation
     vm.push(vString(a.sval & b.sval))
   elif a.kind == tkArray:
-    # Array concatenation
     vm.push(vArray(a.aval & b.aval))
   else:
     raise newException(ValueError, "Unsupported types in addition")
@@ -379,6 +397,68 @@ proc opCastImpl(vm: VM, instr: Instruction) =
   else:
     raise newException(ValueError, "unsupported cast type")
 
+proc opMakeOptionSomeImpl(vm: VM, instr: Instruction) =
+  let value = vm.pop()
+  vm.push(vOptionSome(value))
+
+proc opMakeOptionNoneImpl(vm: VM, instr: Instruction) =
+  vm.push(vOptionNone())
+
+proc opMakeResultOkImpl(vm: VM, instr: Instruction) =
+  let value = vm.pop()
+  vm.push(vResultOk(value))
+
+proc opMakeResultErrImpl(vm: VM, instr: Instruction) =
+  let errValue = vm.pop()
+  vm.push(vResultErr(errValue))
+
+proc opMatchValueImpl(vm: VM, instr: Instruction) =
+  let value = vm.peek() # Don't pop yet, just peek
+  case instr.arg:
+  of 0: # check for None
+    if value.kind == tkOption and not value.hasValue:
+      vm.push(vBool(true))
+    else:
+      vm.push(vBool(false))
+  of 1: # check for Some
+    if value.kind == tkOption and value.hasValue:
+      vm.push(vBool(true))
+    else:
+      vm.push(vBool(false))
+  of 2: # check for Ok
+    if value.kind == tkResult and value.hasValue:
+      vm.push(vBool(true))
+    else:
+      vm.push(vBool(false))
+  of 3: # check for Err
+    if value.kind == tkResult and not value.hasValue:
+      vm.push(vBool(true))
+    else:
+      vm.push(vBool(false))
+  else:
+    vm.push(vBool(false))
+
+proc opExtractSomeImpl(vm: VM, instr: Instruction) =
+  let option = vm.pop()
+  if option.kind == tkOption and option.hasValue and option.wrappedVal != nil:
+    vm.push(option.wrappedVal[])
+  else:
+    raise newException(ValueError, "extractSome: not a Some value")
+
+proc opExtractOkImpl(vm: VM, instr: Instruction) =
+  let result = vm.pop()
+  if result.kind == tkResult and result.hasValue and result.wrappedVal != nil:
+    vm.push(result.wrappedVal[])
+  else:
+    raise newException(ValueError, "extractOk: not an Ok value")
+
+proc opExtractErrImpl(vm: VM, instr: Instruction) =
+  let result = vm.pop()
+  if result.kind == tkResult and not result.hasValue and result.wrappedVal != nil:
+    vm.push(result.wrappedVal[])
+  else:
+    raise newException(ValueError, "extractErr: not an Err value")
+
 proc opJumpImpl(vm: VM, instr: Instruction) =
   vm.pc = int(instr.arg)
 
@@ -468,6 +548,99 @@ proc opCallImpl(vm: VM, instr: Instruction): bool =
         vm.push(vString(""))
     return true
 
+  if funcName == "parseInt":
+    if argCount == 1:
+      let strArg = vm.pop()
+      if strArg.kind == tkString:
+        try:
+          let parsed = parseInt(strArg.sval)
+          vm.push(vOptionSome(vInt(parsed)))
+        except:
+          vm.push(vOptionNone())
+      else:
+        vm.push(vOptionNone())
+    return true
+
+  if funcName == "parseFloat":
+    if argCount == 1:
+      let strArg = vm.pop()
+      if strArg.kind == tkString:
+        try:
+          let parsed = parseFloat(strArg.sval)
+          vm.push(vOptionSome(vFloat(parsed)))
+        except:
+          vm.push(vOptionNone())
+      else:
+        vm.push(vOptionNone())
+    return true
+
+  if funcName == "parseBool":
+    if argCount == 1:
+      let strArg = vm.pop()
+      if strArg.kind == tkString:
+        case strArg.sval.toLower()
+        of "true", "1", "yes", "on":
+          vm.push(vOptionSome(vBool(true)))
+        of "false", "0", "no", "off":
+          vm.push(vOptionSome(vBool(false)))
+        else:
+          vm.push(vOptionNone())
+      else:
+        vm.push(vOptionNone())
+    return true
+
+  if funcName == "toString":
+    if argCount == 1:
+      let arg = vm.pop()
+      case arg.kind
+      of tkInt:
+        vm.push(vString($arg.ival))
+      of tkFloat:
+        vm.push(vString($arg.fval))
+      of tkBool:
+        vm.push(vString($arg.bval))
+      of tkChar:
+        vm.push(vString($arg.cval))
+      else:
+        vm.push(vString(""))
+    return true
+
+  if funcName == "isSome":
+    if argCount == 1:
+      let arg = vm.pop()
+      if arg.kind == tkOption:
+        vm.push(vBool(arg.hasValue))
+      else:
+        vm.push(vBool(false))
+    return true
+
+  if funcName == "isNone":
+    if argCount == 1:
+      let arg = vm.pop()
+      if arg.kind == tkOption:
+        vm.push(vBool(not arg.hasValue))
+      else:
+        vm.push(vBool(false))
+    return true
+
+  if funcName == "isOk":
+    if argCount == 1:
+      let arg = vm.pop()
+      if arg.kind == tkResult:
+        vm.push(vBool(arg.hasValue))
+      else:
+        vm.push(vBool(false))
+    return true
+
+  if funcName == "isErr":
+    if argCount == 1:
+      let arg = vm.pop()
+      if arg.kind == tkResult:
+        vm.push(vBool(not arg.hasValue))
+      else:
+        vm.push(vBool(false))
+    return true
+
   # User-defined function call
   if not vm.program.functions.hasKey(funcName):
     raise newException(ValueError, "Unknown function: " & funcName)
@@ -538,6 +711,14 @@ proc executeInstruction*(vm: VM): bool =
   of opArraySlice: vm.opArraySliceImpl(instr)
   of opArrayLen: vm.opArrayLenImpl(instr)
   of opCast: vm.opCastImpl(instr)
+  of opMakeOptionSome: vm.opMakeOptionSomeImpl(instr)
+  of opMakeOptionNone: vm.opMakeOptionNoneImpl(instr)
+  of opMakeResultOk: vm.opMakeResultOkImpl(instr)
+  of opMakeResultErr: vm.opMakeResultErrImpl(instr)
+  of opMatchValue: vm.opMatchValueImpl(instr)
+  of opExtractSome: vm.opExtractSomeImpl(instr)
+  of opExtractOk: vm.opExtractOkImpl(instr)
+  of opExtractErr: vm.opExtractErrImpl(instr)
   of opJump: vm.opJumpImpl(instr)
   of opJumpIfFalse: vm.opJumpIfFalseImpl(instr)
   of opCall:

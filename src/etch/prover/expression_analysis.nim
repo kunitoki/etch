@@ -1,23 +1,29 @@
 # prover/expression_analysis.nim
 # Expression analysis for the safety prover
 
+
 import std/[strformat, options, tables]
 import ../frontend/ast, ../errors, ../interpreter/serialize
 import types, binary_operations, function_evaluation
+
 
 proc verboseProverLog*(flags: CompilerFlags, msg: string) =
   ## Print verbose debug message if verbose flag is enabled
   if flags.verbose:
     echo "[PROVER] ", msg
 
+
 # Forward declaration for mutual recursion
 proc analyzeExpr*(e: Expr; env: Env, prog: Program = nil, flags: CompilerFlags = CompilerFlags()): Info
+
 
 proc analyzeBoolExpr*(e: Expr): Info =
   infoBool(e.bval)
 
+
 proc analyzeIntExpr*(e: Expr): Info =
   infoConst(e.ival)
+
 
 proc analyzeFloatExpr*(e: Expr): Info =
   # For float literals, we can provide a reasonable integer range for cast analysis
@@ -27,14 +33,17 @@ proc analyzeFloatExpr*(e: Expr): Info =
   else:
     Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
 
+
 proc analyzeStringExpr*(e: Expr): Info =
   # String literal - track length for bounds checking
   let length = e.sval.len.int64
-  infoString(length, lengthKnown = true)
+  infoString(length, sizeKnown = true)
+
 
 proc analyzeCharExpr*(e: Expr): Info =
   # char analysis not needed for safety, chars are always initialized
   Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
+
 
 proc analyzeVarExpr*(e: Expr, env: Env): Info =
   if env.vals.hasKey(e.vname):
@@ -43,6 +52,7 @@ proc analyzeVarExpr*(e: Expr, env: Env): Info =
       raise newProverError(e.pos, &"use of uninitialized variable '{e.vname}' - variable may not be initialized in all control flow paths")
     return info
   raise newProverError(e.pos, &"use of undeclared variable '{e.vname}'")
+
 
 proc analyzeUnaryExpr*(e: Expr, env: Env, prog: Program, flags: CompilerFlags = CompilerFlags()): Info =
   let i0 = analyzeExpr(e.ue, env, prog, flags)
@@ -53,6 +63,7 @@ proc analyzeUnaryExpr*(e: Expr, env: Env, prog: Program, flags: CompilerFlags = 
                 maxv: (if i0.minv == IMin: IMax else: -i0.minv), initialized: true)
   of uoNot:
     return infoBool(false) # boolean domain is tiny; not needed for arithmetic safety
+
 
 proc analyzeBinaryExpr*(e: Expr, env: Env, prog: Program, flags: CompilerFlags = CompilerFlags()): Info =
   let a = analyzeExpr(e.lhs, env, prog, flags)
@@ -65,6 +76,7 @@ proc analyzeBinaryExpr*(e: Expr, env: Env, prog: Program, flags: CompilerFlags =
   of boMod: return analyzeBinaryModulo(e, a, b)
   of boEq,boNe,boLt,boLe,boGt,boGe: return analyzeBinaryComparison(e, a, b)
   of boAnd,boOr: return analyzeBinaryLogical(e, a, b)
+
 
 proc analyzeRandCall*(e: Expr, env: Env, prog: Program): Info =
   # analyze arguments for safety
@@ -104,6 +116,7 @@ proc analyzeRandCall*(e: Expr, env: Env, prog: Program): Info =
     # Invalid rand call, return unknown
     return infoUnknown()
 
+
 proc analyzeBuiltinCall*(e: Expr, env: Env, prog: Program): Info =
   # recognize trusted builtins affecting nonNil/nonZero
   if e.fname == "print":
@@ -112,9 +125,23 @@ proc analyzeBuiltinCall*(e: Expr, env: Env, prog: Program): Info =
     return infoUnknown()
   if e.fname == "rand":
     return analyzeRandCall(e, env, prog)
+  if e.fname == "toString":
+    # analyze argument for safety
+    if e.args.len > 0:
+      let argInfo = analyzeExpr(e.args[0], env, prog)
+      # If we know the integer value, we can compute string length
+      if argInfo.known:
+        let strLen = ($argInfo.cval).len.int64
+        return infoString(strLen, sizeKnown = true)
+      else:
+        # Unknown value - return unknown string length
+        return infoString(0, sizeKnown = false)
+    else:
+      return infoString(0, sizeKnown = false)
   # Unknown builtin - just analyze arguments
   for arg in e.args: discard analyzeExpr(arg, env, prog)
   return infoUnknown()
+
 
 proc analyzeUserDefinedCall*(e: Expr, env: Env, prog: Program): Info =
   # User-defined function call - perform call-site safety analysis
@@ -203,6 +230,7 @@ proc analyzeUserDefinedCall*(e: Expr, env: Env, prog: Program): Info =
 
   return infoUnknown()
 
+
 proc analyzeCallExpr*(e: Expr, env: Env, prog: Program): Info =
   # User-defined function call - perform call-site safety analysis
   if prog != nil and prog.funInstances.hasKey(e.fname):
@@ -210,15 +238,18 @@ proc analyzeCallExpr*(e: Expr, env: Env, prog: Program): Info =
   else:
     return analyzeBuiltinCall(e, env, prog)
 
+
 proc analyzeNewRefExpr*(e: Expr, env: Env, prog: Program): Info =
   # newRef always non-nil
   discard analyzeExpr(e.init, env, prog)  # Analyze the initialization expression
   Info(known: false, nonNil: true, initialized: true)
 
+
 proc analyzeDerefExpr*(e: Expr, env: Env, prog: Program): Info =
   let i0 = analyzeExpr(e.refExpr, env, prog)
   if not i0.nonNil: raise newException(ValueError, "Prover: cannot prove ref non-nil before deref")
   infoUnknown()
+
 
 proc analyzeCastExpr*(e: Expr, env: Env, prog: Program): Info =
   # Explicit cast - analyze the source expression and return appropriate info for target type
@@ -242,12 +273,14 @@ proc analyzeCastExpr*(e: Expr, env: Env, prog: Program): Info =
     # Unknown source value: be conservative
     Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
 
+
 proc analyzeArrayExpr*(e: Expr, env: Env, prog: Program): Info =
   # Array literal - analyze all elements for safety and track size
   for elem in e.elements:
     discard analyzeExpr(elem, env, prog)
   # Return info with known array size
   infoArray(e.elements.len.int64, sizeKnown = true)
+
 
 proc analyzeIndexExpr*(e: Expr, env: Env, prog: Program): Info =
   # Array/String indexing - comprehensive bounds checking
@@ -277,37 +310,42 @@ proc analyzeIndexExpr*(e: Expr, env: Env, prog: Program): Info =
     elif indexInfo.minv < 0:
       raise newProverError(e.indexExpr.pos, &"index range [{indexInfo.minv}, {indexInfo.maxv}] includes negative values")
 
-  # Determine the result type information for nested arrays
-  # If the result type is also an array, we need to analyze the specific inner array size
+  # Determine the result type information for nested arrays and scalar elements
+  # Case 1: Direct indexing into array literal
+  if e.arrayExpr.kind == ekArray and indexInfo.known and
+     indexInfo.cval >= 0 and indexInfo.cval < e.arrayExpr.elements.len:
+    # We're indexing into an array literal with a known index
+    let elementExpr = e.arrayExpr.elements[indexInfo.cval]
+
+    # If the element is itself an array literal, return array info
+    if elementExpr.kind == ekArray:
+      return infoArray(elementExpr.elements.len.int64, sizeKnown = true)
+    # For scalar elements (like integers), analyze the element directly
+    else:
+      return analyzeExpr(elementExpr, env, prog)
+
+  # Case 2: Indexing into a variable that contains an array literal
+  elif e.arrayExpr.kind == ekVar and indexInfo.known:
+    # Look up the variable's original expression
+    if env.exprs.hasKey(e.arrayExpr.vname):
+      let originalExpr = env.exprs[e.arrayExpr.vname]
+      if originalExpr.kind == ekArray and indexInfo.cval >= 0 and indexInfo.cval < originalExpr.elements.len:
+        # The variable was initialized with an array literal
+        let elementExpr = originalExpr.elements[indexInfo.cval]
+
+        # If the element is itself an array literal, return array info
+        if elementExpr.kind == ekArray:
+          return infoArray(elementExpr.elements.len.int64, sizeKnown = true)
+        # For scalar elements (like integers), analyze the element directly
+        else:
+          return analyzeExpr(elementExpr, env, prog)
+
+  # If result type is an array but we can't determine exact size
   if e.typ != nil and e.typ.kind == tkArray:
-    # The result is an array type - need to determine its size
-    # Case 1: Direct indexing into array literal
-    if e.arrayExpr.kind == ekArray and indexInfo.known and
-       indexInfo.cval >= 0 and indexInfo.cval < e.arrayExpr.elements.len:
-      # We're indexing into an array literal with a known index
-      let elementExpr = e.arrayExpr.elements[indexInfo.cval]
-      if elementExpr.kind == ekArray:
-        # The element is itself an array literal - return its specific size info
-        return infoArray(elementExpr.elements.len.int64, sizeKnown = true)
-
-    # Case 2: Indexing into a variable that contains an array literal
-    elif e.arrayExpr.kind == ekVar and indexInfo.known:
-      # Look up the variable's original expression
-      if env.exprs.hasKey(e.arrayExpr.vname):
-        let originalExpr = env.exprs[e.arrayExpr.vname]
-        if originalExpr.kind == ekArray and indexInfo.cval >= 0 and indexInfo.cval < originalExpr.elements.len:
-          # The variable was initialized with an array literal
-          let elementExpr = originalExpr.elements[indexInfo.cval]
-          if elementExpr.kind == ekArray:
-            # The element is itself an array literal - return its specific size info
-            return infoArray(elementExpr.elements.len.int64, sizeKnown = true)
-      # If we can't determine the exact size, return unknown array size
-      return infoArray(-1, sizeKnown = false)
-
-    # If we can't determine the exact size but know it's an array, return unknown array info
     return infoArray(-1, sizeKnown = false)
 
   infoUnknown()
+
 
 proc analyzeSliceExpr*(e: Expr, env: Env, prog: Program): Info =
   # Array slicing - comprehensive slice bounds checking
@@ -391,12 +429,13 @@ proc analyzeSliceExpr*(e: Expr, env: Env, prog: Program): Info =
         let actualEnd = min(arrayInfo.arraySize, endVal)
         if actualEnd >= actualStart:
           let sliceLength = actualEnd - actualStart
-          return infoString(sliceLength, lengthKnown = true)
+          return infoString(sliceLength, sizeKnown = true)
 
     # Fall back to unknown length
-    return infoString(-1, lengthKnown = false)
+    return infoString(-1, sizeKnown = false)
   else:
     return infoUnknown()
+
 
 proc analyzeArrayLenExpr*(e: Expr, env: Env, prog: Program): Info =
   # Array/String length operator: #array/#string -> int
@@ -411,21 +450,87 @@ proc analyzeArrayLenExpr*(e: Expr, env: Env, prog: Program): Info =
     # Size/length is unknown at compile time, but we know it's non-negative
     Info(known: false, minv: 0, maxv: IMax, nonZero: false, initialized: true)
 
+
 proc analyzeNilExpr*(e: Expr): Info =
   # nil reference - always known and not non-nil
   Info(known: false, nonNil: false, initialized: true)
 
-proc analyzeExpr*(e: Expr; env: Env, prog: Program = nil, flags: CompilerFlags = CompilerFlags()): Info =
-  let exprKindStr = case e.kind
-    of ekInt: "integer literal"
-    of ekVar: "variable reference"
-    of ekBin: "binary operation"
-    of ekCall: "function call"
-    of ekIndex: "array index"
-    of ekDeref: "dereference"
-    else: $e.kind
 
-  verboseProverLog(flags, "Analyzing " & exprKindStr & (if e.kind == ekVar: " '" & e.vname & "'" else: ""))
+proc analyzeOptionSomeExpr*(e: Expr, env: Env, prog: Program): Info =
+  # some(value) - analyze the wrapped value
+  discard analyzeExpr(e.someExpr, env, prog)
+  infoUnknown()  # option value is unknown without pattern matching
+
+
+proc analyzeOptionNoneExpr*(e: Expr): Info =
+  # none - safe but represents absence of value
+  infoUnknown()
+
+
+proc analyzeResultOkExpr*(e: Expr, env: Env, prog: Program): Info =
+  # ok(value) - analyze the wrapped value
+  discard analyzeExpr(e.okExpr, env, prog)
+  infoUnknown()  # result value is unknown without pattern matching
+
+
+proc analyzeResultErrExpr*(e: Expr, env: Env, prog: Program): Info =
+  # error(msg) - analyze the error message
+  discard analyzeExpr(e.errExpr, env, prog)
+  infoUnknown()  # error value is unknown without pattern matching
+
+
+proc analyzeMatchExpr(e: Expr, env: Env, prog: Program): Info =
+  # Simplified match expression analysis that only handles expressions, not full statements
+  let matchedInfo = analyzeExpr(e.matchExpr, env, prog)
+
+  for matchCase in e.cases:
+    # Create new environment for this case with pattern bindings
+    var caseEnv = Env(vals: env.vals, nils: env.nils, exprs: env.exprs)
+
+    # Copy parent environment
+    for k, v in env.vals: caseEnv.vals[k] = v
+    for k, v in env.nils: caseEnv.nils[k] = v
+    for k, v in env.exprs: caseEnv.exprs[k] = v
+
+    # Add pattern binding to environment
+    case matchCase.pattern.kind:
+    of pkSome, pkOk:
+      # For some(x) and ok(x), bind the inner value
+      caseEnv.vals[matchCase.pattern.bindName] = matchedInfo
+      caseEnv.nils[matchCase.pattern.bindName] = false
+    of pkErr:
+      # For error(x), bind a string value
+      caseEnv.vals[matchCase.pattern.bindName] = infoUnknown()
+      caseEnv.nils[matchCase.pattern.bindName] = false
+    else:
+      # pkNone, pkWildcard - no bindings
+      discard
+
+    # Analyze case body statements (limited to avoid circular imports)
+    for stmt in matchCase.body:
+      case stmt.kind:
+      of skExpr:
+        discard analyzeExpr(stmt.sexpr, caseEnv, prog)
+      of skVar:
+        # Handle variable declarations in match case bodies
+        if stmt.vinit.isSome():
+          let info = analyzeExpr(stmt.vinit.get(), caseEnv, prog)
+          caseEnv.vals[stmt.vname] = info
+          caseEnv.nils[stmt.vname] = not info.nonNil
+          caseEnv.exprs[stmt.vname] = stmt.vinit.get()
+        else:
+          caseEnv.vals[stmt.vname] = infoUninitialized()
+          caseEnv.nils[stmt.vname] = true
+      else:
+        # For other statement types, we'll skip detailed analysis
+        # This is a limitation but avoids circular imports
+        discard
+
+  return infoUnknown()  # match result is unknown without deeper analysis
+
+
+proc analyzeExpr*(e: Expr; env: Env, prog: Program = nil, flags: CompilerFlags = CompilerFlags()): Info =
+  verboseProverLog(flags, "Analyzing " & $e.kind & (if e.kind == ekVar: " '" & e.vname & "'" else: ""))
 
   case e.kind
   of ekInt: return analyzeIntExpr(e)
@@ -445,3 +550,8 @@ proc analyzeExpr*(e: Expr; env: Env, prog: Program = nil, flags: CompilerFlags =
   of ekArrayLen: return analyzeArrayLenExpr(e, env, prog)
   of ekCast: return analyzeCastExpr(e, env, prog)
   of ekNil: return analyzeNilExpr(e)
+  of ekOptionSome: return analyzeOptionSomeExpr(e, env, prog)
+  of ekOptionNone: return analyzeOptionNoneExpr(e)
+  of ekResultOk: return analyzeResultOkExpr(e, env, prog)
+  of ekResultErr: return analyzeResultErrExpr(e, env, prog)
+  of ekMatch: return analyzeMatchExpr(e, env, prog)

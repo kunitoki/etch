@@ -5,6 +5,7 @@
   "patterns": [
     { "include": "#keywords" },
     { "include": "#types" },
+    { "include": "#functions" },
     { "include": "#numbers" },
     { "include": "#strings" },
     { "include": "#comments" }
@@ -13,7 +14,7 @@
     "keywords": {
       "patterns": [
         {
-          "match": "\\b(fn|comptime|inject|let|var|while|for|in|break|if|else|return|print)\\b",
+          "match": "\\b(fn|let|var|while|for|in|break|if|else|return|match|comptime)\\b",
           "name": "keyword.control.etchlang"
         }
       ]
@@ -21,7 +22,15 @@
     "types": {
       "patterns": [
         {
-          "match": "\\b(void|bool|char|int|float|string|array)\\b",
+          "match": "\\b(void|bool|char|int|float|string|array|ref|option|result)\\b",
+          "name": "storage.type.etchlang"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "match": "\\b(print|inject|some|isSome|none|isNone|ok|isOk|error|isError|parseBool|parseInt|parseFloat|toString|seed|rand|readFile)\\b",
           "name": "storage.type.etchlang"
         }
       ]

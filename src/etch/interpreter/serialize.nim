@@ -35,6 +35,8 @@ type
     opPop, opDup
     opMakeArray, opArrayGet, opArraySlice, opArrayLen
     opCast
+    opMakeOptionSome, opMakeOptionNone, opMakeResultOk, opMakeResultErr
+    opMatchValue, opExtractSome, opExtractOk, opExtractErr
 
   Instruction* = object
     op*: OpCode
@@ -63,7 +65,7 @@ type
 
 const
   BYTECODE_MAGIC = "ETCH"
-  BYTECODE_VERSION = 8
+  BYTECODE_VERSION = 10
 
 proc serializeToBinary*(prog: BytecodeProgram): string =
   ## Serialize bytecode program to binary format for storage

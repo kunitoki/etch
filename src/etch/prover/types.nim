@@ -47,8 +47,8 @@ proc infoUninitialized*(): Info = Info(known: false, minv: IMin, maxv: IMax, ini
 proc infoArray*(size: int64, sizeKnown: bool = true): Info =
   Info(known: false, minv: IMin, maxv: IMax, initialized: true, isArray: true, arraySize: size, arraySizeKnown: sizeKnown)
 
-proc infoString*(length: int64, lengthKnown: bool = true): Info =
-  Info(known: false, minv: IMin, maxv: IMax, initialized: true, isString: true, arraySize: length, arraySizeKnown: lengthKnown)
+proc infoString*(length: int64, sizeKnown: bool = true): Info =
+  Info(known: false, minv: IMin, maxv: IMax, initialized: true, isString: true, arraySize: length, arraySizeKnown: sizeKnown)
 
 proc infoRange*(minv, maxv: int64): Info =
   Info(known: false, minv: minv, maxv: maxv, initialized: true, nonZero: minv > 0 or maxv < 0)

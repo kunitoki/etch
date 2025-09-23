@@ -1,0 +1,4 @@
+Valid int is Some - correct!
+Invalid int is None - correct!
+Success result is Ok - correct!
+Monad check functions working!

@@ -1,7 +1,13 @@
 # ast.nim
 # Core AST + type for Etch
 
+
 import std/[tables, options]
+
+
+const
+  AST_VERSION* = 2
+
 
 type
   Pos* = object
@@ -9,7 +15,7 @@ type
     filename*: string
 
   TypeKind* = enum
-    tkInt, tkFloat, tkString, tkChar, tkBool, tkVoid, tkRef, tkGeneric, tkArray
+    tkInt, tkFloat, tkString, tkChar, tkBool, tkVoid, tkRef, tkGeneric, tkArray, tkOption, tkResult
 
   EtchType* = ref object
     kind*: TypeKind
@@ -30,9 +36,24 @@ type
 
   UnOp* = enum uoNot, uoNeg
 
+  PatternKind* = enum
+    pkSome, pkNone, pkOk, pkErr, pkWildcard
+
+  Pattern* = ref object
+    case kind*: PatternKind
+    of pkSome, pkOk, pkErr:
+      bindName*: string  # variable name to bind the extracted value
+    of pkNone, pkWildcard:
+      discard
+
+  MatchCase* = object
+    pattern*: Pattern
+    body*: seq[Stmt]  # statements to execute if pattern matches
+
   ExprKind* = enum
-    ekInt, ekFloat, ekString, ekChar, ekBool, ekVar, ekBin, ekUn,
-    ekCall, ekNewRef, ekDeref, ekArray, ekIndex, ekSlice, ekArrayLen, ekCast, ekNil
+    ekBool, ekChar, ekInt, ekFloat, ekString, ekVar, ekBin, ekUn,
+    ekCall, ekNewRef, ekDeref, ekArray, ekIndex, ekSlice, ekArrayLen, ekCast, ekNil,
+    ekOptionSome, ekOptionNone, ekResultOk, ekResultErr, ekMatch
 
   Expr* = ref object
     pos*: Pos
@@ -81,6 +102,17 @@ type
       castExpr*: Expr
     of ekNil:
       discard
+    of ekOptionSome:
+      someExpr*: Expr
+    of ekOptionNone:
+      discard
+    of ekResultOk:
+      okExpr*: Expr
+    of ekResultErr:
+      errExpr*: Expr
+    of ekMatch:
+      matchExpr*: Expr        # expression to match against
+      cases*: seq[MatchCase]  # pattern cases
 
   StmtKind* = enum
     skVar, skAssign, skIf, skWhile, skFor, skBreak, skExpr, skReturn, skComptime
@@ -140,6 +172,7 @@ type
     funs*: Table[string, seq[FunDecl]]    # generic templates (supports overloads)
     funInstances*: Table[string, FunDecl] # monomorphized instances
 
+
 proc tVoid*(): EtchType = EtchType(kind: tkVoid)
 proc tBool*(): EtchType = EtchType(kind: tkBool)
 proc tChar*(): EtchType = EtchType(kind: tkChar)
@@ -149,6 +182,9 @@ proc tString*(): EtchType = EtchType(kind: tkString)
 proc tArray*(inner: EtchType): EtchType = EtchType(kind: tkArray, inner: inner)
 proc tRef*(inner: EtchType): EtchType = EtchType(kind: tkRef, inner: inner)
 proc tGeneric*(name: string): EtchType = EtchType(kind: tkGeneric, name: name)
+proc tOption*(inner: EtchType): EtchType = EtchType(kind: tkOption, inner: inner)
+proc tResult*(inner: EtchType): EtchType = EtchType(kind: tkResult, inner: inner)
+
 
 proc `$`*(t: EtchType): string =
   case t.kind
@@ -161,6 +197,31 @@ proc `$`*(t: EtchType): string =
   of tkArray: "array[" & $t.inner & "]"
   of tkRef: "ref[" & $t.inner & "]"
   of tkGeneric: t.name
+  of tkOption: "option[" & $t.inner & "]"
+  of tkResult: "result[" & $t.inner & "]"
+
+
+proc `$`*(t: ExprKind): string =
+  case t
+  of ekBool: "bool literal"
+  of ekChar: "char literal"
+  of ekInt: "integer literal"
+  of ekFloat: "float literal"
+  of ekString: "string literal"
+  of ekVar: "variable reference"
+  of ekBin: "binary operation"
+  of ekUn: "unary operation"
+  of ekCall: "function call"
+  of ekNewRef: "reference new"
+  of ekDeref: "dereference operation"
+  of ekArray: "array literal"
+  of ekIndex: "array index"
+  of ekSlice: "array slice"
+  of ekArrayLen: "array length"
+  of ekCast: "type cast"
+  of ekNil: "nil literal"
+  else: "unknown kind"
+
 
 proc copyType*(t: EtchType): EtchType =
   case t.kind
@@ -173,6 +234,9 @@ proc copyType*(t: EtchType): EtchType =
   of tkArray: tArray(copyType(t.inner))
   of tkRef: tRef(copyType(t.inner))
   of tkGeneric: tGeneric(t.name)
+  of tkOption: tOption(copyType(t.inner))
+  of tkResult: tResult(copyType(t.inner))
+
 
 # Function overload management helpers
 proc addFunction*(prog: Program, funDecl: FunDecl) =
@@ -182,6 +246,7 @@ proc addFunction*(prog: Program, funDecl: FunDecl) =
   else:
     prog.funs[funDecl.name] = @[funDecl]
 
+
 proc getFunctionOverloads*(prog: Program, name: string): seq[FunDecl] =
   ## Get all overloads for a function name
   if prog.funs.hasKey(name):
@@ -189,12 +254,13 @@ proc getFunctionOverloads*(prog: Program, name: string): seq[FunDecl] =
   else:
     result = @[]
 
+
 proc generateOverloadSignature*(funDecl: FunDecl): string =
   ## Generate a unique signature string for overload resolution using compact name mangling
   ## Format: funcName__paramTypes_returnType (inspired by JNI/C++ mangling but simplified)
   result = funDecl.name & "__"
 
-  # Compact type encoding: v=void, b=bool, c=char, i=int, f=float, s=string, A=array, R=ref
+  # Compact type encoding: v=void, b=bool, c=char, i=int, f=float, s=string, A=array, R=ref, O=option, E=result
   proc encodeType(t: EtchType): string =
     case t.kind
     of tkVoid: "v"
@@ -206,6 +272,8 @@ proc generateOverloadSignature*(funDecl: FunDecl): string =
     of tkArray: "A" & encodeType(t.inner)
     of tkRef: "R" & encodeType(t.inner)
     of tkGeneric: "G" & $t.name.len & t.name
+    of tkOption: "O" & encodeType(t.inner)
+    of tkResult: "E" & encodeType(t.inner)
 
   # Encode parameters
   for param in funDecl.params:

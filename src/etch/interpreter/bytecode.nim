@@ -84,6 +84,11 @@ proc compileIndexExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationCo
 proc compileSliceExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext)
 proc compileArrayLenExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext)
 proc compileCastExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext)
+proc compileOptionSomeExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext)
+proc compileOptionNoneExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext)
+proc compileResultOkExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext)
+proc compileResultErrExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext)
+proc compileMatchExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext)
 
 proc compileUnaryExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
   prog.compileExpr(e.ue, ctx)
@@ -165,6 +170,22 @@ proc compileCastExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationCon
 proc compileNilExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
   prog.emit(opLoadNil, pos = e.pos, ctx = ctx)
 
+proc compileOptionSomeExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
+  prog.compileExpr(e.someExpr, ctx)
+  prog.emit(opMakeOptionSome, pos = e.pos, ctx = ctx)
+
+proc compileOptionNoneExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
+  prog.emit(opMakeOptionNone, pos = e.pos, ctx = ctx)
+
+proc compileResultOkExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
+  prog.compileExpr(e.okExpr, ctx)
+  prog.emit(opMakeResultOk, pos = e.pos, ctx = ctx)
+
+proc compileResultErrExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
+  prog.compileExpr(e.errExpr, ctx)
+  prog.emit(opMakeResultErr, pos = e.pos, ctx = ctx)
+
+
 proc compileExpr*(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
   case e.kind
   of ekInt: prog.compileIntExpr(e, ctx)
@@ -184,6 +205,11 @@ proc compileExpr*(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContex
   of ekArrayLen: prog.compileArrayLenExpr(e, ctx)
   of ekCast: prog.compileCastExpr(e, ctx)
   of ekNil: prog.compileNilExpr(e, ctx)
+  of ekOptionSome: prog.compileOptionSomeExpr(e, ctx)
+  of ekOptionNone: prog.compileOptionNoneExpr(e, ctx)
+  of ekResultOk: prog.compileResultOkExpr(e, ctx)
+  of ekResultErr: prog.compileResultErrExpr(e, ctx)
+  of ekMatch: prog.compileMatchExpr(e, ctx)
 
 proc compileStmt*(prog: var BytecodeProgram, s: Stmt, ctx: var CompilationContext)
 
@@ -382,6 +408,89 @@ proc compileStmt*(prog: var BytecodeProgram, s: Stmt, ctx: var CompilationContex
   of skExpr: prog.compileExprStmt(s, ctx)
   of skReturn: prog.compileReturnStmt(s, ctx)
   of skComptime: prog.compileComptimeStmt(s, ctx)
+
+proc compileMatchExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
+  # Compile the expression to be matched
+  prog.compileExpr(e.matchExpr, ctx)
+
+  # Create jump table for each pattern case
+  var caseJumps: seq[int] = @[]
+  var endJumps: seq[int] = @[]
+
+  for i, matchCase in e.cases:
+    # Duplicate the matched value for pattern testing
+    prog.emit(opDup, pos = e.pos, ctx = ctx)
+
+    # Emit pattern matching code
+    case matchCase.pattern.kind:
+    of pkSome:
+      # Check if option is Some and extract value
+      prog.emit(opMatchValue, 1, pos = e.pos, ctx = ctx) # 1 = check for Some
+      let jumpToNext = prog.instructions.len
+      prog.emit(opJumpIfFalse, pos = e.pos, ctx = ctx) # Jump if not Some
+      caseJumps.add(jumpToNext)
+
+      # Extract and bind value
+      prog.emit(opExtractSome, pos = e.pos, ctx = ctx)
+      prog.emit(opStoreVar, 0, matchCase.pattern.bindName, e.pos, ctx)
+
+    of pkNone:
+      # Check if option is None
+      prog.emit(opMatchValue, 0, pos = e.pos, ctx = ctx) # 0 = check for None
+      let jumpToNext = prog.instructions.len
+      prog.emit(opJumpIfFalse, pos = e.pos, ctx = ctx) # Jump if not None
+      caseJumps.add(jumpToNext)
+
+    of pkOk:
+      # Check if result is Ok and extract value
+      prog.emit(opMatchValue, 2, pos = e.pos, ctx = ctx) # 2 = check for Ok
+      let jumpToNext = prog.instructions.len
+      prog.emit(opJumpIfFalse, pos = e.pos, ctx = ctx) # Jump if not Ok
+      caseJumps.add(jumpToNext)
+
+      # Extract and bind value
+      prog.emit(opExtractOk, pos = e.pos, ctx = ctx)
+      prog.emit(opStoreVar, 0, matchCase.pattern.bindName, e.pos, ctx)
+
+    of pkErr:
+      # Check if result is Error and extract value
+      prog.emit(opMatchValue, 3, pos = e.pos, ctx = ctx) # 3 = check for Err
+      let jumpToNext = prog.instructions.len
+      prog.emit(opJumpIfFalse, pos = e.pos, ctx = ctx) # Jump if not Err
+      caseJumps.add(jumpToNext)
+
+      # Extract and bind error value
+      prog.emit(opExtractErr, pos = e.pos, ctx = ctx)
+      prog.emit(opStoreVar, 0, matchCase.pattern.bindName, e.pos, ctx)
+
+    of pkWildcard:
+      # Wildcard always matches
+      discard
+
+    # Pop the matched value (consumed by pattern test)
+    prog.emit(opPop, pos = e.pos, ctx = ctx)
+
+    # Compile case body - treat last statement as expression result
+    for i, stmt in matchCase.body:
+      if i == matchCase.body.len - 1 and stmt.kind == skExpr:
+        # Last statement is an expression - compile as expression (don't pop result)
+        prog.compileExpr(stmt.sexpr, ctx)
+      else:
+        # Regular statement - compile normally
+        prog.compileStmt(stmt, ctx)
+
+    # Jump to end of match expression
+    let jumpToEnd = prog.instructions.len
+    prog.emit(opJump, pos = e.pos, ctx = ctx)
+    endJumps.add(jumpToEnd)
+
+    # Patch jump to next case (if this pattern didn't match)
+    if i < caseJumps.len:
+      prog.instructions[caseJumps[i]].arg = prog.instructions.len
+
+  # Patch all jumps to end
+  for jump in endJumps:
+    prog.instructions[jump].arg = prog.instructions.len
 
 proc evaluateConstantExpr(expr: Expr): GlobalValue =
   ## Evaluate simple constant expressions for global variable initialization

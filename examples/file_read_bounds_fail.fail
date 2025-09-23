@@ -1,0 +1,5 @@
+examples/file_read_bounds_fail.etch:20:31: error: index range [-9223372036854775808, 9223372036854775807] extends beyond array bounds [0, 4]
+  19 |     // Use file data in unsafe array index
+  20 |     var safe_calc: int = data[file_number];
+                                     ^
+  21 |     print(safe_calc);

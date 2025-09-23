@@ -1,0 +1,14 @@
+fn main() -> int {
+    // Test that none infers option[int] from assignment context
+    let opt: option[int] = none;
+    let message: string = match opt {
+        some(x) => {
+            "Found: " + toString(x);
+        }
+        none => {
+            "Nothing found";
+        }
+    };
+    print(message);
+    return 0;
+}

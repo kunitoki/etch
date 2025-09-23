@@ -1,0 +1,24 @@
+fn main() -> void {
+    // Test option checking functions
+    let validInt: option[int] = parseInt("42");
+    let invalidInt: option[int] = parseInt("not a number");
+
+    // Test isSome/isNone
+    if isSome(validInt) {
+        print("Valid int is Some - correct!");
+    }
+
+    if isNone(invalidInt) {
+        print("Invalid int is None - correct!");
+    }
+
+    // Test result checking functions
+    let successResult: result[int] = ok(100);
+
+    // Test isOk
+    if isOk(successResult) {
+        print("Success result is Ok - correct!");
+    }
+
+    print("Monad check functions working!");
+}

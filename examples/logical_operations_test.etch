@@ -1,0 +1,37 @@
+// Test: Logical operations with constant folding
+// Tests various logical AND and OR scenarios
+
+fn main() -> void {
+    // Basic constant folding for AND
+    let true_and_true: bool = true and true;     // Should fold to true
+    let true_and_false: bool = true and false;   // Should fold to false
+    let false_and_true: bool = false and true;   // Should fold to false
+    let false_and_false: bool = false and false; // Should fold to false
+
+    print(true_and_true);
+    print(true_and_false);
+    print(false_and_true);
+    print(false_and_false);
+
+    // Basic constant folding for OR
+    let true_or_true: bool = true or true;     // Should fold to true
+    let true_or_false: bool = true or false;   // Should fold to true
+    let false_or_true: bool = false or true;   // Should fold to true
+    let false_or_false: bool = false or false; // Should fold to false
+
+    print(true_or_true);
+    print(true_or_false);
+    print(false_or_true);
+    print(false_or_false);
+
+    // Test with comparisons that evaluate to booleans
+    let zero_eq_zero: bool = (0 == 0) and (1 == 1);   // true and true = true
+    let one_ne_two: bool = (1 != 2) and (2 == 3);     // true and false = false
+    let zero_lt_five: bool = (0 < 5) or (5 < 0);      // true or false = true
+    let false_or_false: bool = (1 == 2) or (2 == 3);  // false or false = false
+
+    print(zero_eq_zero);
+    print(one_ne_two);
+    print(zero_lt_five);
+    print(false_or_false);
+}

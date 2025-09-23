@@ -14,7 +14,8 @@ type
 const keywords = [
   "fn","let","var","return","if","elif","else","while","for","break","in",
   "true","false","int","float","string","char","bool","void","ref",
-  "comptime","new","and","or","array","nil"
+  "comptime","new","and","or","array","nil","option","match",
+  "some","none","ok","error"
 ].toSeq
 
 proc isKeyword(w: string): bool = w in keywords
@@ -44,7 +45,7 @@ proc lex*(src: string): seq[Token] =
       continue
 
     # 2-char symbol
-    if i+1 < src.len and (src.substr(i, i+1) in ["->","==","!=", "<=",">=",".."]):
+    if i+1 < src.len and (src.substr(i, i+1) in ["->","==","!=", "<=",">=","..","=>"]):
       result.add Token(kind: tkSymbol, lex: src.substr(i, i+1), line: line, col: col)
       inc i, 2; inc col, 2
       continue

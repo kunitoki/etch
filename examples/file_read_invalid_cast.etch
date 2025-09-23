@@ -1,0 +1,21 @@
+// Test: Invalid casting from file data
+// Shows how parseInt safely handles invalid input with option types
+
+fn main() -> void {
+    // Read file content with non-numeric data
+    let content: string = readFile("examples/data/file_mixed_data.txt"); // Contains "123,abc,456,xyz"
+
+    // This demonstrates safe parsing - returns none for invalid input
+    let res: string = match parseInt(content) {
+        some(number) => {
+            print(number);
+            "Successfully parsed";
+        }
+        none => {
+            print("Failed to parse number - invalid format");
+            "Parse failed";
+        }
+    };
+
+    print(res);
+}

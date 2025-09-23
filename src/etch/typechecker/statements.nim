@@ -7,6 +7,7 @@ import types, expressions
 
 
 proc typecheckStmt*(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TySubst)
+proc inferMatchExpr*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType
 
 
 proc typecheckVar(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TySubst) =
@@ -22,7 +23,12 @@ proc typecheckVar(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TyS
 
     var tempSubst = subst
     let t0 = try:
-      inferExprTypes(prog, fd, tempScope, s.vinit.get(), tempSubst)
+      if s.vinit.get().kind == ekMatch:
+        # Handle match expressions directly to avoid circular import issues
+        # TODO: Pass expected type to inferMatchExpr when it supports it
+        inferMatchExpr(prog, fd, tempScope, s.vinit.get(), tempSubst)
+      else:
+        inferExprTypes(prog, fd, tempScope, s.vinit.get(), tempSubst, s.vtype)
     except EtchError as e:
       # If we get an error during type inference, check if it's specifically about
       # the variable being initialized (circular reference) vs other issues
@@ -85,7 +91,7 @@ proc typecheckReturn(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var 
     if s.re.isSome(): raise newTypecheckError(s.pos, "void function cannot return a value")
   else:
     if not s.re.isSome(): raise newTypecheckError(s.pos, "non-void function must return a value")
-    let rt = inferExprTypes(prog, fd, sc, s.re.get(), subst)
+    let rt = inferExprTypes(prog, fd, sc, s.re.get(), subst, fd.ret)
     if not typeEq(rt, fd.ret): raise newTypecheckError(s.pos, &"return type mismatch: expected {fd.ret}, got {rt}")
 
 
@@ -142,6 +148,82 @@ proc typecheckBreak(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var T
   discard
 
 
+proc typecheckStmtList*(prog: Program; fd: FunDecl; sc: Scope; stmts: seq[Stmt]; subst: var TySubst): EtchType =
+  ## Type check a list of statements and return the type of the last expression (or void)
+  var resultType = tVoid()
+  for j, stmt in stmts:
+    typecheckStmt(prog, fd, sc, stmt, subst)
+    if j == stmts.len - 1 and stmt.kind == skExpr:
+      # Last statement is expression - this determines block type
+      resultType = stmt.sexpr.typ
+  return resultType
+
+
+proc inferMatchExpr*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  # Type check the matched expression
+  let matchedType = inferExprTypes(prog, fd, sc, e.matchExpr, subst)
+
+  # Verify matched expression is option or result type
+  if matchedType.kind != tkOption and matchedType.kind != tkResult:
+    raise newTypecheckError(e.pos, &"match can only be used with option[T] or result[T] types, got {matchedType}")
+
+  # Check all cases and determine result type
+  if e.cases.len == 0:
+    raise newTypecheckError(e.pos, "match expression must have at least one case")
+
+  var resultType: EtchType = nil
+  var hasRelevantCases = false
+
+  for i, matchCase in e.cases:
+    # Verify pattern matches the matched type
+    case matchedType.kind:
+    of tkOption:
+      if matchCase.pattern.kind notin {pkSome, pkNone, pkWildcard}:
+        raise newTypecheckError(e.pos, &"invalid pattern for option[T]: expected some(_), none, or _")
+      hasRelevantCases = true
+    of tkResult:
+      if matchCase.pattern.kind notin {pkOk, pkErr, pkWildcard}:
+        raise newTypecheckError(e.pos, &"invalid pattern for result[T]: expected ok(_), error(_), or _")
+      hasRelevantCases = true
+    else:
+      discard
+
+    # Create scope for pattern bindings
+    var caseScope = Scope(types: initTable[string, EtchType](), flags: initTable[string, VarFlag]())
+    # Copy parent scope
+    for k, v in sc.types: caseScope.types[k] = v
+    for k, v in sc.flags: caseScope.flags[k] = v
+
+    # Add pattern binding to scope
+    case matchCase.pattern.kind:
+    of pkSome, pkOk:
+      caseScope.types[matchCase.pattern.bindName] = matchedType.inner
+      caseScope.flags[matchCase.pattern.bindName] = vfLet
+    of pkErr:
+      # For error patterns, bind the error value (usually string)
+      caseScope.types[matchCase.pattern.bindName] = tString()  # Assume error messages are strings
+      caseScope.flags[matchCase.pattern.bindName] = vfLet
+    else:
+      discard
+
+    # Type check all statements in case body
+    let caseType = typecheckStmtList(prog, fd, caseScope, matchCase.body, subst)
+
+    if resultType == nil:
+      resultType = caseType
+    elif not typeEq(resultType, caseType):
+      raise newTypecheckError(e.pos, &"match case {i+1} has type {caseType} but expected {resultType}")
+
+  if not hasRelevantCases:
+    raise newTypecheckError(e.pos, "match expression must have at least one relevant case")
+
+  if resultType == nil:
+    resultType = tVoid()
+
+  e.typ = resultType
+  return resultType
+
+
 proc typecheckStmt*(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TySubst) =
   case s.kind
   of skVar: typecheckVar(prog, fd, sc, s, subst)
@@ -150,6 +232,10 @@ proc typecheckStmt*(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var T
   of skWhile: typecheckWhile(prog, fd, sc, s, subst)
   of skFor: typecheckFor(prog, fd, sc, s, subst)
   of skBreak: typecheckBreak(prog, fd, sc, s, subst)
-  of skExpr: discard inferExprTypes(prog, fd, sc, s.sexpr, subst)
+  of skExpr:
+    if s.sexpr.kind == ekMatch:
+      s.sexpr.typ = inferMatchExpr(prog, fd, sc, s.sexpr, subst)
+    else:
+      discard inferExprTypes(prog, fd, sc, s.sexpr, subst)
   of skReturn: typecheckReturn(prog, fd, sc, s, subst)
   of skComptime: typecheckComptime(prog, fd, sc, s, subst)

@@ -6,6 +6,7 @@ import ../frontend/ast, ../errors
 import types
 
 
+
 # Convert BinOp to operator symbol string for user-defined operator lookup
 proc binOpToString(bop: BinOp): string =
   case bop
@@ -30,7 +31,7 @@ proc isOperatorFunction(name: string): bool =
   baseName in ["+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">="]
 
 
-proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType
+proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst; expectedTy: EtchType = nil): EtchType
 
 
 # Builtin function type inference
@@ -54,7 +55,7 @@ proc inferCallBuiltinNew(prog: Program; sc: Scope; e: Expr; subst: var TySubst):
 proc inferCallBuiltinDeref(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
   if e.args.len != 1: raise newTypecheckError(e.pos, "deref expects 1 argument")
   let t0 = inferExprTypes(prog, nil, sc, e.args[0], subst)
-  if t0.kind != tkRef: raise newTypecheckError(e.pos, "deref expects Ref[...]")
+  if t0.kind != tkRef: raise newTypecheckError(e.pos, "deref expects ref[...]")
   e.typ = t0.inner
   return e.typ
 
@@ -106,6 +107,72 @@ proc inferCallBuiltinSeed(prog: Program; sc: Scope; e: Expr; subst: var TySubst)
       raise newTypecheckError(e.pos, "seed expects int argument")
   e.instTypes = @[]
   e.typ = tVoid()
+  return e.typ
+
+
+proc inferCallBuiltinParseInt(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  if e.args.len != 1: raise newTypecheckError(e.pos, "parseInt expects 1 argument")
+  let argType = inferExprTypes(prog, nil, sc, e.args[0], subst)
+  if argType.kind != tkString: raise newTypecheckError(e.pos, "parseInt expects string argument")
+  e.instTypes = @[]
+  e.typ = tOption(tInt())
+  return e.typ
+
+proc inferCallBuiltinParseFloat(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  if e.args.len != 1: raise newTypecheckError(e.pos, "parseFloat expects 1 argument")
+  let argType = inferExprTypes(prog, nil, sc, e.args[0], subst)
+  if argType.kind != tkString: raise newTypecheckError(e.pos, "parseFloat expects string argument")
+  e.instTypes = @[]
+  e.typ = tOption(tFloat())
+  return e.typ
+
+proc inferCallBuiltinParseBool(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  if e.args.len != 1: raise newTypecheckError(e.pos, "parseBool expects 1 argument")
+  let argType = inferExprTypes(prog, nil, sc, e.args[0], subst)
+  if argType.kind != tkString: raise newTypecheckError(e.pos, "parseBool expects string argument")
+  e.instTypes = @[]
+  e.typ = tOption(tBool())
+  return e.typ
+
+proc inferCallBuiltinToString(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  if e.args.len != 1: raise newTypecheckError(e.pos, "toString expects 1 argument")
+  let argType = inferExprTypes(prog, nil, sc, e.args[0], subst)
+  if not (argType.kind in {tkBool, tkInt, tkFloat, tkChar}):
+    raise newTypecheckError(e.pos, "toString supports bool/int/float/char")
+  e.instTypes = @[]
+  e.typ = tString()
+  return e.typ
+
+proc inferCallBuiltinIsSome(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  if e.args.len != 1: raise newTypecheckError(e.pos, "isSome expects 1 argument")
+  let argType = inferExprTypes(prog, nil, sc, e.args[0], subst)
+  if argType.kind != tkOption: raise newTypecheckError(e.pos, "isSome expects option[T] argument")
+  e.instTypes = @[]
+  e.typ = tBool()
+  return e.typ
+
+proc inferCallBuiltinIsNone(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  if e.args.len != 1: raise newTypecheckError(e.pos, "isNone expects 1 argument")
+  let argType = inferExprTypes(prog, nil, sc, e.args[0], subst)
+  if argType.kind != tkOption: raise newTypecheckError(e.pos, "isNone expects option[T] argument")
+  e.instTypes = @[]
+  e.typ = tBool()
+  return e.typ
+
+proc inferCallBuiltinIsOk(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  if e.args.len != 1: raise newTypecheckError(e.pos, "isOk expects 1 argument")
+  let argType = inferExprTypes(prog, nil, sc, e.args[0], subst)
+  if argType.kind != tkResult: raise newTypecheckError(e.pos, "isOk expects result[T] argument")
+  e.instTypes = @[]
+  e.typ = tBool()
+  return e.typ
+
+proc inferCallBuiltinIsErr(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  if e.args.len != 1: raise newTypecheckError(e.pos, "isErr expects 1 argument")
+  let argType = inferExprTypes(prog, nil, sc, e.args[0], subst)
+  if argType.kind != tkResult: raise newTypecheckError(e.pos, "isErr expects result[T] argument")
+  e.instTypes = @[]
+  e.typ = tBool()
   return e.typ
 
 
@@ -243,7 +310,7 @@ proc inferCall(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType 
   return retT
 
 
-proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst; expectedTy: EtchType = nil): EtchType =
   case e.kind
   of ekInt: e.typ = tInt(); return e.typ
   of ekFloat: e.typ = tFloat(); return e.typ
@@ -364,6 +431,14 @@ proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var 
       of "readFile": return inferCallBuiltinReadFile(prog, sc, e, subst)
       of "inject": return inferCallBuiltinInject(prog, sc, e, subst)
       of "seed": return inferCallBuiltinSeed(prog, sc, e, subst)
+      of "parseInt": return inferCallBuiltinParseInt(prog, sc, e, subst)
+      of "parseFloat": return inferCallBuiltinParseFloat(prog, sc, e, subst)
+      of "parseBool": return inferCallBuiltinParseBool(prog, sc, e, subst)
+      of "toString": return inferCallBuiltinToString(prog, sc, e, subst)
+      of "isSome": return inferCallBuiltinIsSome(prog, sc, e, subst)
+      of "isNone": return inferCallBuiltinIsNone(prog, sc, e, subst)
+      of "isOk": return inferCallBuiltinIsOk(prog, sc, e, subst)
+      of "isErr": return inferCallBuiltinIsErr(prog, sc, e, subst)
       else:
         # Regular function call - handle monomorphization
         return inferCall(prog, sc, e, subst)
@@ -443,3 +518,35 @@ proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var 
 
     e.typ = toType
     return e.typ
+  of ekOptionSome:
+    let innerType = inferExprTypes(prog, fd, sc, e.someExpr, subst)
+    e.typ = tOption(innerType)
+    return e.typ
+  of ekOptionNone:
+    # Try to use expected type if available
+    if expectedTy != nil and expectedTy.kind == tkOption:
+      return expectedTy
+    else:
+      # none requires explicit type annotation to determine option type
+      raise newTypecheckError(e.pos, "none requires explicit type annotation")
+  of ekResultOk:
+    let innerType = inferExprTypes(prog, fd, sc, e.okExpr, subst)
+    e.typ = tResult(innerType)
+    return e.typ
+  of ekResultErr:
+    # Try to use expected type if available
+    if expectedTy != nil and expectedTy.kind == tkResult:
+      let errTy = inferExprTypes(prog, fd, sc, e.errExpr, subst)
+      if errTy.kind != tkString:
+        raise newTypecheckError(e.pos, "error constructor requires string argument")
+      return expectedTy
+    else:
+      # error requires explicit type annotation to determine result type
+      raise newTypecheckError(e.pos, "error requires explicit type annotation")
+  of ekMatch:
+    # Match expressions need special handling - implemented in statements due to circular import
+    # Return a default type for now - the real type will be set by inferMatchExpr
+    if e.typ == nil:
+      return tVoid()  # Placeholder
+    else:
+      return e.typ

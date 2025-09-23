@@ -1,0 +1,22 @@
+// Simple pattern matching test
+fn divideInts(a: int, b: int) -> result[int] {
+    if b == 0 {
+        return error("Division by zero");
+    } else {
+        return ok(a / b);
+    }
+}
+
+fn main() -> int {
+    let divResult: result[int] = divideInts(42, 6);
+    let message: string = match divResult {
+        ok(value) => {
+            "Division successful: " + toString(value);
+        }
+        error(err) => {
+            "Division failed: " + err;
+        }
+    };
+    print(message);
+    return 0;
+}

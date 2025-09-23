@@ -527,3 +527,4 @@ proc proveStmt*(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags = C
   of skExpr: proveExpr(s, env, prog, flags, fnContext)
   of skReturn: proveReturn(s, env, prog, flags, fnContext)
   of skComptime: proveComptime(s, env, prog, flags, fnContext)
+

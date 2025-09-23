@@ -1,0 +1,10 @@
+// Test: Multiplication overflow detection (should fail)
+// This test should fail with overflow detection for large multiplications
+
+fn main() -> void {
+    // This should fail: very large multiplication that overflows int64
+    let big_a: int = 9223372036854775807;  // Max int64
+    let big_b: int = 2;
+    let unsafe_mult: int = big_a * big_b;  // Should overflow int64
+    print(unsafe_mult);
+}

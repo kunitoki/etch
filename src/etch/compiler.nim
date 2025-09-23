@@ -94,7 +94,7 @@ proc evaluateGlobalVariables(prog: Program): Table[string, V] =
         let res = evalExprWithBytecode(prog, g.vinit.get(), globalVars)
         # Store the evaluated value for subsequent globals
         globalVars[g.vname] = res
-      except Exception as e:
+      except:
         # TODO - should we log this ? at least in verbose mode ?
         # If evaluation fails, store default value (silently)
         # The actual error will be caught by the compiler's type checker

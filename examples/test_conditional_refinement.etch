@@ -1,0 +1,7 @@
+fn main() -> void {
+    let x: int = rand(1000);  // Range [0, 1000]
+    if x < 10 {
+        let safe_add: int = x + 5;  // Should be safe: [0, 9] + 5 = [5, 14]
+        print(safe_add);
+    }
+}

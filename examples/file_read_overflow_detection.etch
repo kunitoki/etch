@@ -1,0 +1,25 @@
+// Test: Overflow detection with file-based numbers
+// Shows how the prover prevents potential overflow from file data
+
+fn main() -> void {
+    // Read a safe number from file
+    let content: string = readFile("examples/data/file_small_numbers.txt");
+    let maybeNumber: option[int] = parseInt(content);
+    let file_number: int = match maybeNumber {
+        some(num) => num;
+        none => 0;  // Default fallback
+    };
+
+    // This is safe - small numbers
+    let safe_mult: int = file_number * 1000;
+    print(safe_mult);
+
+    // Use with rand to show range analysis
+    let rand_val: int = rand(100);
+    let safe_add: int = file_number + rand_val; // [2 + 0, 2 + 100] = [2, 102]
+    print(safe_add);
+
+    // Show casting is safe
+    let as_float: float = float(file_number);
+    print(as_float);
+}

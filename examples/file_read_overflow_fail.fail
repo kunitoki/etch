@@ -1,0 +1,5 @@
+examples/file_read_overflow_fail.etch:19:43: error: potential addition overflow
+  18 |     let small_add: int = rand(1000);           // Range: [0, 1000]
+  19 |     let overflow_risk: int = large_number + small_add;  // Should fail: potential overflow
+                                                 ^
+  20 |     print(overflow_risk);

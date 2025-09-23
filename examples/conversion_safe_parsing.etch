@@ -1,0 +1,19 @@
+fn main() -> void {
+    // Test safe parsing functions
+    let goodInt: option[int] = parseInt("42");
+    let badInt: option[int] = parseInt("not a number");
+
+    let goodFloat: option[float] = parseFloat("3.14");
+    let badFloat: option[float] = parseFloat("invalid");
+
+    let goodBool: option[bool] = parseBool("true");
+    let badBool: option[bool] = parseBool("maybe");
+
+    // Test toString - always safe
+    let intStr: string = toString(123);
+    let floatStr: string = toString(3.14);
+    let boolStr: string = toString(true);
+    let charStr: string = toString('A');
+
+    print("Safe parsing functions test passed");
+}

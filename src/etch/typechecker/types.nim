@@ -1,8 +1,8 @@
 # types.nim
 # Type utilities and operations for the type checker
 
-import std/[tables, strformat]
-import ../frontend/ast, ../errors
+import std/[tables]
+import ../frontend/ast
 
 
 type
@@ -17,6 +17,8 @@ proc typeEq*(a, b: EtchType): bool =
   case a.kind
   of tkRef: return typeEq(a.inner, b.inner)
   of tkArray: return typeEq(a.inner, b.inner)
+  of tkOption: return typeEq(a.inner, b.inner)
+  of tkResult: return typeEq(a.inner, b.inner)
   of tkGeneric: return a.name == b.name
   else: true
 
@@ -31,4 +33,6 @@ proc resolveTy*(t: EtchType, subst: var TySubst): EtchType =
     else: return t
   of tkRef: return tRef(resolveTy(t.inner, subst))
   of tkArray: return tArray(resolveTy(t.inner, subst))
+  of tkOption: return tOption(resolveTy(t.inner, subst))
+  of tkResult: return tResult(resolveTy(t.inner, subst))
   of tkInt, tkFloat, tkString, tkChar, tkBool, tkVoid: return t
