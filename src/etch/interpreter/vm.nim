@@ -1,7 +1,7 @@
 # vm.nim
 # Simple AST interpreter acting as Etch VM (used both at runtime and for comptime eval)
 
-import std/[tables, strformat, strutils, random, json]
+import std/[tables, strformat, strutils, random, json, algorithm]
 import ../frontend/ast, bytecode, debugger
 
 type
@@ -664,10 +664,12 @@ proc opCallImpl(vm: VM, instr: Instruction): bool =
     returnAddress: vm.pc
   )
 
-  # Pop arguments and collect them
+  # Pop arguments and collect them (they come off stack in reverse order)
   var args: seq[V] = @[]
   for i in 0..<argCount:
     args.add(vm.pop())
+  # Reverse args to get them in correct parameter order
+  args.reverse()
 
   # Get parameter names from function debug info
   if vm.program.functionInfo.hasKey(funcName):
@@ -751,6 +753,10 @@ proc vmDebuggerShouldBreak*(vm: VM): bool =
     let instr = vm.program.instructions[vm.pc]  # Current instruction about to execute
     let currentFile = instr.debug.sourceFile
     let currentLine = instr.debug.line
+
+    # Skip breaking on internal control flow instructions
+    if instr.op == opJump or instr.op == opJumpIfFalse:
+      return false
 
     # Check breakpoints
     if vm.debugger.hasBreakpoint(currentFile, currentLine):

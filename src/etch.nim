@@ -1,7 +1,7 @@
 # etch_cli.nim
 # CLI for Etch: parse, typecheck, monomorphize on call, prove safety, run VM or emit C
 
-import std/[os, strutils, tables]
+import std/[os, strutils, tables, json]
 import ./etch/[compiler, tester, debug_server]
 import ./etch/interpreter/[bytecode]
 
@@ -56,7 +56,28 @@ when isMainModule:
       # Start debug server
       runDebugServer(bytecodeProgram, sourceFile)
     except Exception as e:
-      echo "Error: ", e.msg
+      # Send compilation error as JSON response for debug adapter
+      let errorResponse = %*{
+        "seq": 999,
+        "type": "event",
+        "event": "output",
+        "body": {
+          "category": "stderr",
+          "output": "Error: " & e.msg & "\n"
+        }
+      }
+      echo $errorResponse
+      stdout.flushFile()
+
+      # Send terminated event to signal end of debugging session
+      let terminatedEvent = %*{
+        "seq": 1000,
+        "type": "event",
+        "event": "terminated",
+        "body": {}
+      }
+      echo $terminatedEvent
+      stdout.flushFile()
       quit 1
 
     quit 0

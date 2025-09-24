@@ -1,7 +1,7 @@
 # debug_server.nim
 # Debug server for communicating with VSCode Debug Adapter Protocol
 
-import std/[json, sequtils, tables, strutils, os]
+import std/[json, sequtils, tables, strutils, os, algorithm]
 import interpreter/[vm, bytecode, debugger]
 
 type
@@ -180,33 +180,42 @@ proc handleDebugRequest*(server: DebugServer, request: JsonNode): JsonNode =
     return %*{"success": true}
 
   of "stackTrace":
-    # Return current stack frame based on debugger state
+    # Return current stack frames from debugger
     var stackFrames: seq[JsonNode] = @[]
 
-    stderr.writeLine("DEBUG: stackTrace request - debugger.paused=" & $server.debugger.paused &
-                     " lastFile=" & server.debugger.lastFile &
-                     " lastLine=" & $server.debugger.lastLine)
-    stderr.flushFile()
 
     if server.debugger.paused and server.debugger.lastFile.len > 0 and server.debugger.lastLine > 0:
-      # Create stack frame for current position
-      let stackFrame = %*{
-        "id": 1,
-        "name": "main",
-        "source": {
-          "name": server.debugger.lastFile.split("/")[^1],  # Just filename
-          "path": server.debugger.lastFile.absolutePath()  # Convert to absolute path
-        },
-        "line": server.debugger.lastLine,
-        "column": 1,
-        "variablesReference": 1  # Reference for variable scope
-      }
-      stackFrames.add(stackFrame)
-      stderr.writeLine("DEBUG: Added stack frame: line=" & $server.debugger.lastLine & " file=" & server.debugger.lastFile.absolutePath())
-      stderr.flushFile()
-    else:
-      stderr.writeLine("DEBUG: No stack frame created - conditions not met")
-      stderr.flushFile()
+      # Create stack frames from debugger's stack frame tracking
+      if server.debugger.stackFrames.len > 0:
+        # Show all stack frames, starting from the current (deepest) frame
+        for i, frame in server.debugger.stackFrames.reversed():
+          let stackFrame = %*{
+            "id": i + 1,
+            "name": frame.functionName,
+            "source": {
+              "name": server.debugger.lastFile.split("/")[^1],  # Just filename
+              "path": server.debugger.lastFile.absolutePath()  # Convert to absolute path
+            },
+            "line": if i == 0: server.debugger.lastLine else: frame.line,  # Current line for top frame
+            "column": 1,
+            "variablesReference": i + 1  # Each frame gets its own variable reference
+          }
+          stackFrames.add(stackFrame)
+      else:
+        # Fallback to main frame if no debugger frames exist
+        let stackFrame = %*{
+          "id": 1,
+          "name": "main",
+          "source": {
+            "name": server.debugger.lastFile.split("/")[^1],
+            "path": server.debugger.lastFile.absolutePath()
+          },
+          "line": server.debugger.lastLine,
+          "column": 1,
+          "variablesReference": 1
+        }
+        stackFrames.add(stackFrame)
+
 
     return %*{
       "success": true,
@@ -217,21 +226,39 @@ proc handleDebugRequest*(server: DebugServer, request: JsonNode): JsonNode =
     }
 
   of "variables":
-    # Return current variables in scope
+    # Return variables for the specified scope
     let args = request["arguments"]
     let variablesReference = if args.hasKey("variablesReference"): args["variablesReference"].getInt() else: 0
 
     var variables: seq[JsonNode] = @[]
 
-    # For now, we handle the main scope (variablesReference = 1)
-    if variablesReference == 1:
-      let currentVars = vm.vmGetCurrentVariables(server.vm)
-      for name, value in currentVars:
-        variables.add(%*{
-          "name": name,
-          "value": value,
-          "variablesReference": 0  # 0 means no nested variables
-        })
+
+    if variablesReference > 0:
+      if variablesReference == 1 and server.debugger.stackFrames.len > 0:
+        # Current (top) stack frame variables - local variables and function parameters
+        let currentFrame = server.debugger.stackFrames[^1]
+
+        let currentVars = vm.vmGetCurrentVariables(server.vm)
+        for name, value in currentVars:
+          variables.add(%*{
+            "name": name,
+            "value": value,
+            "variablesReference": 0  # 0 means no nested variables
+          })
+      elif variablesReference <= server.debugger.stackFrames.len:
+        # Variables for a specific stack frame (1-indexed)
+        let frameIndex = server.debugger.stackFrames.len - variablesReference
+        let frame = server.debugger.stackFrames[frameIndex]
+
+        # For non-current frames, we'd need frame-specific variable lookup
+        # For now, just show current variables
+        let currentVars = vm.vmGetCurrentVariables(server.vm)
+        for name, value in currentVars:
+          variables.add(%*{
+            "name": name,
+            "value": value,
+            "variablesReference": 0
+          })
 
     return %*{
       "success": true,
@@ -395,11 +422,15 @@ proc runDebugServer*(program: BytecodeProgram, sourceFile: string) =
         server.debugger.paused = true
         server.debugger.stepMode = debugger.smContinue
 
-        # Get the first instruction's debug info if available
-        if server.vm.program.instructions.len > 0:
-          let firstInstr = server.vm.program.instructions[0]
-          server.debugger.lastFile = firstInstr.debug.sourceFile
-          server.debugger.lastLine = firstInstr.debug.line
+        # Start at main function like the VM does
+        if server.vm.program.functions.hasKey("main"):
+          server.vm.pc = server.vm.program.functions["main"]
+
+        # Get the instruction at PC for debug info
+        if server.vm.pc < server.vm.program.instructions.len:
+          let currentInstr = server.vm.program.instructions[server.vm.pc]
+          server.debugger.lastFile = currentInstr.debug.sourceFile
+          server.debugger.lastLine = currentInstr.debug.line
         else:
           # Fallback to source file
           server.debugger.lastFile = sourceFile
