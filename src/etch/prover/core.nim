@@ -4,7 +4,7 @@
 
 import std/[tables]
 import ../frontend/ast, ../errors, ../interpreter/serialize
-import types, statement_analysis
+import types, expression_analysis
 
 
 proc verboseProverLog*(flags: CompilerFlags, msg: string) =

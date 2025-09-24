@@ -4,11 +4,11 @@ nimcache/
 nimblecache/
 htmldocs/
 
+/etch
 __etch__/
 *.etcx
 *.etca
 *.vsix
-etch
 nimble.develop
 nimble.paths
 .vscode/
