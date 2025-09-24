@@ -3,7 +3,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { spawn, ChildProcess } from 'child_process';
 import {
-    DebugSession, InitializedEvent, TerminatedEvent, StoppedEvent, OutputEvent
+    DebugSession, InitializedEvent, TerminatedEvent, StoppedEvent, OutputEvent,
+    Thread, StackFrame, Source
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 
@@ -32,13 +33,16 @@ export class EtchDebugAdapterProvider implements vscode.DebugAdapterDescriptorFa
 }
 
 class EtchDebugAdapter extends DebugSession {
+    private static THREAD_ID = 1;
     private etchProcess: ChildProcess | undefined;
     private nextSeq = 1;
-    private pendingStackTraceResponse: DebugProtocol.StackTraceResponse | undefined;
+    private currentFile: string = '';
+    private currentLine: number = 0;
 
     constructor() {
         super();
         log('EtchDebugAdapter created');
+        // IMPORTANT: Etch uses 1-based lines
         this.setDebuggerLinesStartAt1(true);
         this.setDebuggerColumnsStartAt1(true);
     }
@@ -65,6 +69,7 @@ class EtchDebugAdapter extends DebugSession {
 
         const launchArgs = args as any;
         const program = launchArgs.program;
+
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(program));
         const workspacePath = workspaceFolder?.uri.fsPath || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
@@ -163,9 +168,17 @@ class EtchDebugAdapter extends DebugSession {
 
             switch (message.event) {
                 case 'stopped':
+                    // Update current position if provided
+                    if (message.body.file) {
+                        this.currentFile = message.body.file;
+                    }
+                    if (message.body.line) {
+                        this.currentLine = message.body.line;
+                    }
+
                     this.sendEvent(new StoppedEvent(
                         message.body.reason || 'pause',
-                        message.body.threadId || 1
+                        message.body.threadId || EtchDebugAdapter.THREAD_ID
                     ));
                     break;
 
@@ -184,16 +197,7 @@ class EtchDebugAdapter extends DebugSession {
             }
         } else if (message.type === 'response') {
             log(`Received response from Etch: ${JSON.stringify(message)}`);
-
-            // Handle specific response types
-            if (message.command === 'stackTrace' && this.pendingStackTraceResponse) {
-                // Forward stack trace response to VSCode
-                log(`Stack trace response from Etch: ${JSON.stringify(message.body, null, 2)}`);
-                this.pendingStackTraceResponse.body = message.body;
-                this.sendResponse(this.pendingStackTraceResponse);
-                this.pendingStackTraceResponse = undefined;
-                log('Forwarded stack trace response to VSCode');
-            }
+            // For now, just log responses - we're testing with hardcoded stack traces
         }
     }
 
@@ -266,38 +270,36 @@ class EtchDebugAdapter extends DebugSession {
     }
 
     protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void {
-        log(`Stack trace request for thread ${args.threadId}, startFrame: ${args.startFrame}, levels: ${args.levels}`);
+        log(`Stack trace request for thread ${args.threadId}`);
+        log(`Current position: file=${this.currentFile}, line=${this.currentLine}`);
 
-        // Store the response to send back when Etch responds
-        this.pendingStackTraceResponse = response;
+        const frames: StackFrame[] = [];
 
-        // Forward to Etch debug server
-        this.sendToEtch('stackTrace', {
-            threadId: args.threadId,
-            startFrame: args.startFrame || 0,
-            levels: args.levels || 20
-        });
+        // Only send stack frame if we have a valid position
+        if (this.currentFile && this.currentLine > 0) {
+            const source = new Source(path.basename(this.currentFile), this.currentFile);
+            const stackFrame = new StackFrame(0, 'main', source, this.currentLine);
+            frames.push(stackFrame);
+            log(`Created stack frame: line=${this.currentLine}, file=${this.currentFile}`);
+        } else {
+            log('No current position available for stack trace');
+        }
 
-        log('Stack trace request forwarded to Etch');
+        response.body = {
+            stackFrames: frames,
+            totalFrames: frames.length
+        };
 
-        // Add a timeout fallback in case Etch doesn't respond
-        setTimeout(() => {
-            if (this.pendingStackTraceResponse) {
-                log('Stack trace response timeout - sending empty response');
-                this.pendingStackTraceResponse.body = {
-                    stackFrames: [],
-                    totalFrames: 0
-                };
-                this.sendResponse(this.pendingStackTraceResponse);
-                this.pendingStackTraceResponse = undefined;
-            }
-        }, 1000);
+        log(`Sending stack trace with ${frames.length} frames`);
+        this.sendResponse(response);
     }
 
     protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
         log('Threads request');
         response.body = {
-            threads: [{ id: 1, name: 'Main Thread' }]
+            threads: [
+                new Thread(EtchDebugAdapter.THREAD_ID, "main")
+            ]
         };
         this.sendResponse(response);
     }

@@ -105,6 +105,11 @@ proc handleDebugRequest*(server: DebugServer, request: JsonNode): JsonNode =
     # Return current stack frame based on debugger state
     var stackFrames: seq[JsonNode] = @[]
 
+    stderr.writeLine("DEBUG: stackTrace request - debugger.paused=" & $server.debugger.paused &
+                     " lastFile=" & server.debugger.lastFile &
+                     " lastLine=" & $server.debugger.lastLine)
+    stderr.flushFile()
+
     if server.debugger.paused and server.debugger.lastFile.len > 0 and server.debugger.lastLine > 0:
       # Create stack frame for current position
       let stackFrame = %*{
@@ -118,6 +123,11 @@ proc handleDebugRequest*(server: DebugServer, request: JsonNode): JsonNode =
         "column": 1
       }
       stackFrames.add(stackFrame)
+      stderr.writeLine("DEBUG: Added stack frame: line=" & $server.debugger.lastLine & " file=" & server.debugger.lastFile.absolutePath())
+      stderr.flushFile()
+    else:
+      stderr.writeLine("DEBUG: No stack frame created - conditions not met")
+      stderr.flushFile()
 
     return %*{
       "success": true,
@@ -164,6 +174,7 @@ proc runDebugServer*(program: BytecodeProgram, sourceFile: string) =
   let server = newDebugServer(program)
   var initialized = false
   var eventSeq = 1000  # Start event sequence numbers at 1000
+  var responseSeq = 6  # Start response sequence numbers at 6
 
   stderr.writeLine("DEBUG: Debug server initialized, waiting for requests...")
   stderr.flushFile()
@@ -287,7 +298,9 @@ proc runDebugServer*(program: BytecodeProgram, sourceFile: string) =
           "body": {
             "reason": "entry",
             "threadId": 1,
-            "allThreadsStopped": true
+            "allThreadsStopped": true,
+            "file": server.debugger.lastFile,
+            "line": server.debugger.lastLine
           }
         }
         echo $stoppedEvent
@@ -313,9 +326,11 @@ proc runDebugServer*(program: BytecodeProgram, sourceFile: string) =
         response["type"] = %*"response"
         response["command"] = %*command
         if not response.hasKey("seq"):
-          response["seq"] = %*(5)  # Increment sequence number
+          response["seq"] = %*responseSeq
+          responseSeq += 1
 
       echo $response
+      stdout.flushFile()
 
     except EOFError:
       stderr.writeLine("DEBUG: EOF reached, exiting debug server")
