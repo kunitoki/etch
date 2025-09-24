@@ -683,28 +683,72 @@ proc opCallImpl(vm: VM, instr: Instruction): bool =
   vm.pc = vm.program.functions[funcName]
   return true
 
+proc vmValueToDisplayString(value: V): string =
+  ## Convert a VM value to a display string for debugger
+  case value.kind
+  of tkInt: return $value.ival
+  of tkFloat: return $value.fval
+  of tkString: return "\"" & value.sval & "\""
+  of tkChar: return "'" & $value.cval & "'"
+  of tkBool: return if value.bval: "true" else: "false"
+  of tkVoid: return "(void)"
+  else: return "<" & $value.kind & ">"
+
+proc vmGetCurrentVariables*(vm: VM): Table[string, string] =
+  ## Get current variables in scope for debugger display
+  var variables = initTable[string, string]()
+
+  # Get variables from current call frame (if any)
+  if vm.callStack.len > 0:
+    let currentFrame = vm.callStack[^1]
+    for name, value in currentFrame.vars:
+      variables[name] = vmValueToDisplayString(value)
+
+  # Get global variables
+  for name, value in vm.globals:
+    # Only show globals if they're not shadowed by locals
+    if not variables.hasKey(name):
+      variables[name] = vmValueToDisplayString(value)
+
+  return variables
+
 # Debugger implementation functions
 proc vmDebuggerBeforeInstruction*(vm: VM) =
   ## Called before each instruction execution
-  if vm.pc > 0 and vm.pc <= vm.program.instructions.len:
-    let instr = vm.program.instructions[vm.pc - 1]
+  if vm.pc < vm.program.instructions.len:
+    let instr = vm.program.instructions[vm.pc]  # Current instruction about to execute
 
-    # Update call depth tracking for step operations
+    # Update stack frame tracking for step operations
     case instr.op:
     of opCall:
-      vm.debugger.callDepth += 1
+      let funcName = instr.sarg
+      let currentFile = if instr.debug.sourceFile.len > 0: instr.debug.sourceFile else: "main"
+      let isBuiltIn = not vm.program.functions.hasKey(funcName)
+      vm.debugger.pushStackFrame(funcName, currentFile, instr.debug.line, isBuiltIn)
     of opReturn:
-      vm.debugger.callDepth -= 1
+      vm.debugger.popStackFrame()
     else:
       discard
+
+proc vmDebuggerAfterInstruction*(vm: VM) =
+  ## Called after instruction execution for debugging
+  if vm.debugger != nil and vm.pc > 0:
+    let instr = vm.program.instructions[vm.pc - 1]  # Instruction just executed
+
+    # For built-in function calls, pop stack frame immediately since they don't use opReturn
+    if instr.op == opCall:
+      let funcName = instr.sarg
+      # Check if this is a built-in function (not a user-defined function)
+      if not vm.program.functions.hasKey(funcName):
+        vm.debugger.popStackFrame()
 
 proc vmDebuggerShouldBreak*(vm: VM): bool =
   ## Check if execution should break at current instruction
   if vm.debugger.paused:
     return true
 
-  if vm.pc > 0 and vm.pc <= vm.program.instructions.len:
-    let instr = vm.program.instructions[vm.pc - 1]
+  if vm.pc < vm.program.instructions.len:
+    let instr = vm.program.instructions[vm.pc]  # Current instruction about to execute
     let currentFile = instr.debug.sourceFile
     let currentLine = instr.debug.line
 
@@ -718,14 +762,27 @@ proc vmDebuggerShouldBreak*(vm: VM): bool =
       return false
     of smStepInto:
       # Break on any instruction (but not on the same line we just stepped from)
-      return currentLine != vm.debugger.lastLine or currentFile != vm.debugger.lastFile
+      let shouldBreak = currentLine != vm.debugger.lastLine or currentFile != vm.debugger.lastFile
+      if shouldBreak and currentLine > 0:  # Only log for valid lines
+        stderr.writeLine("DEBUG: StepInto - breaking at line " & $currentLine &
+                        " (last was " & $vm.debugger.lastLine & ")")
+        stderr.flushFile()
+      return shouldBreak
     of smStepOver:
-      # Break if we're at same call depth or returned
-      return vm.debugger.callDepth <= vm.debugger.stepCallDepth and
-             (currentLine != vm.debugger.lastLine or currentFile != vm.debugger.lastFile)
+      # Break if we're at the same user call depth or returned, and on a different line
+      let shouldBreak = vm.debugger.userCallDepth <= vm.debugger.stepCallDepth and
+                        (currentLine != vm.debugger.lastLine or currentFile != vm.debugger.lastFile) and
+                        currentLine > 0  # Only break on valid lines
+      if currentLine > 0:  # Only log for valid lines
+        stderr.writeLine("DEBUG: StepOver - line " & $currentLine &
+                        " (last was " & $vm.debugger.lastLine & "), userDepth=" &
+                        $vm.debugger.userCallDepth & "/" & $vm.debugger.stepCallDepth &
+                        ", shouldBreak=" & $shouldBreak)
+        stderr.flushFile()
+      return shouldBreak
     of smStepOut:
-      # Break if we've returned from current function
-      return vm.debugger.callDepth < vm.debugger.stepCallDepth
+      # Break if we've returned from current user function
+      return vm.debugger.userCallDepth < vm.debugger.stepCallDepth
 
   return false
 
@@ -734,8 +791,8 @@ proc vmDebuggerOnBreak*(vm: VM) =
   vm.debugger.paused = true
   vm.debugger.stepMode = smContinue
 
-  if vm.pc > 0 and vm.pc <= vm.program.instructions.len:
-    let instr = vm.program.instructions[vm.pc - 1]
+  if vm.pc < vm.program.instructions.len:
+    let instr = vm.program.instructions[vm.pc]  # Current instruction where we stopped
     vm.debugger.lastFile = instr.debug.sourceFile
     vm.debugger.lastLine = instr.debug.line
 
@@ -810,6 +867,10 @@ proc executeInstruction*(vm: VM): bool =
     return vm.opCallImpl(instr)
   of opReturn:
     return vm.opReturnImpl(instr)
+
+  # Call debugger after instruction hook
+  if vm.debugger != nil:
+    vmDebuggerAfterInstruction(vm)
 
   return true
 

@@ -66,7 +66,7 @@ type
 
 const
   BYTECODE_MAGIC = "ETCH"
-  BYTECODE_VERSION = 11
+  BYTECODE_VERSION = 12
 
 proc serializeToBinary*(prog: BytecodeProgram): string =
   ## Serialize bytecode program to binary format for storage

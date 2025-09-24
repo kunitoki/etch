@@ -117,7 +117,7 @@ proc compileProgramWithGlobals*(prog: Program, sourceHash: string, evaluatedGlob
 
 proc parseAndTypecheck*(options: CompilerOptions): (Program, string, Table[string, V]) =
   ## Parse source file and perform type checking, return AST, hash, and evaluated globals
-  let flags = CompilerFlags(verbose: options.verbose)
+  let flags = CompilerFlags(verbose: options.verbose, debug: options.debug)
 
   verboseLog(flags, "Starting compilation of " & options.sourceFile)
 
@@ -225,7 +225,7 @@ proc saveBytecodeToCache*(bytecodeProg: BytecodeProgram, bytecodeFile: string) =
 
 proc compileAndRun*(options: CompilerOptions): CompilerResult =
   ## Main compilation and execution function
-  let flags = CompilerFlags(verbose: options.verbose)
+  let flags = CompilerFlags(verbose: options.verbose, debug: options.debug)
 
   echo "Compiling: ", options.sourceFile
   verboseLog(flags, "Compilation options: runVM=" & $options.runVM & ", verbose=" & $options.verbose)
@@ -266,7 +266,7 @@ proc compileAndRun*(options: CompilerOptions): CompilerResult =
 
 proc tryRunCachedOrCompile*(options: CompilerOptions): CompilerResult =
   ## Try to run cached bytecode, fall back to compilation if needed
-  let flags = CompilerFlags(verbose: options.verbose)
+  let flags = CompilerFlags(verbose: options.verbose, debug: options.debug)
   let bytecodeFile = getBytecodeFileName(options.sourceFile)
 
   verboseLog(flags, "Checking for cached bytecode at: " & bytecodeFile)

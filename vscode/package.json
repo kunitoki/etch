@@ -94,6 +94,7 @@
       {
         "type": "etch",
         "label": "Etch Debug",
+        "runtime": "node",
         "program": "./out/debugAdapter.js",
         "configurationAttributes": {
           "launch": {

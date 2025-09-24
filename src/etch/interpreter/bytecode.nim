@@ -1,7 +1,7 @@
 # bytecode.nim
 # Bytecode generation for Etch programs
 
-import std/[tables, options, hashes, sequtils]
+import std/[tables, options, hashes, sequtils, strformat]
 import ../frontend/ast, serialize
 export serialize
 
@@ -44,6 +44,11 @@ proc emit*(prog: var BytecodeProgram, op: OpCode, arg: int64 = 0, sarg: string =
 
   let instr = Instruction(op: op, arg: arg, sarg: sarg, debug: debug)
   prog.instructions.add(instr)
+
+  # Verbose logging for debug investigation
+  if prog.compilerFlags.verbose:
+    let instrIdx = prog.instructions.high
+    echo &"[BYTECODE] Instruction {instrIdx}: {op} at line {pos.line}, col {pos.col} (func: {ctx.currentFunction})"
 
   # Build line-to-instruction mapping for debugging only when debug flag is set
   if prog.compilerFlags.debug and pos.line > 0:
@@ -253,24 +258,59 @@ proc compileAssignStmt(prog: var BytecodeProgram, s: Stmt, ctx: var CompilationC
   prog.emit(opStoreVar, 0, s.aname, s.pos, ctx)
 
 proc compileIfStmt(prog: var BytecodeProgram, s: Stmt, ctx: var CompilationContext) =
-  prog.compileExpr(s.cond, ctx)
-  let jumpToElse = prog.instructions.len
-  prog.emit(opJumpIfFalse, pos = s.pos, ctx = ctx)  # Will patch this address
+  var jumpToNexts: seq[int] = @[]  # Jumps to the next elif/else clause
+  var jumpToEnds: seq[int] = @[]   # Jumps to the end of the entire if-elif-else chain
 
+  # Main if condition
+  prog.compileExpr(s.cond, ctx)
+  let jumpToElif = prog.instructions.len
+  prog.emit(opJumpIfFalse, pos = s.cond.pos, ctx = ctx)  # Use condition position for better debugging
+  jumpToNexts.add(jumpToElif)
+
+  # Then body
   for stmt in s.thenBody:
     prog.compileStmt(stmt, ctx)
 
-  let jumpToEnd = prog.instructions.len
-  prog.emit(opJump, pos = s.pos, ctx = ctx)  # Jump past else block
+  # Jump to end after then body (skip elif/else)
+  let jumpToEndFromThen = prog.instructions.len
+  prog.emit(opJump, pos = s.pos, ctx = ctx)
+  jumpToEnds.add(jumpToEndFromThen)
 
-  # Patch jumpToElse to point here
-  prog.instructions[jumpToElse].arg = prog.instructions.len
+  # Patch first jump to point to the first elif (or else if no elif)
+  prog.instructions[jumpToElif].arg = prog.instructions.len
 
+  # Compile elif chain
+  for i, elifClause in s.elifChain:
+    # Compile elif condition
+    prog.compileExpr(elifClause.cond, ctx)
+    let jumpToNextElif = prog.instructions.len
+    prog.emit(opJumpIfFalse, pos = elifClause.cond.pos, ctx = ctx)  # Use elif condition position
+    jumpToNexts.add(jumpToNextElif)
+
+    # Compile elif body
+    for stmt in elifClause.body:
+      prog.compileStmt(stmt, ctx)
+
+    # Jump to end after elif body
+    let jumpToEndFromElif = prog.instructions.len
+    prog.emit(opJump, pos = elifClause.cond.pos, ctx = ctx)  # Use elif position
+    jumpToEnds.add(jumpToEndFromElif)
+
+    # Patch previous jump to next to point here (to next elif condition)
+    if i < s.elifChain.len - 1:
+      prog.instructions[jumpToNextElif].arg = prog.instructions.len
+
+  # Patch last elif jump to point to else body (if it exists)
+  if s.elifChain.len > 0:
+    prog.instructions[jumpToNexts[^1]].arg = prog.instructions.len
+
+  # Compile else body
   for stmt in s.elseBody:
     prog.compileStmt(stmt, ctx)
 
-  # Patch jumpToEnd to point here
-  prog.instructions[jumpToEnd].arg = prog.instructions.len
+  # Patch all jumps to end to point here
+  for jumpToEnd in jumpToEnds:
+    prog.instructions[jumpToEnd].arg = prog.instructions.len
 
 proc compileWhileStmt(prog: var BytecodeProgram, s: Stmt, ctx: var CompilationContext) =
   let loopStart = prog.instructions.len

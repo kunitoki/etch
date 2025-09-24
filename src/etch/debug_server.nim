@@ -68,12 +68,60 @@ proc handleDebugRequest*(server: DebugServer, request: JsonNode): JsonNode =
     return %*{"success": true}
 
   of "next":
+    # Update debugger's current position before stepping
+    if server.vm.pc < server.vm.program.instructions.len:
+      let currentInstr = server.vm.program.instructions[server.vm.pc]
+      server.debugger.lastFile = currentInstr.debug.sourceFile
+      server.debugger.lastLine = currentInstr.debug.line
+
     debugger.step(server.debugger, debugger.smStepOver)
 
+    stderr.writeLine("DEBUG: next - starting step, pc=" & $server.vm.pc &
+                     " paused=" & $server.debugger.paused &
+                     " lastLine=" & $server.debugger.lastLine)
+    stderr.flushFile()
+
     # Execute one step
+    var instructionCount = 0
     while not server.debugger.paused and server.vm.pc < server.vm.program.instructions.len:
+      instructionCount += 1
+      if instructionCount > 1000:  # Safety limit
+        stderr.writeLine("DEBUG: Safety limit reached - too many instructions without pause")
+        stderr.flushFile()
+        break
       if not vm.executeInstruction(server.vm):
         break
+
+    stderr.writeLine("DEBUG: next - executed " & $instructionCount & " instructions, " &
+                     "pc=" & $server.vm.pc &
+                     " paused=" & $server.debugger.paused &
+                     " lastLine=" & $server.debugger.lastLine)
+    stderr.flushFile()
+
+    # Check if program finished
+    if server.vm.pc >= server.vm.program.instructions.len:
+      # Program terminated
+      let terminatedEvent = %*{
+        "type": "event",
+        "event": "terminated",
+        "body": {}
+      }
+      echo $terminatedEvent
+      stdout.flushFile()
+    elif server.debugger.paused and server.debugger.lastFile.len > 0:
+      # Send stopped event if we're paused
+      let stoppedEvent = %*{
+        "type": "event",
+        "event": "stopped",
+        "body": {
+          "reason": "step",
+          "threadId": 1,
+          "file": server.debugger.lastFile,
+          "line": server.debugger.lastLine
+        }
+      }
+      echo $stoppedEvent
+      stdout.flushFile()
 
     return %*{"success": true}
 
@@ -85,6 +133,21 @@ proc handleDebugRequest*(server: DebugServer, request: JsonNode): JsonNode =
       if not vm.executeInstruction(server.vm):
         break
 
+    # Send stopped event if we're paused
+    if server.debugger.paused and server.debugger.lastFile.len > 0:
+      let stoppedEvent = %*{
+        "type": "event",
+        "event": "stopped",
+        "body": {
+          "reason": "step",
+          "threadId": 1,
+          "file": server.debugger.lastFile,
+          "line": server.debugger.lastLine
+        }
+      }
+      echo $stoppedEvent
+      stdout.flushFile()
+
     return %*{"success": true}
 
   of "stepOut":
@@ -94,6 +157,21 @@ proc handleDebugRequest*(server: DebugServer, request: JsonNode): JsonNode =
     while not server.debugger.paused and server.vm.pc < server.vm.program.instructions.len:
       if not vm.executeInstruction(server.vm):
         break
+
+    # Send stopped event if we're paused
+    if server.debugger.paused and server.debugger.lastFile.len > 0:
+      let stoppedEvent = %*{
+        "type": "event",
+        "event": "stopped",
+        "body": {
+          "reason": "step",
+          "threadId": 1,
+          "file": server.debugger.lastFile,
+          "line": server.debugger.lastLine
+        }
+      }
+      echo $stoppedEvent
+      stdout.flushFile()
 
     return %*{"success": true}
 
@@ -120,7 +198,8 @@ proc handleDebugRequest*(server: DebugServer, request: JsonNode): JsonNode =
           "path": server.debugger.lastFile.absolutePath()  # Convert to absolute path
         },
         "line": server.debugger.lastLine,
-        "column": 1
+        "column": 1,
+        "variablesReference": 1  # Reference for variable scope
       }
       stackFrames.add(stackFrame)
       stderr.writeLine("DEBUG: Added stack frame: line=" & $server.debugger.lastLine & " file=" & server.debugger.lastFile.absolutePath())
@@ -138,11 +217,47 @@ proc handleDebugRequest*(server: DebugServer, request: JsonNode): JsonNode =
     }
 
   of "variables":
-    # This would return variables - to be implemented
+    # Return current variables in scope
+    let args = request["arguments"]
+    let variablesReference = if args.hasKey("variablesReference"): args["variablesReference"].getInt() else: 0
+
+    var variables: seq[JsonNode] = @[]
+
+    # For now, we handle the main scope (variablesReference = 1)
+    if variablesReference == 1:
+      let currentVars = vm.vmGetCurrentVariables(server.vm)
+      for name, value in currentVars:
+        variables.add(%*{
+          "name": name,
+          "value": value,
+          "variablesReference": 0  # 0 means no nested variables
+        })
+
     return %*{
       "success": true,
       "body": {
-        "variables": []
+        "variables": variables
+      }
+    }
+
+  of "scopes":
+    # Return variable scopes for a stack frame
+    let args = request["arguments"]
+    let frameId = args["frameId"].getInt()
+
+    var scopes: seq[JsonNode] = @[]
+
+    if frameId == 1:  # Main frame
+      scopes.add(%*{
+        "name": "Local",
+        "variablesReference": 1,
+        "expensive": false
+      })
+
+    return %*{
+      "success": true,
+      "body": {
+        "scopes": scopes
       }
     }
 

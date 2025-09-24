@@ -66,9 +66,11 @@ class EtchDebugAdapter extends DebugSession {
 
     protected launchRequest(response: DebugProtocol.LaunchResponse, args: DebugProtocol.LaunchRequestArguments): void {
         log('Handling launch request');
+        log(`Launch args: ${JSON.stringify(args, null, 2)}`);
 
         const launchArgs = args as any;
         const program = launchArgs.program;
+        log(`Program path: ${program}`);
 
         const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(program));
         const workspacePath = workspaceFolder?.uri.fsPath || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
