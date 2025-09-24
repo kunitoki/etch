@@ -2,7 +2,7 @@
 # Type definitions and basic constructors for the safety prover
 
 import std/[tables]
-import ../frontend/ast
+import ../frontend/ast, ../interpreter/serialize
 
 const IMin* = low(int64)
 const IMax* = high(int64)
@@ -34,6 +34,14 @@ type Env* = ref object
 type ConditionResult* = enum
   crUnknown, crAlwaysTrue, crAlwaysFalse
 
+type ProverContext* = ref object
+  fnContext*: string  # Current function context for error messages
+  flags*: CompilerFlags  # Compiler flags (includes verbose mode)
+  prog*: Program  # Program being analyzed (can be nil)
+
+proc newProverContext*(fnContext: string = "", flags: CompilerFlags = CompilerFlags(), prog: Program = nil): ProverContext =
+  ProverContext(fnContext: fnContext, flags: flags, prog: prog)
+
 proc infoConst*(v: int64): Info =
   Info(known: true, cval: v, minv: v, maxv: v, nonZero: v != 0, isBool: false, initialized: true)
 
@@ -52,23 +60,6 @@ proc infoString*(length: int64, sizeKnown: bool = true): Info =
 
 proc infoRange*(minv, maxv: int64): Info =
   Info(known: false, minv: minv, maxv: maxv, initialized: true, nonZero: minv > 0 or maxv < 0)
-
-proc meet*(a, b: Info): Info =
-  result = Info()
-  result.known = a.known and b.known and a.cval == b.cval
-  result.cval = (if result.known: a.cval else: 0)
-  result.minv = max(a.minv, b.minv)
-  result.maxv = min(a.maxv, b.maxv)
-  result.nonZero = a.nonZero and b.nonZero
-  result.nonNil = a.nonNil and b.nonNil
-  result.isBool = a.isBool and b.isBool
-  result.initialized = a.initialized and b.initialized
-  # Array/String info meet
-  result.isArray = a.isArray and b.isArray
-  result.isString = a.isString and b.isString
-  if result.isArray or result.isString:
-    result.arraySizeKnown = a.arraySizeKnown and b.arraySizeKnown and a.arraySize == b.arraySize
-    result.arraySize = (if result.arraySizeKnown: a.arraySize else: -1)
 
 proc union*(a, b: Info): Info =
   # Union operation for control flow merging - covers all possible values from both branches

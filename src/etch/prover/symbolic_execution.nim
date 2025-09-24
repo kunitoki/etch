@@ -5,7 +5,9 @@ import std/[tables, options]
 import ../frontend/ast
 import types
 
-const MAX_LOOP_ITERATIONS* = 1000  # Prevent infinite symbolic execution
+
+const MAX_LOOP_ITERATIONS = 1000  # Prevent infinite symbolic execution
+
 
 type
   SymbolicState* = ref object
@@ -20,23 +22,28 @@ type
     erRuntimeHit,    # Hit runtime boundary (unknown values)
     erIterationLimit # Hit iteration limit
 
+
 # Symbolic execution using unified Info type
 proc symConst*(value: int64): Info =
   infoConst(value)  # Use existing function from types.nim
 
+
 proc symBool*(b: bool): Info =
   infoBool(b)  # Use existing function from types.nim
+
 
 proc symUnknown*(minVal: int64 = IMin, maxVal: int64 = IMax): Info =
   Info(known: false, cval: 0, minv: minVal, maxv: maxVal, initialized: true)
 
+
 proc symUninitialized*(): Info =
   infoUninitialized()  # Use existing function from types.nim
+
 
 proc symArray*(size: int64, sizeKnown: bool = true): Info =
   infoArray(size, sizeKnown)  # Use existing function from types.nim
 
-# Symbolic value operations on Info type
+
 proc symAdd*(a, b: Info): Info =
   if a.known and b.known:
     let res = a.cval + b.cval
@@ -51,6 +58,7 @@ proc symAdd*(a, b: Info): Info =
     let maxResult = a.maxv + b.maxv
     return symUnknown(minResult, maxResult)
 
+
 proc symSub*(a, b: Info): Info =
   if a.known and b.known:
     let res = a.cval - b.cval
@@ -64,6 +72,7 @@ proc symSub*(a, b: Info): Info =
     let maxResult = a.maxv - b.minv
     return symUnknown(minResult, maxResult)
 
+
 proc symMul*(a, b: Info): Info =
   if a.known and b.known:
     let res = a.cval * b.cval
@@ -75,11 +84,13 @@ proc symMul*(a, b: Info): Info =
     # Range multiplication is complex, use conservative approach
     return symUnknown()
 
+
 proc symDiv*(a, b: Info): Info =
   if a.known and b.known and b.cval != 0:
     return symConst(a.cval div b.cval)
   else:
     return symUnknown()
+
 
 proc symMod*(a, b: Info): Info =
   if a.known and b.known and b.cval != 0:
@@ -87,7 +98,7 @@ proc symMod*(a, b: Info): Info =
   else:
     return symUnknown()
 
-# Comparison operations
+
 proc symLt*(a, b: Info): Info =
   if a.known and b.known:
     return symBool(a.cval < b.cval)
@@ -97,6 +108,7 @@ proc symLt*(a, b: Info): Info =
     return symBool(false)  # Always false
   else:
     return symUnknown(0, 1)  # Unknown boolean
+
 
 proc symLe*(a, b: Info): Info =
   if a.known and b.known:
@@ -108,6 +120,7 @@ proc symLe*(a, b: Info): Info =
   else:
     return symUnknown(0, 1)
 
+
 proc symGt*(a, b: Info): Info =
   if a.known and b.known:
     return symBool(a.cval > b.cval)
@@ -117,6 +130,7 @@ proc symGt*(a, b: Info): Info =
     return symBool(false)
   else:
     return symUnknown(0, 1)
+
 
 proc symGe*(a, b: Info): Info =
   if a.known and b.known:
@@ -128,6 +142,7 @@ proc symGe*(a, b: Info): Info =
   else:
     return symUnknown(0, 1)
 
+
 proc symEq*(a, b: Info): Info =
   if a.known and b.known:
     return symBool(a.cval == b.cval)
@@ -135,6 +150,7 @@ proc symEq*(a, b: Info): Info =
     return symBool(false)  # Ranges don't overlap
   else:
     return symUnknown(0, 1)
+
 
 proc symNe*(a, b: Info): Info =
   if a.known and b.known:
@@ -144,11 +160,7 @@ proc symNe*(a, b: Info): Info =
   else:
     return symUnknown(0, 1)
 
-# Meet operation for control flow merging (use existing meet from types.nim)
-proc symMeet*(a, b: Info): Info =
-  meet(a, b)  # Use the existing meet operation from types.nim
 
-# SymbolicState operations
 proc newSymbolicState*(): SymbolicState =
   SymbolicState(
     variables: initTable[string, Info](),
@@ -156,6 +168,7 @@ proc newSymbolicState*(): SymbolicState =
     iterationCount: 0,
     hitRuntimeBoundary: false
   )
+
 
 proc copy*(state: SymbolicState): SymbolicState =
   result = SymbolicState(
@@ -165,24 +178,26 @@ proc copy*(state: SymbolicState): SymbolicState =
     hitRuntimeBoundary: state.hitRuntimeBoundary
   )
 
+
 proc setVariable*(state: SymbolicState, name: string, value: Info, expr: Expr = nil) =
   state.variables[name] = value
   if expr != nil:
     state.expressions[name] = expr
+
 
 proc getVariable*(state: SymbolicState, name: string): Option[Info] =
   if state.variables.hasKey(name):
     return some(state.variables[name])
   return none(Info)
 
+
 proc hasVariable*(state: SymbolicState, name: string): bool =
   state.variables.hasKey(name)
 
-# No conversion functions needed - using unified Info type
 
-# Forward declarations
 proc symbolicEvaluateExpr*(expr: Expr, state: SymbolicState, prog: Program = nil): Info
 proc symbolicExecuteStmt*(stmt: Stmt, state: SymbolicState, prog: Program = nil): ExecutionResult
+
 
 proc symbolicEvaluateExpr*(expr: Expr, state: SymbolicState, prog: Program = nil): Info =
   case expr.kind
@@ -220,6 +235,7 @@ proc symbolicEvaluateExpr*(expr: Expr, state: SymbolicState, prog: Program = nil
     # Unsupported expression type - mark as runtime boundary
     state.hitRuntimeBoundary = true
     return symUnknown()
+
 
 proc symbolicExecuteStmt*(stmt: Stmt, state: SymbolicState, prog: Program = nil): ExecutionResult =
   case stmt.kind
@@ -264,6 +280,7 @@ proc symbolicExecuteStmt*(stmt: Stmt, state: SymbolicState, prog: Program = nil)
     state.hitRuntimeBoundary = true
     return erRuntimeHit
 
+
 proc symbolicExecuteWhile*(stmt: Stmt, state: SymbolicState, prog: Program = nil): ExecutionResult =
   var iterations = 0
   while iterations < MAX_LOOP_ITERATIONS:
@@ -290,6 +307,7 @@ proc symbolicExecuteWhile*(stmt: Stmt, state: SymbolicState, prog: Program = nil
 
   # Hit iteration limit
   return erIterationLimit
+
 
 proc executeSymbolically*(statements: seq[Stmt], initialState: SymbolicState = nil, prog: Program = nil): SymbolicState =
   let state = if initialState != nil: initialState else: newSymbolicState()

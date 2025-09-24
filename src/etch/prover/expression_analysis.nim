@@ -7,10 +7,10 @@ import ../frontend/ast, ../errors, ../interpreter/serialize
 import types, binary_operations, function_evaluation, symbolic_execution
 
 
-proc proveStmt*(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags = CompilerFlags(), fnContext: string = "")
-proc analyzeExpr*(e: Expr; env: Env, prog: Program = nil, flags: CompilerFlags = CompilerFlags()): Info
-proc analyzeBinaryExpr*(e: Expr, env: Env, prog: Program, flags: CompilerFlags = CompilerFlags()): Info
-proc analyzeCallExpr*(e: Expr, env: Env, prog: Program, flags: CompilerFlags = CompilerFlags()): Info
+proc proveStmt*(s: Stmt; env: Env, ctx: ProverContext)
+proc analyzeExpr*(e: Expr; env: Env, ctx: ProverContext): Info
+proc analyzeBinaryExpr*(e: Expr, env: Env, ctx: ProverContext): Info
+proc analyzeCallExpr*(e: Expr, env: Env, ctx: ProverContext): Info
 
 
 proc verboseProverLog*(flags: CompilerFlags, msg: string) =
@@ -19,9 +19,9 @@ proc verboseProverLog*(flags: CompilerFlags, msg: string) =
     echo "[PROVER] ", msg
 
 
-proc evaluateCondition*(cond: Expr, env: Env, prog: Program = nil, flags: CompilerFlags = CompilerFlags()): ConditionResult =
+proc evaluateCondition*(cond: Expr, env: Env, ctx: ProverContext): ConditionResult =
   ## Unified condition evaluation for dead code detection
-  let condInfo = analyzeExpr(cond, env, prog, flags)
+  let condInfo = analyzeExpr(cond, env, ctx)
 
   # Check for constant conditions - if all values are known, we can evaluate
   if condInfo.known:
@@ -30,8 +30,8 @@ proc evaluateCondition*(cond: Expr, env: Env, prog: Program = nil, flags: Compil
 
   # Range-based dead code detection for comparison operations
   if cond.kind == ekBin:
-    let lhs = analyzeExpr(cond.lhs, env, prog)
-    let rhs = analyzeExpr(cond.rhs, env, prog)
+    let lhs = analyzeExpr(cond.lhs, env, ctx)
+    let rhs = analyzeExpr(cond.rhs, env, ctx)
     case cond.bop
     of boGt: # x > y is always false if max(x) <= min(y)
       if lhs.maxv <= rhs.minv:
@@ -97,7 +97,7 @@ proc analyzeStringExpr*(e: Expr): Info =
 
 
 proc analyzeCharExpr*(e: Expr): Info =
-  # char analysis not needed for safety, chars are always initialized
+  # Char analysis not needed for safety, chars are always initialized
   Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
 
 
@@ -110,8 +110,8 @@ proc analyzeVarExpr*(e: Expr, env: Env): Info =
   raise newProverError(e.pos, &"use of undeclared variable '{e.vname}'")
 
 
-proc analyzeUnaryExpr*(e: Expr, env: Env, prog: Program, flags: CompilerFlags = CompilerFlags()): Info =
-  let i0 = analyzeExpr(e.ue, env, prog, flags)
+proc analyzeUnaryExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
+  let i0 = analyzeExpr(e.ue, env, ctx)
   case e.uop
   of uoNeg:
     if i0.known: return infoConst(-i0.cval)
@@ -121,26 +121,30 @@ proc analyzeUnaryExpr*(e: Expr, env: Env, prog: Program, flags: CompilerFlags = 
     return infoBool(false) # boolean domain is tiny; not needed for arithmetic safety
 
 
-proc analyzeBinaryExpr*(e: Expr, env: Env, prog: Program, flags: CompilerFlags = CompilerFlags()): Info =
-  let a = analyzeExpr(e.lhs, env, prog, flags)
-  let b = analyzeExpr(e.rhs, env, prog, flags)
+proc analyzeBinaryExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
+  let a = analyzeExpr(e.lhs, env, ctx)
+  let b = analyzeExpr(e.rhs, env, ctx)
   case e.bop
   of boAdd: return analyzeBinaryAddition(e, a, b)
   of boSub: return analyzeBinarySubtraction(e, a, b)
   of boMul: return analyzeBinaryMultiplication(e, a, b)
-  of boDiv: return analyzeBinaryDivision(e, a, b)
-  of boMod: return analyzeBinaryModulo(e, a, b)
+  of boDiv: return analyzeBinaryDivision(e, a, b, ctx)
+  of boMod: return analyzeBinaryModulo(e, a, b, ctx)
   of boEq,boNe,boLt,boLe,boGt,boGe: return analyzeBinaryComparison(e, a, b)
   of boAnd,boOr: return analyzeBinaryLogical(e, a, b)
 
 
-proc analyzeRandCall*(e: Expr, env: Env, prog: Program): Info =
-  # analyze arguments for safety
-  for arg in e.args: discard analyzeExpr(arg, env, prog)
+proc analyzePrintCall*(e: Expr, env: Env, ctx: ProverContext): Info =
+  for arg in e.args: discard analyzeExpr(arg, env, ctx)
+  return infoUnknown()
+
+
+proc analyzeRandCall*(e: Expr, env: Env, ctx: ProverContext): Info =
+  for arg in e.args: discard analyzeExpr(arg, env, ctx)
 
   # Track the range of rand(max) or rand(max, min)
   if e.args.len == 1:
-    let maxInfo = analyzeExpr(e.args[0], env, prog)
+    let maxInfo = analyzeExpr(e.args[0], env, ctx)
     if maxInfo.known:
       # rand(max) returns 0 to max inclusive - can be zero unless min > 0
       return Info(known: false, minv: 0, maxv: maxInfo.cval, nonZero: false, initialized: true)
@@ -149,8 +153,8 @@ proc analyzeRandCall*(e: Expr, env: Env, prog: Program): Info =
       # rand(max) where max is in range [a, b] returns values in range [0, b]
       return Info(known: false, minv: 0, maxv: max(0, maxInfo.maxv), nonZero: false, initialized: true)
   elif e.args.len == 2:
-    let maxInfo = analyzeExpr(e.args[0], env, prog)
-    let minInfo = analyzeExpr(e.args[1], env, prog)
+    let maxInfo = analyzeExpr(e.args[0], env, ctx)
+    let minInfo = analyzeExpr(e.args[1], env, ctx)
     if maxInfo.known and minInfo.known:
       # Both arguments are constants
       let actualMin = min(minInfo.cval, maxInfo.cval)
@@ -172,58 +176,54 @@ proc analyzeRandCall*(e: Expr, env: Env, prog: Program): Info =
     return infoUnknown()
 
 
-proc analyzeBuiltinCall*(e: Expr, env: Env, prog: Program): Info =
+proc analyzeToStringCall*(e: Expr, env: Env, ctx: ProverContext): Info =
+  if e.args.len > 0:
+    let argInfo = analyzeExpr(e.args[0], env, ctx)
+    # If we know the integer value, we can compute string length
+    if argInfo.known:
+      let strLen = ($argInfo.cval).len.int64
+      return infoString(strLen, sizeKnown = true)
+  return infoString(0, sizeKnown = false)
+
+
+proc analyzeParseIntCall*(e: Expr, env: Env, ctx: ProverContext): Info =
+  if e.args.len > 0:
+    discard analyzeExpr(e.args[0], env, ctx)
+  # parseInt can return any valid integer that fits in a string representation
+  # The actual range should be based on realistic string parsing limits
+  return Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
+
+
+proc analyzeBuiltinCall*(e: Expr, env: Env, ctx: ProverContext): Info =
   # recognize trusted builtins affecting nonNil/nonZero
-  if e.fname == "print":
-    # analyze arguments for safety even though print returns void
-    for arg in e.args: discard analyzeExpr(arg, env, prog)
-    return infoUnknown()
-  if e.fname == "rand":
-    return analyzeRandCall(e, env, prog)
-  if e.fname == "toString":
-    # analyze argument for safety
-    if e.args.len > 0:
-      let argInfo = analyzeExpr(e.args[0], env, prog)
-      # If we know the integer value, we can compute string length
-      if argInfo.known:
-        let strLen = ($argInfo.cval).len.int64
-        return infoString(strLen, sizeKnown = true)
-      else:
-        # Unknown value - return unknown string length
-        return infoString(0, sizeKnown = false)
-    else:
-      return infoString(0, sizeKnown = false)
-  if e.fname == "parseInt":
-    # parseInt returns option[int] - analyze argument for safety
-    if e.args.len > 0:
-      discard analyzeExpr(e.args[0], env, prog)
-    # parseInt can return any valid integer that fits in a string representation
-    # The actual range should be based on realistic string parsing limits
-    return Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
+  if e.fname == "print": return analyzePrintCall(e, env, ctx)
+  if e.fname == "rand": return analyzeRandCall(e, env, ctx)
+  if e.fname == "toString": return analyzeToStringCall(e, env, ctx)
+  if e.fname == "parseInt": return analyzeParseIntCall(e, env, ctx)
   # Unknown builtin - just analyze arguments
-  for arg in e.args: discard analyzeExpr(arg, env, prog)
+  for arg in e.args: discard analyzeExpr(arg, env, ctx)
   return infoUnknown()
 
 
-proc analyzeUserDefinedCall*(e: Expr, env: Env, prog: Program, flags: CompilerFlags = CompilerFlags()): Info =
+proc analyzeUserDefinedCall*(e: Expr, env: Env, ctx: ProverContext): Info =
   # User-defined function call - comprehensive call-site safety analysis
-  let fn = prog.funInstances[e.fname]
+  let fn = ctx.prog.funInstances[e.fname]
 
-  verboseProverLog(flags, &"Analyzing user-defined function call: {e.fname}")
+  verboseProverLog(ctx.flags, &"Analyzing user-defined function call: {e.fname}")
 
   # Analyze arguments to get their safety information
   var argInfos: seq[Info] = @[]
   for i, arg in e.args:
-    let argInfo = analyzeExpr(arg, env, prog, flags)
+    let argInfo = analyzeExpr(arg, env, ctx)
     argInfos.add argInfo
-    verboseProverLog(flags, &"Argument {i}: {(if argInfo.known: $argInfo.cval else: \"[\" & $argInfo.minv & \"..\" & $argInfo.maxv & \"]\")}")
+    verboseProverLog(ctx.flags, &"Argument {i}: {(if argInfo.known: $argInfo.cval else: \"[\" & $argInfo.minv & \"..\" & $argInfo.maxv & \"]\")}")
 
   # Add default parameter information
   for i in e.args.len..<fn.params.len:
     if fn.params[i].defaultValue.isSome:
-      let defaultInfo = analyzeExpr(fn.params[i].defaultValue.get, env, prog, flags)
+      let defaultInfo = analyzeExpr(fn.params[i].defaultValue.get, env, ctx)
       argInfos.add defaultInfo
-      verboseProverLog(flags, &"Default param {i}: {(if defaultInfo.known: $defaultInfo.cval else: \"[\" & $defaultInfo.minv & \"..\" & $defaultInfo.maxv & \"]\")}")
+      verboseProverLog(ctx.flags, &"Default param {i}: {(if defaultInfo.known: $defaultInfo.cval else: \"[\" & $defaultInfo.minv & \"..\" & $defaultInfo.maxv & \"]\")}")
     else:
       # This shouldn't happen if type checking is correct
       argInfos.add infoUnknown()
@@ -237,10 +237,10 @@ proc analyzeUserDefinedCall*(e: Expr, env: Env, prog: Program, flags: CompilerFl
 
   # If all arguments are constants, try to evaluate simple pure functions at compile time
   if allArgsConstant:
-    verboseProverLog(flags, "All arguments are constants - attempting compile-time evaluation")
-    let evalResult = tryEvaluatePureFunction(e, argInfos, fn, prog)
+    verboseProverLog(ctx.flags, "All arguments are constants - attempting compile-time evaluation")
+    let evalResult = tryEvaluatePureFunction(e, argInfos, fn, ctx.prog)
     if evalResult.isSome:
-      verboseProverLog(flags, &"Function evaluated at compile-time to: {evalResult.get}")
+      verboseProverLog(ctx.flags, &"Function evaluated at compile-time to: {evalResult.get}")
       return infoConst(evalResult.get)
 
   # Create function call environment with parameter mappings
@@ -271,11 +271,11 @@ proc analyzeUserDefinedCall*(e: Expr, env: Env, prog: Program, flags: CompilerFl
     # Store the original argument expression if it's simple enough
     if i < e.args.len:
       callEnv.exprs[paramName] = e.args[i]
-    verboseProverLog(flags, &"Parameter '{paramName}' mapped to: {(if argInfos[i].known: $argInfos[i].cval else: \"[\" & $argInfos[i].minv & \"..\" & $argInfos[i].maxv & \"]\")}")
+    verboseProverLog(ctx.flags, &"Parameter '{paramName}' mapped to: {(if argInfos[i].known: $argInfos[i].cval else: \"[\" & $argInfos[i].minv & \"..\" & $argInfos[i].maxv & \"]\")}")
 
   # Perform comprehensive safety analysis on function body
   let fnContext = &"function {functionNameFromSignature(e.fname)}"
-  verboseProverLog(flags, &"Starting comprehensive analysis of function body with {fn.body.len} statements")
+  verboseProverLog(ctx.flags, &"Starting comprehensive analysis of function body with {fn.body.len} statements")
 
   # Recursive helper to analyze expressions for all safety violations
   proc checkExpressionSafety(expr: Expr) =
@@ -288,7 +288,7 @@ proc analyzeUserDefinedCall*(e: Expr, env: Env, prog: Program, flags: CompilerFl
       # Then check the binary operation itself
       case expr.bop
       of boDiv, boMod:
-        let divisorInfo = analyzeExpr(expr.rhs, callEnv, prog, flags)
+        let divisorInfo = analyzeExpr(expr.rhs, callEnv, ctx)
         if divisorInfo.known and divisorInfo.cval == 0:
           raise newProverError(expr.pos, &"division by zero in {fnContext}")
         elif not divisorInfo.nonZero:
@@ -296,18 +296,21 @@ proc analyzeUserDefinedCall*(e: Expr, env: Env, prog: Program, flags: CompilerFl
       of boAdd, boSub, boMul:
         # Check for potential overflow/underflow
         # The binary operations module already does overflow checks
-        discard analyzeBinaryExpr(expr, callEnv, prog, flags)
+        # Create a temporary context with the function context
+        let tmpCtx = newProverContext(fnContext, ctx.flags, ctx.prog)
+        discard analyzeBinaryExpr(expr, callEnv, tmpCtx)
       else:
         discard
     of ekIndex:
       # Array bounds checking
       checkExpressionSafety(expr.arrayExpr)
       checkExpressionSafety(expr.indexExpr)
-      let indexInfo = analyzeExpr(expr.indexExpr, callEnv, prog, flags)
+      let tmpCtx = newProverContext(fnContext, ctx.flags, ctx.prog)
+      let indexInfo = analyzeExpr(expr.indexExpr, callEnv, tmpCtx)
       if indexInfo.known and indexInfo.cval < 0:
         raise newProverError(expr.pos, &"negative array index in {fnContext}")
       # Additional bounds checking is done by the recursive call to analyzeExpr
-      discard analyzeExpr(expr, callEnv, prog, flags)
+      discard analyzeExpr(expr, callEnv, tmpCtx)
     of ekSlice:
       # Slice bounds checking
       if expr.startExpr.isSome:
@@ -315,10 +318,12 @@ proc analyzeUserDefinedCall*(e: Expr, env: Env, prog: Program, flags: CompilerFl
       if expr.endExpr.isSome:
         checkExpressionSafety(expr.endExpr.get)
       checkExpressionSafety(expr.sliceExpr)
-      discard analyzeExpr(expr, callEnv, prog, flags)
+      let tmpCtx = newProverContext(fnContext, ctx.flags, ctx.prog)
+      discard analyzeExpr(expr, callEnv, tmpCtx)
     of ekDeref:
       # Nil dereference checking
-      let refInfo = analyzeExpr(expr.refExpr, callEnv, prog, flags)
+      let tmpCtx = newProverContext(fnContext, ctx.flags, ctx.prog)
+      let refInfo = analyzeExpr(expr.refExpr, callEnv, tmpCtx)
       if not refInfo.nonNil:
         raise newProverError(expr.pos, &"cannot prove reference is non-nil before dereference in {fnContext}")
     of ekVar:
@@ -334,55 +339,60 @@ proc analyzeUserDefinedCall*(e: Expr, env: Env, prog: Program, flags: CompilerFl
       for arg in expr.args:
         checkExpressionSafety(arg)
       # Check the function call itself
-      discard analyzeExpr(expr, callEnv, prog, flags)
+      let tmpCtx = newProverContext(fnContext, ctx.flags, ctx.prog)
+      discard analyzeExpr(expr, callEnv, tmpCtx)
     else:
       # For other expression types, just analyze normally
-      discard analyzeExpr(expr, callEnv, prog, flags)
+      let tmpCtx = newProverContext(fnContext, ctx.flags, ctx.prog)
+      discard analyzeExpr(expr, callEnv, tmpCtx)
 
   # Check all statements in the function body using full statement analysis
+  # Create a new context for the function body with the function context
+  var fnCtx = newProverContext(fnContext, ctx.flags, ctx.prog)
   for i, stmt in fn.body:
-    verboseProverLog(flags, &"Analyzing statement {i + 1}/{fn.body.len}: {stmt.kind}")
-    proveStmt(stmt, callEnv, prog, flags, fnContext)
+    verboseProverLog(ctx.flags, &"Analyzing statement {i + 1}/{fn.body.len}: {stmt.kind}")
+    proveStmt(stmt, callEnv, fnCtx)
 
-  verboseProverLog(flags, &"Function {fnContext} analysis completed successfully")
+  verboseProverLog(ctx.flags, &"Function {fnContext} analysis completed successfully")
 
   # Try to determine return value information by looking at return statements
   # This is a simplified approach - a more complete implementation would track
   # all possible return paths and merge their info
   for stmt in fn.body:
     if stmt.kind == skReturn and stmt.re.isSome:
-      let returnInfo = analyzeExpr(stmt.re.get, callEnv, prog, flags)
-      verboseProverLog(flags, &"Function return value: {(if returnInfo.known: $returnInfo.cval else: \"[\" & $returnInfo.minv & \"..\" & $returnInfo.maxv & \"]\")}")
+      let tmpCtx = newProverContext(fnContext, ctx.flags, ctx.prog)
+      let returnInfo = analyzeExpr(stmt.re.get, callEnv, tmpCtx)
+      verboseProverLog(ctx.flags, &"Function return value: {(if returnInfo.known: $returnInfo.cval else: \"[\" & $returnInfo.minv & \"..\" & $returnInfo.maxv & \"]\")}")
       return returnInfo
 
   # No return statement found or void return
-  verboseProverLog(flags, &"Function {fnContext} has no explicit return value")
+  verboseProverLog(ctx.flags, &"Function {fnContext} has no explicit return value")
   return infoUnknown()
 
 
-proc analyzeCallExpr*(e: Expr, env: Env, prog: Program, flags: CompilerFlags = CompilerFlags()): Info =
+proc analyzeCallExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
   # User-defined function call - perform call-site safety analysis
-  if prog != nil and prog.funInstances.hasKey(e.fname):
-    return analyzeUserDefinedCall(e, env, prog, flags)
+  if ctx.prog != nil and ctx.prog.funInstances.hasKey(e.fname):
+    return analyzeUserDefinedCall(e, env, ctx)
   else:
-    return analyzeBuiltinCall(e, env, prog)
+    return analyzeBuiltinCall(e, env, ctx)
 
 
-proc analyzeNewRefExpr*(e: Expr, env: Env, prog: Program): Info =
+proc analyzeNewRefExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
   # newRef always non-nil
-  discard analyzeExpr(e.init, env, prog)  # Analyze the initialization expression
+  discard analyzeExpr(e.init, env, ctx)  # Analyze the initialization expression
   Info(known: false, nonNil: true, initialized: true)
 
 
-proc analyzeDerefExpr*(e: Expr, env: Env, prog: Program): Info =
-  let i0 = analyzeExpr(e.refExpr, env, prog)
+proc analyzeDerefExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
+  let i0 = analyzeExpr(e.refExpr, env, ctx)
   if not i0.nonNil: raise newException(ValueError, "Prover: cannot prove ref non-nil before deref")
   infoUnknown()
 
 
-proc analyzeCastExpr*(e: Expr, env: Env, prog: Program): Info =
+proc analyzeCastExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
   # Explicit cast - analyze the source expression and return appropriate info for target type
-  let sourceInfo = analyzeExpr(e.castExpr, env, prog)  # Analyze source for safety
+  let sourceInfo = analyzeExpr(e.castExpr, env, ctx)  # Analyze source for safety
 
   # For known values, we can be more precise about the cast result
   if sourceInfo.known:
@@ -403,18 +413,18 @@ proc analyzeCastExpr*(e: Expr, env: Env, prog: Program): Info =
     Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
 
 
-proc analyzeArrayExpr*(e: Expr, env: Env, prog: Program): Info =
+proc analyzeArrayExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
   # Array literal - analyze all elements for safety and track size
   for elem in e.elements:
-    discard analyzeExpr(elem, env, prog)
+    discard analyzeExpr(elem, env, ctx)
   # Return info with known array size
   infoArray(e.elements.len.int64, sizeKnown = true)
 
 
-proc analyzeIndexExpr*(e: Expr, env: Env, prog: Program): Info =
+proc analyzeIndexExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
   # Array/String indexing - comprehensive bounds checking
-  let arrayInfo = analyzeExpr(e.arrayExpr, env, prog)
-  let indexInfo = analyzeExpr(e.indexExpr, env, prog)
+  let arrayInfo = analyzeExpr(e.arrayExpr, env, ctx)
+  let indexInfo = analyzeExpr(e.indexExpr, env, ctx)
 
   # Basic negative index check
   if indexInfo.known and indexInfo.cval < 0:
@@ -451,7 +461,7 @@ proc analyzeIndexExpr*(e: Expr, env: Env, prog: Program): Info =
       return infoArray(elementExpr.elements.len.int64, sizeKnown = true)
     # For scalar elements (like integers), analyze the element directly
     else:
-      return analyzeExpr(elementExpr, env, prog)
+      return analyzeExpr(elementExpr, env, ctx)
 
   # Case 2: Indexing into a variable that contains an array literal
   elif e.arrayExpr.kind == ekVar and indexInfo.known:
@@ -467,7 +477,7 @@ proc analyzeIndexExpr*(e: Expr, env: Env, prog: Program): Info =
           return infoArray(elementExpr.elements.len.int64, sizeKnown = true)
         # For scalar elements (like integers), analyze the element directly
         else:
-          return analyzeExpr(elementExpr, env, prog)
+          return analyzeExpr(elementExpr, env, ctx)
 
   # If result type is an array but we can't determine exact size
   if e.typ != nil and e.typ.kind == tkArray:
@@ -476,9 +486,9 @@ proc analyzeIndexExpr*(e: Expr, env: Env, prog: Program): Info =
   infoUnknown()
 
 
-proc analyzeSliceExpr*(e: Expr, env: Env, prog: Program): Info =
+proc analyzeSliceExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
   # Array slicing - comprehensive slice bounds checking
-  let arrayInfo = analyzeExpr(e.sliceExpr, env, prog)
+  let arrayInfo = analyzeExpr(e.sliceExpr, env, ctx)
 
   var startInfo, endInfo: Info
   var hasStart = false
@@ -486,14 +496,14 @@ proc analyzeSliceExpr*(e: Expr, env: Env, prog: Program): Info =
 
   # Analyze start bound if present
   if e.startExpr.isSome:
-    startInfo = analyzeExpr(e.startExpr.get, env, prog)
+    startInfo = analyzeExpr(e.startExpr.get, env, ctx)
     hasStart = true
     if startInfo.known and startInfo.cval < 0:
       raise newProverError(e.startExpr.get.pos, &"slice start cannot be negative: {startInfo.cval}")
 
   # Analyze end bound if present
   if e.endExpr.isSome:
-    endInfo = analyzeExpr(e.endExpr.get, env, prog)
+    endInfo = analyzeExpr(e.endExpr.get, env, ctx)
     hasEnd = true
     if endInfo.known and endInfo.cval < 0:
       raise newProverError(e.endExpr.get.pos, &"slice end cannot be negative: {endInfo.cval}")
@@ -566,9 +576,9 @@ proc analyzeSliceExpr*(e: Expr, env: Env, prog: Program): Info =
     return infoUnknown()
 
 
-proc analyzeArrayLenExpr*(e: Expr, env: Env, prog: Program): Info =
+proc analyzeArrayLenExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
   # Array/String length operator: #array/#string -> int
-  let arrayInfo = analyzeExpr(e.lenExpr, env, prog)
+  let arrayInfo = analyzeExpr(e.lenExpr, env, ctx)
   if arrayInfo.isArray and arrayInfo.arraySizeKnown:
     # If we know the array size, return it as a constant
     infoConst(arrayInfo.arraySize)
@@ -585,9 +595,9 @@ proc analyzeNilExpr*(e: Expr): Info =
   Info(known: false, nonNil: false, initialized: true)
 
 
-proc analyzeOptionSomeExpr*(e: Expr, env: Env, prog: Program): Info =
+proc analyzeOptionSomeExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
   # some(value) - analyze the wrapped value
-  discard analyzeExpr(e.someExpr, env, prog)
+  discard analyzeExpr(e.someExpr, env, ctx)
   infoUnknown()  # option value is unknown without pattern matching
 
 
@@ -596,21 +606,21 @@ proc analyzeOptionNoneExpr*(e: Expr): Info =
   infoUnknown()
 
 
-proc analyzeResultOkExpr*(e: Expr, env: Env, prog: Program): Info =
+proc analyzeResultOkExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
   # ok(value) - analyze the wrapped value
-  discard analyzeExpr(e.okExpr, env, prog)
+  discard analyzeExpr(e.okExpr, env, ctx)
   infoUnknown()  # result value is unknown without pattern matching
 
 
-proc analyzeResultErrExpr*(e: Expr, env: Env, prog: Program): Info =
+proc analyzeResultErrExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
   # error(msg) - analyze the error message
-  discard analyzeExpr(e.errExpr, env, prog)
+  discard analyzeExpr(e.errExpr, env, ctx)
   infoUnknown()  # error value is unknown without pattern matching
 
 
-proc analyzeMatchExpr(e: Expr, env: Env, prog: Program): Info =
+proc analyzeMatchExpr(e: Expr, env: Env, ctx: ProverContext): Info =
   # Simplified match expression analysis that only handles expressions, not full statements
-  let matchedInfo = analyzeExpr(e.matchExpr, env, prog)
+  let matchedInfo = analyzeExpr(e.matchExpr, env, ctx)
 
   for matchCase in e.cases:
     # Create new environment for this case with pattern bindings
@@ -640,11 +650,11 @@ proc analyzeMatchExpr(e: Expr, env: Env, prog: Program): Info =
     for stmt in matchCase.body:
       case stmt.kind:
       of skExpr:
-        discard analyzeExpr(stmt.sexpr, caseEnv, prog)
+        discard analyzeExpr(stmt.sexpr, caseEnv, ctx)
       of skVar:
         # Handle variable declarations in match case bodies
         if stmt.vinit.isSome():
-          let info = analyzeExpr(stmt.vinit.get(), caseEnv, prog)
+          let info = analyzeExpr(stmt.vinit.get(), caseEnv, ctx)
           caseEnv.vals[stmt.vname] = info
           caseEnv.nils[stmt.vname] = not info.nonNil
           caseEnv.exprs[stmt.vname] = stmt.vinit.get()
@@ -665,8 +675,8 @@ proc analyzeMatchExpr(e: Expr, env: Env, prog: Program): Info =
   return infoUnknown()  # match result is unknown without deeper analysis
 
 
-proc analyzeExpr*(e: Expr; env: Env, prog: Program = nil, flags: CompilerFlags = CompilerFlags()): Info =
-  verboseProverLog(flags, "Analyzing " & $e.kind & (if e.kind == ekVar: " '" & e.vname & "'" else: ""))
+proc analyzeExpr*(e: Expr; env: Env, ctx: ProverContext): Info =
+  verboseProverLog(ctx.flags, "Analyzing " & $e.kind & (if e.kind == ekVar: " '" & e.vname & "'" else: ""))
 
   case e.kind
   of ekInt: return analyzeIntExpr(e)
@@ -675,57 +685,57 @@ proc analyzeExpr*(e: Expr; env: Env, prog: Program = nil, flags: CompilerFlags =
   of ekChar: return analyzeCharExpr(e)
   of ekBool: return analyzeBoolExpr(e)
   of ekVar: return analyzeVarExpr(e, env)
-  of ekUn: return analyzeUnaryExpr(e, env, prog, flags)
-  of ekBin: return analyzeBinaryExpr(e, env, prog, flags)
-  of ekCall: return analyzeCallExpr(e, env, prog, flags)
-  of ekNewRef: return analyzeNewRefExpr(e, env, prog)
-  of ekDeref: return analyzeDerefExpr(e, env, prog)
-  of ekArray: return analyzeArrayExpr(e, env, prog)
-  of ekIndex: return analyzeIndexExpr(e, env, prog)
-  of ekSlice: return analyzeSliceExpr(e, env, prog)
-  of ekArrayLen: return analyzeArrayLenExpr(e, env, prog)
-  of ekCast: return analyzeCastExpr(e, env, prog)
+  of ekUn: return analyzeUnaryExpr(e, env, ctx)
+  of ekBin: return analyzeBinaryExpr(e, env, ctx)
+  of ekCall: return analyzeCallExpr(e, env, ctx)
+  of ekNewRef: return analyzeNewRefExpr(e, env, ctx)
+  of ekDeref: return analyzeDerefExpr(e, env, ctx)
+  of ekArray: return analyzeArrayExpr(e, env, ctx)
+  of ekIndex: return analyzeIndexExpr(e, env, ctx)
+  of ekSlice: return analyzeSliceExpr(e, env, ctx)
+  of ekArrayLen: return analyzeArrayLenExpr(e, env, ctx)
+  of ekCast: return analyzeCastExpr(e, env, ctx)
   of ekNil: return analyzeNilExpr(e)
-  of ekOptionSome: return analyzeOptionSomeExpr(e, env, prog)
+  of ekOptionSome: return analyzeOptionSomeExpr(e, env, ctx)
   of ekOptionNone: return analyzeOptionNoneExpr(e)
-  of ekResultOk: return analyzeResultOkExpr(e, env, prog)
-  of ekResultErr: return analyzeResultErrExpr(e, env, prog)
-  of ekMatch: return analyzeMatchExpr(e, env, prog)
+  of ekResultOk: return analyzeResultOkExpr(e, env, ctx)
+  of ekResultErr: return analyzeResultErrExpr(e, env, ctx)
+  of ekMatch: return analyzeMatchExpr(e, env, ctx)
 
 
-proc analyzeFunctionBody*(statements: seq[Stmt], env: Env, prog: Program, flags: CompilerFlags, fnContext: string) =
+proc analyzeFunctionBody*(statements: seq[Stmt], env: Env, ctx: ProverContext) =
   ## Analyze a sequence of statements in a function body with full control flow analysis
   for i, stmt in statements:
-    verboseProverLog(flags, &"Analyzing statement {i + 1}/{statements.len}: {stmt.kind}")
-    proveStmt(stmt, env, prog, flags, fnContext)
+    verboseProverLog(ctx.flags, &"Analyzing statement {i + 1}/{statements.len}: {stmt.kind}")
+    proveStmt(stmt, env, ctx)
 
 
-proc proveVar(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnContext: string) =
-  verboseProverLog(flags, "Declaring variable: " & s.vname)
+proc proveVar(s: Stmt; env: Env, ctx: ProverContext) =
+  verboseProverLog(ctx.flags, "Declaring variable: " & s.vname)
   if s.vinit.isSome():
-    verboseProverLog(flags, "Variable " & s.vname & " has initializer")
-    let info = analyzeExpr(s.vinit.get(), env, prog, flags)
+    verboseProverLog(ctx.flags, "Variable " & s.vname & " has initializer")
+    let info = analyzeExpr(s.vinit.get(), env, ctx)
     env.vals[s.vname] = info
     env.nils[s.vname] = not info.nonNil
     env.exprs[s.vname] = s.vinit.get()  # Store original expression
     if info.known:
-      verboseProverLog(flags, "Variable " & s.vname & " initialized with constant value: " & $info.cval)
+      verboseProverLog(ctx.flags, "Variable " & s.vname & " initialized with constant value: " & $info.cval)
     else:
-      verboseProverLog(flags, "Variable " & s.vname & " initialized with range [" & $info.minv & ".." & $info.maxv & "]")
+      verboseProverLog(ctx.flags, "Variable " & s.vname & " initialized with range [" & $info.minv & ".." & $info.maxv & "]")
   else:
-    verboseProverLog(flags, "Variable " & s.vname & " declared without initializer (uninitialized)")
+    verboseProverLog(ctx.flags, "Variable " & s.vname & " declared without initializer (uninitialized)")
     # Variable is declared but not initialized
     env.vals[s.vname] = infoUninitialized()
     env.nils[s.vname] = true
 
 
-proc proveAssign(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnContext: string) =
-  verboseProverLog(flags, "Assignment to variable: " & s.aname)
+proc proveAssign(s: Stmt; env: Env, ctx: ProverContext) =
+  verboseProverLog(ctx.flags, "Assignment to variable: " & s.aname)
   # Check if the variable being assigned to exists
   if not env.vals.hasKey(s.aname):
     raise newProverError(s.pos, &"assignment to undeclared variable '{s.aname}'")
 
-  let info = analyzeExpr(s.aval, env, prog, flags)
+  let info = analyzeExpr(s.aval, env, ctx)
   # Assignment initializes the variable
   var newInfo = info
   newInfo.initialized = true
@@ -733,32 +743,32 @@ proc proveAssign(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, f
   env.exprs[s.aname] = s.aval  # Store original expression
   if info.nonNil: env.nils[s.aname] = false
   if info.known:
-    verboseProverLog(flags, "Variable " & s.aname & " assigned constant value: " & $info.cval)
+    verboseProverLog(ctx.flags, "Variable " & s.aname & " assigned constant value: " & $info.cval)
   else:
-    verboseProverLog(flags, "Variable " & s.aname & " assigned range [" & $info.minv & ".." & $info.maxv & "]")
+    verboseProverLog(ctx.flags, "Variable " & s.aname & " assigned range [" & $info.minv & ".." & $info.maxv & "]")
 
 
-proc proveIf(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnContext: string) =
-  let condResult = evaluateCondition(s.cond, env, prog, flags)
-  verboseProverLog(flags, "If condition evaluation result: " & $condResult)
+proc proveIf(s: Stmt; env: Env, ctx: ProverContext) =
+  let condResult = evaluateCondition(s.cond, env, ctx)
+  verboseProverLog(ctx.flags, "If condition evaluation result: " & $condResult)
 
   case condResult
   of crAlwaysTrue:
-    verboseProverLog(flags, "Condition is always true - analyzing only then branch")
+    verboseProverLog(ctx.flags, "Condition is always true - analyzing only then branch")
     # Check if this is an obvious constant condition that should trigger error
     if isObviousConstant(s.cond) and s.elseBody.len > 0:
       raise newProverError(s.pos, "unreachable code (condition is always true)")
     # Only analyze then branch
     var thenEnv = Env(vals: env.vals, nils: env.nils, exprs: env.exprs)
-    verboseProverLog(flags, "Analyzing " & $s.thenBody.len & " statements in then branch")
-    for st in s.thenBody: proveStmt(st, thenEnv, prog, flags, fnContext)
+    verboseProverLog(ctx.flags, "Analyzing " & $s.thenBody.len & " statements in then branch")
+    for st in s.thenBody: proveStmt(st, thenEnv, ctx)
     # Copy then results back to main env
     for k, v in thenEnv.vals: env.vals[k] = v
     for k, v in thenEnv.exprs: env.exprs[k] = v
-    verboseProverLog(flags, "Then branch analysis complete")
+    verboseProverLog(ctx.flags, "Then branch analysis complete")
     return
   of crAlwaysFalse:
-    verboseProverLog(flags, "Condition is always false - skipping then branch")
+    verboseProverLog(ctx.flags, "Condition is always false - skipping then branch")
     # Check if this is an obvious constant condition that should trigger error
     if isObviousConstant(s.cond) and s.thenBody.len > 0 and s.elseBody.len == 0:
       raise newProverError(s.pos, "unreachable code (condition is always false)")
@@ -768,14 +778,14 @@ proc proveIf(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnCon
     # Process elif chain
     for i, elifBranch in s.elifChain:
       var elifEnv = Env(vals: env.vals, nils: env.nils, exprs: env.exprs)
-      let elifCondResult = evaluateCondition(elifBranch.cond, env, prog, flags)
+      let elifCondResult = evaluateCondition(elifBranch.cond, env, ctx)
       if elifCondResult != crAlwaysFalse:
-        for st in elifBranch.body: proveStmt(st, elifEnv, prog, flags, fnContext)
+        for st in elifBranch.body: proveStmt(st, elifEnv, ctx)
         elifEnvs.add(elifEnv)
 
     # Process else branch
     var elseEnv = Env(vals: env.vals, nils: env.nils, exprs: env.exprs)
-    for st in s.elseBody: proveStmt(st, elseEnv, prog, flags, fnContext)
+    for st in s.elseBody: proveStmt(st, elseEnv, ctx)
 
     # Merge results from all executed branches
     if elifEnvs.len > 0:
@@ -818,14 +828,14 @@ proc proveIf(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnCon
         env.exprs[k] = v
     return
   of crUnknown:
-    verboseProverLog(flags, "Condition result is unknown at compile time - analyzing all branches")
+    verboseProverLog(ctx.flags, "Condition result is unknown at compile time - analyzing all branches")
     discard # Continue with normal analysis
 
   # Normal case: condition is not known at compile time
   # Process then branch (condition could be true)
-  verboseProverLog(flags, "Analyzing control flow with condition refinement")
+  verboseProverLog(ctx.flags, "Analyzing control flow with condition refinement")
   var thenEnv = Env(vals: env.vals, nils: env.nils, exprs: env.exprs)
-  let condInfo = analyzeExpr(s.cond, env, prog)
+  let condInfo = analyzeExpr(s.cond, env, ctx)
   if not (condInfo.known and condInfo.cval == 0):
     # Control flow sensitive analysis: refine environment based on condition
     if s.cond.kind == ekBin:
@@ -836,30 +846,30 @@ proc proveIf(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnCon
             thenEnv.vals[s.cond.lhs.vname].nonZero = true
       of boGe: # x >= value: in then branch, x >= value
         if s.cond.lhs.kind == ekVar and thenEnv.vals.hasKey(s.cond.lhs.vname):
-          let rhsInfo = analyzeExpr(s.cond.rhs, env, prog)
+          let rhsInfo = analyzeExpr(s.cond.rhs, env, ctx)
           if rhsInfo.known:
             # In then branch: x >= rhsInfo.cval
             thenEnv.vals[s.cond.lhs.vname].minv = max(thenEnv.vals[s.cond.lhs.vname].minv, rhsInfo.cval)
       of boGt: # x > value: in then branch, x >= value + 1
         if s.cond.lhs.kind == ekVar and thenEnv.vals.hasKey(s.cond.lhs.vname):
-          let rhsInfo = analyzeExpr(s.cond.rhs, env, prog)
+          let rhsInfo = analyzeExpr(s.cond.rhs, env, ctx)
           if rhsInfo.known:
             # In then branch: x > rhsInfo.cval means x >= rhsInfo.cval + 1
             thenEnv.vals[s.cond.lhs.vname].minv = max(thenEnv.vals[s.cond.lhs.vname].minv, rhsInfo.cval + 1)
       of boLe: # x <= value: in then branch, x <= value
         if s.cond.lhs.kind == ekVar and thenEnv.vals.hasKey(s.cond.lhs.vname):
-          let rhsInfo = analyzeExpr(s.cond.rhs, env, prog)
+          let rhsInfo = analyzeExpr(s.cond.rhs, env, ctx)
           if rhsInfo.known:
             # In then branch: x <= rhsInfo.cval
             thenEnv.vals[s.cond.lhs.vname].maxv = min(thenEnv.vals[s.cond.lhs.vname].maxv, rhsInfo.cval)
       of boLt: # x < value: in then branch, x <= value - 1
         if s.cond.lhs.kind == ekVar and thenEnv.vals.hasKey(s.cond.lhs.vname):
-          let rhsInfo = analyzeExpr(s.cond.rhs, env, prog)
+          let rhsInfo = analyzeExpr(s.cond.rhs, env, ctx)
           if rhsInfo.known:
             # In then branch: x < rhsInfo.cval means x <= rhsInfo.cval - 1
             thenEnv.vals[s.cond.lhs.vname].maxv = min(thenEnv.vals[s.cond.lhs.vname].maxv, rhsInfo.cval - 1)
       else: discard
-    for st in s.thenBody: proveStmt(st, thenEnv, prog, flags, fnContext)
+    for st in s.thenBody: proveStmt(st, thenEnv, ctx)
 
   # Process elif chain
   var elifEnvs: seq[Env] = @[]
@@ -875,7 +885,7 @@ proc proveIf(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnCon
             elifEnv.vals[elifBranch.cond.lhs.vname].nonZero = true
       else: discard
 
-    for st in elifBranch.body: proveStmt(st, elifEnv, prog, flags)
+    for st in elifBranch.body: proveStmt(st, elifEnv, ctx)
     elifEnvs.add(elifEnv)
 
   # Process else branch
@@ -889,31 +899,31 @@ proc proveIf(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnCon
           elseEnv.vals[s.cond.lhs.vname].nonZero = true
     of boGe: # x >= value: in else branch (condition false), x < value
       if s.cond.lhs.kind == ekVar and elseEnv.vals.hasKey(s.cond.lhs.vname):
-        let rhsInfo = analyzeExpr(s.cond.rhs, env, prog)
+        let rhsInfo = analyzeExpr(s.cond.rhs, env, ctx)
         if rhsInfo.known:
           # In else branch: !(x >= rhsInfo.cval) means x < rhsInfo.cval, so x <= rhsInfo.cval - 1
           elseEnv.vals[s.cond.lhs.vname].maxv = min(elseEnv.vals[s.cond.lhs.vname].maxv, rhsInfo.cval - 1)
     of boGt: # x > value: in else branch (condition false), x <= value
       if s.cond.lhs.kind == ekVar and elseEnv.vals.hasKey(s.cond.lhs.vname):
-        let rhsInfo = analyzeExpr(s.cond.rhs, env, prog)
+        let rhsInfo = analyzeExpr(s.cond.rhs, env, ctx)
         if rhsInfo.known:
           # In else branch: !(x > rhsInfo.cval) means x <= rhsInfo.cval
           elseEnv.vals[s.cond.lhs.vname].maxv = min(elseEnv.vals[s.cond.lhs.vname].maxv, rhsInfo.cval)
     of boLe: # x <= value: in else branch (condition false), x > value
       if s.cond.lhs.kind == ekVar and elseEnv.vals.hasKey(s.cond.lhs.vname):
-        let rhsInfo = analyzeExpr(s.cond.rhs, env, prog)
+        let rhsInfo = analyzeExpr(s.cond.rhs, env, ctx)
         if rhsInfo.known:
           # In else branch: !(x <= rhsInfo.cval) means x > rhsInfo.cval, so x >= rhsInfo.cval + 1
           elseEnv.vals[s.cond.lhs.vname].minv = max(elseEnv.vals[s.cond.lhs.vname].minv, rhsInfo.cval + 1)
     of boLt: # x < value: in else branch (condition false), x >= value
       if s.cond.lhs.kind == ekVar and elseEnv.vals.hasKey(s.cond.lhs.vname):
-        let rhsInfo = analyzeExpr(s.cond.rhs, env, prog)
+        let rhsInfo = analyzeExpr(s.cond.rhs, env, ctx)
         if rhsInfo.known:
           # In else branch: !(x < rhsInfo.cval) means x >= rhsInfo.cval
           elseEnv.vals[s.cond.lhs.vname].minv = max(elseEnv.vals[s.cond.lhs.vname].minv, rhsInfo.cval)
     else: discard
 
-  for st in s.elseBody: proveStmt(st, elseEnv, prog, flags)
+  for st in s.elseBody: proveStmt(st, elseEnv, ctx)
 
   # Join - merge variable states from all branches
   # For complete initialization analysis, we need to check all possible paths
@@ -963,15 +973,15 @@ proc proveIf(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnCon
       env.vals[varName] = mergedInfo
 
 
-proc proveWhile(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnContext: string) =
+proc proveWhile(s: Stmt; env: Env, ctx: ProverContext) =
   # Enhanced while loop analysis using symbolic execution
-  let condResult = evaluateCondition(s.wcond, env, prog)
+  let condResult = evaluateCondition(s.wcond, env, ctx)
 
   case condResult
   of crAlwaysFalse:
     if s.wbody.len > 0:
-      if fnContext.len > 0 and '<' in fnContext and '>' in fnContext and "<>" notin fnContext:
-        raise newProverError(s.pos, &"unreachable code (while condition is always false) in {fnContext}")
+      if ctx.fnContext.len > 0 and '<' in ctx.fnContext and '>' in ctx.fnContext and "<>" notin ctx.fnContext:
+        raise newProverError(s.pos, &"unreachable code (while condition is always false) in {ctx.fnContext}")
       else:
         raise newProverError(s.pos, "unreachable code (while condition is always false)")
     # Skip loop body analysis since it's never executed
@@ -989,7 +999,7 @@ proc proveWhile(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fn
     symState.setVariable(varName, info)  # Direct assignment since using unified Info type
 
   # Try to execute the loop symbolically
-  let loopResult = symbolicExecuteWhile(s, symState, prog)
+  let loopResult = symbolicExecuteWhile(s, symState, ctx.prog)
 
   case loopResult
   of erContinue:
@@ -1011,7 +1021,7 @@ proc proveWhile(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fn
 
     # Analyze loop body with traditional method
     for st in s.wbody:
-      proveStmt(st, loopEnv, prog, flags, fnContext)
+      proveStmt(st, loopEnv, ctx)
 
     # Enhanced merge: if symbolic execution determined a variable was initialized,
     # trust that result even if traditional analysis is conservative
@@ -1033,7 +1043,7 @@ proc proveWhile(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fn
           env.vals[varName] = conservativeInfo
         else:
           # Variable was already initialized, merge normally
-          env.vals[varName] = meet(originalInfo, loopInfo)
+          env.vals[varName] = union(originalInfo, loopInfo)
       elif originalVars.hasKey(varName):
         # Handle variables without symbolic info conservatively
         let originalInfo = originalVars[varName]
@@ -1043,7 +1053,7 @@ proc proveWhile(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fn
           conservativeInfo.initialized = false
           env.vals[varName] = conservativeInfo
         else:
-          env.vals[varName] = meet(originalInfo, loopInfo)
+          env.vals[varName] = union(originalInfo, loopInfo)
       else:
         # New variable declared in loop - conservative approach
         var conservativeInfo = loopEnv.vals[varName]
@@ -1054,15 +1064,15 @@ proc proveWhile(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fn
     discard
 
 
-proc proveFor(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnContext: string) =
+proc proveFor(s: Stmt; env: Env, ctx: ProverContext) =
   # Analyze for loop: for var in start..end or for var in array
-  verboseProverLog(flags, "Analyzing for loop variable: " & s.fvar)
+  verboseProverLog(ctx.flags, "Analyzing for loop variable: " & s.fvar)
 
   var loopVarInfo: Info
   if s.farray.isSome():
     # Array iteration: for x in array
-    let arrayInfo = analyzeExpr(s.farray.get(), env, prog, flags)
-    verboseProverLog(flags, "For loop over array with info: " & (if arrayInfo.isArray: "array" else: "unknown"))
+    let arrayInfo = analyzeExpr(s.farray.get(), env, ctx)
+    verboseProverLog(ctx.flags, "For loop over array with info: " & (if arrayInfo.isArray: "array" else: "unknown"))
 
     # Loop variable gets the element type - for now assume int (could be enhanced later)
     loopVarInfo = infoUnknown()
@@ -1076,11 +1086,11 @@ proc proveFor(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnCo
 
   else:
     # Range iteration: for var in start..end
-    let startInfo = analyzeExpr(s.fstart.get(), env, prog, flags)
-    let endInfo = analyzeExpr(s.fend.get(), env, prog, flags)
+    let startInfo = analyzeExpr(s.fstart.get(), env, ctx)
+    let endInfo = analyzeExpr(s.fend.get(), env, ctx)
 
-    verboseProverLog(flags, "For loop start range: [" & $startInfo.minv & ".." & $startInfo.maxv & "]")
-    verboseProverLog(flags, "For loop end range: [" & $endInfo.minv & ".." & $endInfo.maxv & "]")
+    verboseProverLog(ctx.flags, "For loop start range: [" & $startInfo.minv & ".." & $startInfo.maxv & "]")
+    verboseProverLog(ctx.flags, "For loop end range: [" & $endInfo.minv & ".." & $endInfo.maxv & "]")
 
     # Check if loop will never execute
     if s.finclusive:
@@ -1113,11 +1123,11 @@ proc proveFor(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnCo
   env.vals[s.fvar] = loopVarInfo
   env.nils[s.fvar] = false
 
-  verboseProverLog(flags, "Loop variable " & s.fvar & " has range [" & $loopVarInfo.minv & ".." & $loopVarInfo.maxv & "]")
+  verboseProverLog(ctx.flags, "Loop variable " & s.fvar & " has range [" & $loopVarInfo.minv & ".." & $loopVarInfo.maxv & "]")
 
   # Analyze loop body
   for stmt in s.fbody:
-    proveStmt(stmt, env, prog, flags, fnContext)
+    proveStmt(stmt, env, ctx)
 
   # Restore old variable state (for loops introduce block scope)
   if oldVarInfo.initialized:
@@ -1127,28 +1137,28 @@ proc proveFor(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnCo
     env.nils.del(s.fvar)
 
 
-proc proveBreak(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnContext: string) =
+proc proveBreak(s: Stmt; env: Env, ctx: ProverContext) =
   # Break statements are valid only inside loops, but this is a parse-time concern
   # For prover purposes, break doesn't change variable states
-  verboseProverLog(flags, "Break statement (control flow transfer)")
+  verboseProverLog(ctx.flags, "Break statement (control flow transfer)")
 
 
-proc proveExpr(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnContext: string) =
-  discard analyzeExpr(s.sexpr, env, prog)
+proc proveExpr(s: Stmt; env: Env, ctx: ProverContext) =
+  discard analyzeExpr(s.sexpr, env, ctx)
 
 
-proc proveReturn(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnContext: string) =
+proc proveReturn(s: Stmt; env: Env, ctx: ProverContext) =
   if s.re.isSome():
-      discard analyzeExpr(s.re.get(), env, prog)
+      discard analyzeExpr(s.re.get(), env, ctx)
 
 
-proc proveComptime(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags, fnContext: string) =
+proc proveComptime(s: Stmt; env: Env, ctx: ProverContext) =
   # Comptime blocks may contain injected statements after folding
   for injectedStmt in s.cbody:
-    proveStmt(injectedStmt, env, prog, flags, fnContext)
+    proveStmt(injectedStmt, env, ctx)
 
 
-proc proveStmt*(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags = CompilerFlags(), fnContext: string = "") =
+proc proveStmt*(s: Stmt; env: Env, ctx: ProverContext) =
   let stmtKindStr = case s.kind
     of skVar: "variable declaration"
     of skAssign: "assignment"
@@ -1160,15 +1170,15 @@ proc proveStmt*(s: Stmt; env: Env, prog: Program = nil, flags: CompilerFlags = C
     of skReturn: "return statement"
     else: $s.kind
 
-  verboseProverLog(flags, "Analyzing " & stmtKindStr & (if fnContext != "": " in " & fnContext else: ""))
+  verboseProverLog(ctx.flags, "Analyzing " & stmtKindStr & (if ctx.fnContext != "": " in " & ctx.fnContext else: ""))
 
   case s.kind
-  of skVar: proveVar(s, env, prog, flags, fnContext)
-  of skAssign: proveAssign(s, env, prog, flags, fnContext)
-  of skIf: proveIf(s, env, prog, flags, fnContext)
-  of skWhile: proveWhile(s, env, prog, flags, fnContext)
-  of skFor: proveFor(s, env, prog, flags, fnContext)
-  of skBreak: proveBreak(s, env, prog, flags, fnContext)
-  of skExpr: proveExpr(s, env, prog, flags, fnContext)
-  of skReturn: proveReturn(s, env, prog, flags, fnContext)
-  of skComptime: proveComptime(s, env, prog, flags, fnContext)
+  of skVar: proveVar(s, env, ctx)
+  of skAssign: proveAssign(s, env, ctx)
+  of skIf: proveIf(s, env, ctx)
+  of skWhile: proveWhile(s, env, ctx)
+  of skFor: proveFor(s, env, ctx)
+  of skBreak: proveBreak(s, env, ctx)
+  of skExpr: proveExpr(s, env, ctx)
+  of skReturn: proveReturn(s, env, ctx)
+  of skComptime: proveComptime(s, env, ctx)

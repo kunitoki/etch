@@ -7,6 +7,9 @@ import ../frontend/ast, ../errors, ../interpreter/serialize
 import types, expression_analysis
 
 
+const MAIN_FN_NAME = "main"
+
+
 proc verboseProverLog*(flags: CompilerFlags, msg: string) =
   ## Print verbose debug message if verbose flag is enabled
   if flags.verbose:
@@ -30,22 +33,23 @@ proc prove*(prog: Program, filename: string = "<unknown>", flags: CompilerFlags 
 
   # Second pass: analyze global variable initializations with full environment
   verboseProverLog(flags, "Analyzing global variable initializations")
+  let globalCtx = newProverContext("", flags, prog)
   for g in prog.globals:
     if g.kind == skVar:
       verboseProverLog(flags, "Proving global variable: " & g.vname)
-    proveStmt(g, env, prog, flags)
+    proveStmt(g, env, globalCtx)
 
   # Analyze main function directly (it's the entry point)
-  if prog.funInstances.hasKey("main"):
+  if prog.funInstances.hasKey(MAIN_FN_NAME):
     verboseProverLog(flags, "Analyzing main function")
-    let mainFn = prog.funInstances["main"]
+    let mainFn = prog.funInstances[MAIN_FN_NAME]
     var mainEnv = Env(vals: env.vals, nils: env.nils, exprs: env.exprs) # copy global environment
     verboseProverLog(flags, "Main function has " & $mainFn.body.len & " statements")
+    let mainCtx = newProverContext(MAIN_FN_NAME, flags, prog)
     for i, stmt in mainFn.body:
       verboseProverLog(flags, "Proving main statement " & $(i + 1) & "/" & $mainFn.body.len)
-      proveStmt(stmt, mainEnv, prog, flags)
+      proveStmt(stmt, mainEnv, mainCtx)
   else:
     verboseProverLog(flags, "No main function found to analyze")
 
   verboseProverLog(flags, "Safety proof analysis complete")
-  # Other function bodies are analyzed at call-sites for more precise analysis

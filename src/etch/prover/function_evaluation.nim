@@ -5,6 +5,10 @@ import std/[tables, options]
 import ../frontend/ast
 import types
 
+
+const MAX_ITERATIONS = 1000
+
+
 proc tryEvaluateComplexFunction*(body: seq[Stmt], paramEnv: Table[string, int64]): Option[int64] =
   ## Try to evaluate a function body with loops and local variables
   var localVars = paramEnv  # Start with parameters
@@ -62,7 +66,6 @@ proc tryEvaluateComplexFunction*(body: seq[Stmt], paramEnv: Table[string, int64]
         return none(int64)  # Cannot evaluate assignment
     of skWhile:
       # Simple loop evaluation with maximum iterations to prevent infinite loops
-      const MAX_ITERATIONS = 1000
       var iterations = 0
       while iterations < MAX_ITERATIONS:
         let condVal = evalExprLocal(stmt.wcond)
@@ -96,6 +99,7 @@ proc tryEvaluateComplexFunction*(body: seq[Stmt], paramEnv: Table[string, int64]
 
   # If we reach here without a return, assume void return
   return some(0'i64)
+
 
 proc tryEvaluatePureFunction*(call: Expr, argInfos: seq[Info], fn: FunDecl, prog: Program): Option[int64] =
   ## Try to evaluate a pure function with constant arguments

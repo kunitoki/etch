@@ -2,6 +2,7 @@
 # Binary operation analysis for the safety prover
 
 
+import std/strformat
 import ../frontend/ast, ../errors
 import types
 
@@ -165,27 +166,27 @@ proc analyzeBinaryMultiplication*(e: Expr, a: Info, b: Info): Info =
   return Info(known: false, minv: minResult, maxv: maxResult, nonZero: a.nonZero or b.nonZero, initialized: true)
 
 
-proc analyzeBinaryDivision*(e: Expr, a: Info, b: Info): Info =
+proc analyzeBinaryDivision*(e: Expr, a: Info, b: Info, ctx: ProverContext): Info =
   if b.known:
-    if b.cval == 0: raise newProverError(e.pos, "division by zero")
+    if b.cval == 0: raise newProverError(e.pos, if ctx.fnContext != "": &"division by zero in {ctx.fnContext}" else: "division by zero")
   else:
     # Skip overflow checks for float operations
     if e.typ != nil and e.typ.kind == tkFloat:
       return Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
 
     if not b.nonZero:
-      raise newProverError(e.pos, "cannot prove divisor is non-zero")
+      raise newProverError(e.pos, if ctx.fnContext != "": &"cannot prove divisor is non-zero in {ctx.fnContext}" else: "cannot prove divisor is non-zero")
 
   # Range not needed for overflow on div; accept
   return Info(known: false, minv: IMin, maxv: IMax, nonZero: true, initialized: true)
 
 
-proc analyzeBinaryModulo*(e: Expr, a: Info, b: Info): Info =
+proc analyzeBinaryModulo*(e: Expr, a: Info, b: Info, ctx: ProverContext): Info =
   if b.known:
-    if b.cval == 0: raise newProverError(e.pos, "modulo by zero")
+    if b.cval == 0: raise newProverError(e.pos, if ctx.fnContext != "": &"modulo by zero in {ctx.fnContext}" else: "modulo by zero")
   else:
     if not b.nonZero:
-      raise newProverError(e.pos, "cannot prove divisor is non-zero")
+      raise newProverError(e.pos, if ctx.fnContext != "": &"cannot prove divisor is non-zero in {ctx.fnContext}" else: "cannot prove divisor is non-zero")
 
   # Modulo result is always less than divisor (for positive divisor)
   return Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
