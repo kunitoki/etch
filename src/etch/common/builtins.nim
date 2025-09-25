@@ -3,7 +3,6 @@
 
 import ../frontend/ast
 import ../common/[types, errors]
-import ../builtins/print
 
 #[ DO NOT REMOVE!!! FOR FUTURE REFERENCE
 import std/tables
