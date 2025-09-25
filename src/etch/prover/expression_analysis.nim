@@ -3,7 +3,8 @@
 
 
 import std/[strformat, options, tables, strutils]
-import ../frontend/ast, ../errors, ../interpreter/serialize
+import ../frontend/ast, ../common/errors
+import ../common/logging
 import types, binary_operations, function_evaluation, symbolic_execution
 
 
@@ -11,12 +12,6 @@ proc proveStmt*(s: Stmt; env: Env, ctx: ProverContext)
 proc analyzeExpr*(e: Expr; env: Env, ctx: ProverContext): Info
 proc analyzeBinaryExpr*(e: Expr, env: Env, ctx: ProverContext): Info
 proc analyzeCallExpr*(e: Expr, env: Env, ctx: ProverContext): Info
-
-
-proc verboseProverLog*(flags: CompilerFlags, msg: string) =
-  ## Print verbose debug message if verbose flag is enabled
-  if flags.verbose:
-    echo "[PROVER] ", msg
 
 
 proc evaluateCondition*(cond: Expr, env: Env, ctx: ProverContext): ConditionResult =
@@ -209,21 +204,21 @@ proc analyzeUserDefinedCall*(e: Expr, env: Env, ctx: ProverContext): Info =
   # User-defined function call - comprehensive call-site safety analysis
   let fn = ctx.prog.funInstances[e.fname]
 
-  verboseProverLog(ctx.flags, &"Analyzing user-defined function call: {e.fname}")
+  logProver(ctx.flags, &"Analyzing user-defined function call: {e.fname}")
 
   # Analyze arguments to get their safety information
   var argInfos: seq[Info] = @[]
   for i, arg in e.args:
     let argInfo = analyzeExpr(arg, env, ctx)
     argInfos.add argInfo
-    verboseProverLog(ctx.flags, &"Argument {i}: {(if argInfo.known: $argInfo.cval else: \"[\" & $argInfo.minv & \"..\" & $argInfo.maxv & \"]\")}")
+    logProver(ctx.flags, &"Argument {i}: {(if argInfo.known: $argInfo.cval else: \"[\" & $argInfo.minv & \"..\" & $argInfo.maxv & \"]\")}")
 
   # Add default parameter information
   for i in e.args.len..<fn.params.len:
     if fn.params[i].defaultValue.isSome:
       let defaultInfo = analyzeExpr(fn.params[i].defaultValue.get, env, ctx)
       argInfos.add defaultInfo
-      verboseProverLog(ctx.flags, &"Default param {i}: {(if defaultInfo.known: $defaultInfo.cval else: \"[\" & $defaultInfo.minv & \"..\" & $defaultInfo.maxv & \"]\")}")
+      logProver(ctx.flags, &"Default param {i}: {(if defaultInfo.known: $defaultInfo.cval else: \"[\" & $defaultInfo.minv & \"..\" & $defaultInfo.maxv & \"]\")}")
     else:
       # This shouldn't happen if type checking is correct
       argInfos.add infoUnknown()
@@ -237,10 +232,10 @@ proc analyzeUserDefinedCall*(e: Expr, env: Env, ctx: ProverContext): Info =
 
   # If all arguments are constants, try to evaluate simple pure functions at compile time
   if allArgsConstant:
-    verboseProverLog(ctx.flags, "All arguments are constants - attempting compile-time evaluation")
+    logProver(ctx.flags, "All arguments are constants - attempting compile-time evaluation")
     let evalResult = tryEvaluatePureFunction(e, argInfos, fn, ctx.prog)
     if evalResult.isSome:
-      verboseProverLog(ctx.flags, &"Function evaluated at compile-time to: {evalResult.get}")
+      logProver(ctx.flags, &"Function evaluated at compile-time to: {evalResult.get}")
       return infoConst(evalResult.get)
 
   # Create function call environment with parameter mappings
@@ -271,11 +266,11 @@ proc analyzeUserDefinedCall*(e: Expr, env: Env, ctx: ProverContext): Info =
     # Store the original argument expression if it's simple enough
     if i < e.args.len:
       callEnv.exprs[paramName] = e.args[i]
-    verboseProverLog(ctx.flags, &"Parameter '{paramName}' mapped to: {(if argInfos[i].known: $argInfos[i].cval else: \"[\" & $argInfos[i].minv & \"..\" & $argInfos[i].maxv & \"]\")}")
+    logProver(ctx.flags, &"Parameter '{paramName}' mapped to: {(if argInfos[i].known: $argInfos[i].cval else: \"[\" & $argInfos[i].minv & \"..\" & $argInfos[i].maxv & \"]\")}")
 
   # Perform comprehensive safety analysis on function body
   let fnContext = &"function {functionNameFromSignature(e.fname)}"
-  verboseProverLog(ctx.flags, &"Starting comprehensive analysis of function body with {fn.body.len} statements")
+  logProver(ctx.flags, &"Starting comprehensive analysis of function body with {fn.body.len} statements")
 
   # Recursive helper to analyze expressions for all safety violations
   proc checkExpressionSafety(expr: Expr) =
@@ -350,10 +345,10 @@ proc analyzeUserDefinedCall*(e: Expr, env: Env, ctx: ProverContext): Info =
   # Create a new context for the function body with the function context
   var fnCtx = newProverContext(fnContext, ctx.flags, ctx.prog)
   for i, stmt in fn.body:
-    verboseProverLog(ctx.flags, &"Analyzing statement {i + 1}/{fn.body.len}: {stmt.kind}")
+    logProver(ctx.flags, &"Analyzing statement {i + 1}/{fn.body.len}: {stmt.kind}")
     proveStmt(stmt, callEnv, fnCtx)
 
-  verboseProverLog(ctx.flags, &"Function {fnContext} analysis completed successfully")
+  logProver(ctx.flags, &"Function {fnContext} analysis completed successfully")
 
   # Try to determine return value information by looking at return statements
   # This is a simplified approach - a more complete implementation would track
@@ -362,11 +357,11 @@ proc analyzeUserDefinedCall*(e: Expr, env: Env, ctx: ProverContext): Info =
     if stmt.kind == skReturn and stmt.re.isSome:
       let tmpCtx = newProverContext(fnContext, ctx.flags, ctx.prog)
       let returnInfo = analyzeExpr(stmt.re.get, callEnv, tmpCtx)
-      verboseProverLog(ctx.flags, &"Function return value: {(if returnInfo.known: $returnInfo.cval else: \"[\" & $returnInfo.minv & \"..\" & $returnInfo.maxv & \"]\")}")
+      logProver(ctx.flags, &"Function return value: {(if returnInfo.known: $returnInfo.cval else: \"[\" & $returnInfo.minv & \"..\" & $returnInfo.maxv & \"]\")}")
       return returnInfo
 
   # No return statement found or void return
-  verboseProverLog(ctx.flags, &"Function {fnContext} has no explicit return value")
+  logProver(ctx.flags, &"Function {fnContext} has no explicit return value")
   return infoUnknown()
 
 
@@ -676,7 +671,7 @@ proc analyzeMatchExpr(e: Expr, env: Env, ctx: ProverContext): Info =
 
 
 proc analyzeExpr*(e: Expr; env: Env, ctx: ProverContext): Info =
-  verboseProverLog(ctx.flags, "Analyzing " & $e.kind & (if e.kind == ekVar: " '" & e.vname & "'" else: ""))
+  logProver(ctx.flags, "Analyzing " & $e.kind & (if e.kind == ekVar: " '" & e.vname & "'" else: ""))
 
   case e.kind
   of ekInt: return analyzeIntExpr(e)
@@ -706,31 +701,31 @@ proc analyzeExpr*(e: Expr; env: Env, ctx: ProverContext): Info =
 proc analyzeFunctionBody*(statements: seq[Stmt], env: Env, ctx: ProverContext) =
   ## Analyze a sequence of statements in a function body with full control flow analysis
   for i, stmt in statements:
-    verboseProverLog(ctx.flags, &"Analyzing statement {i + 1}/{statements.len}: {stmt.kind}")
+    logProver(ctx.flags, &"Analyzing statement {i + 1}/{statements.len}: {stmt.kind}")
     proveStmt(stmt, env, ctx)
 
 
 proc proveVar(s: Stmt; env: Env, ctx: ProverContext) =
-  verboseProverLog(ctx.flags, "Declaring variable: " & s.vname)
+  logProver(ctx.flags, "Declaring variable: " & s.vname)
   if s.vinit.isSome():
-    verboseProverLog(ctx.flags, "Variable " & s.vname & " has initializer")
+    logProver(ctx.flags, "Variable " & s.vname & " has initializer")
     let info = analyzeExpr(s.vinit.get(), env, ctx)
     env.vals[s.vname] = info
     env.nils[s.vname] = not info.nonNil
     env.exprs[s.vname] = s.vinit.get()  # Store original expression
     if info.known:
-      verboseProverLog(ctx.flags, "Variable " & s.vname & " initialized with constant value: " & $info.cval)
+      logProver(ctx.flags, "Variable " & s.vname & " initialized with constant value: " & $info.cval)
     else:
-      verboseProverLog(ctx.flags, "Variable " & s.vname & " initialized with range [" & $info.minv & ".." & $info.maxv & "]")
+      logProver(ctx.flags, "Variable " & s.vname & " initialized with range [" & $info.minv & ".." & $info.maxv & "]")
   else:
-    verboseProverLog(ctx.flags, "Variable " & s.vname & " declared without initializer (uninitialized)")
+    logProver(ctx.flags, "Variable " & s.vname & " declared without initializer (uninitialized)")
     # Variable is declared but not initialized
     env.vals[s.vname] = infoUninitialized()
     env.nils[s.vname] = true
 
 
 proc proveAssign(s: Stmt; env: Env, ctx: ProverContext) =
-  verboseProverLog(ctx.flags, "Assignment to variable: " & s.aname)
+  logProver(ctx.flags, "Assignment to variable: " & s.aname)
   # Check if the variable being assigned to exists
   if not env.vals.hasKey(s.aname):
     raise newProverError(s.pos, &"assignment to undeclared variable '{s.aname}'")
@@ -743,32 +738,32 @@ proc proveAssign(s: Stmt; env: Env, ctx: ProverContext) =
   env.exprs[s.aname] = s.aval  # Store original expression
   if info.nonNil: env.nils[s.aname] = false
   if info.known:
-    verboseProverLog(ctx.flags, "Variable " & s.aname & " assigned constant value: " & $info.cval)
+    logProver(ctx.flags, "Variable " & s.aname & " assigned constant value: " & $info.cval)
   else:
-    verboseProverLog(ctx.flags, "Variable " & s.aname & " assigned range [" & $info.minv & ".." & $info.maxv & "]")
+    logProver(ctx.flags, "Variable " & s.aname & " assigned range [" & $info.minv & ".." & $info.maxv & "]")
 
 
 proc proveIf(s: Stmt; env: Env, ctx: ProverContext) =
   let condResult = evaluateCondition(s.cond, env, ctx)
-  verboseProverLog(ctx.flags, "If condition evaluation result: " & $condResult)
+  logProver(ctx.flags, "If condition evaluation result: " & $condResult)
 
   case condResult
   of crAlwaysTrue:
-    verboseProverLog(ctx.flags, "Condition is always true - analyzing only then branch")
+    logProver(ctx.flags, "Condition is always true - analyzing only then branch")
     # Check if this is an obvious constant condition that should trigger error
     if isObviousConstant(s.cond) and s.elseBody.len > 0:
       raise newProverError(s.pos, "unreachable code (condition is always true)")
     # Only analyze then branch
     var thenEnv = Env(vals: env.vals, nils: env.nils, exprs: env.exprs)
-    verboseProverLog(ctx.flags, "Analyzing " & $s.thenBody.len & " statements in then branch")
+    logProver(ctx.flags, "Analyzing " & $s.thenBody.len & " statements in then branch")
     for st in s.thenBody: proveStmt(st, thenEnv, ctx)
     # Copy then results back to main env
     for k, v in thenEnv.vals: env.vals[k] = v
     for k, v in thenEnv.exprs: env.exprs[k] = v
-    verboseProverLog(ctx.flags, "Then branch analysis complete")
+    logProver(ctx.flags, "Then branch analysis complete")
     return
   of crAlwaysFalse:
-    verboseProverLog(ctx.flags, "Condition is always false - skipping then branch")
+    logProver(ctx.flags, "Condition is always false - skipping then branch")
     # Check if this is an obvious constant condition that should trigger error
     if isObviousConstant(s.cond) and s.thenBody.len > 0 and s.elseBody.len == 0:
       raise newProverError(s.pos, "unreachable code (condition is always false)")
@@ -828,12 +823,12 @@ proc proveIf(s: Stmt; env: Env, ctx: ProverContext) =
         env.exprs[k] = v
     return
   of crUnknown:
-    verboseProverLog(ctx.flags, "Condition result is unknown at compile time - analyzing all branches")
+    logProver(ctx.flags, "Condition result is unknown at compile time - analyzing all branches")
     discard # Continue with normal analysis
 
   # Normal case: condition is not known at compile time
   # Process then branch (condition could be true)
-  verboseProverLog(ctx.flags, "Analyzing control flow with condition refinement")
+  logProver(ctx.flags, "Analyzing control flow with condition refinement")
   var thenEnv = Env(vals: env.vals, nils: env.nils, exprs: env.exprs)
   let condInfo = analyzeExpr(s.cond, env, ctx)
   if not (condInfo.known and condInfo.cval == 0):
@@ -1066,13 +1061,13 @@ proc proveWhile(s: Stmt; env: Env, ctx: ProverContext) =
 
 proc proveFor(s: Stmt; env: Env, ctx: ProverContext) =
   # Analyze for loop: for var in start..end or for var in array
-  verboseProverLog(ctx.flags, "Analyzing for loop variable: " & s.fvar)
+  logProver(ctx.flags, "Analyzing for loop variable: " & s.fvar)
 
   var loopVarInfo: Info
   if s.farray.isSome():
     # Array iteration: for x in array
     let arrayInfo = analyzeExpr(s.farray.get(), env, ctx)
-    verboseProverLog(ctx.flags, "For loop over array with info: " & (if arrayInfo.isArray: "array" else: "unknown"))
+    logProver(ctx.flags, "For loop over array with info: " & (if arrayInfo.isArray: "array" else: "unknown"))
 
     # Loop variable gets the element type - for now assume int (could be enhanced later)
     loopVarInfo = infoUnknown()
@@ -1089,8 +1084,8 @@ proc proveFor(s: Stmt; env: Env, ctx: ProverContext) =
     let startInfo = analyzeExpr(s.fstart.get(), env, ctx)
     let endInfo = analyzeExpr(s.fend.get(), env, ctx)
 
-    verboseProverLog(ctx.flags, "For loop start range: [" & $startInfo.minv & ".." & $startInfo.maxv & "]")
-    verboseProverLog(ctx.flags, "For loop end range: [" & $endInfo.minv & ".." & $endInfo.maxv & "]")
+    logProver(ctx.flags, "For loop start range: [" & $startInfo.minv & ".." & $startInfo.maxv & "]")
+    logProver(ctx.flags, "For loop end range: [" & $endInfo.minv & ".." & $endInfo.maxv & "]")
 
     # Check if loop will never execute
     if s.finclusive:
@@ -1123,7 +1118,7 @@ proc proveFor(s: Stmt; env: Env, ctx: ProverContext) =
   env.vals[s.fvar] = loopVarInfo
   env.nils[s.fvar] = false
 
-  verboseProverLog(ctx.flags, "Loop variable " & s.fvar & " has range [" & $loopVarInfo.minv & ".." & $loopVarInfo.maxv & "]")
+  logProver(ctx.flags, "Loop variable " & s.fvar & " has range [" & $loopVarInfo.minv & ".." & $loopVarInfo.maxv & "]")
 
   # Analyze loop body
   for stmt in s.fbody:
@@ -1140,7 +1135,7 @@ proc proveFor(s: Stmt; env: Env, ctx: ProverContext) =
 proc proveBreak(s: Stmt; env: Env, ctx: ProverContext) =
   # Break statements are valid only inside loops, but this is a parse-time concern
   # For prover purposes, break doesn't change variable states
-  verboseProverLog(ctx.flags, "Break statement (control flow transfer)")
+  logProver(ctx.flags, "Break statement (control flow transfer)")
 
 
 proc proveExpr(s: Stmt; env: Env, ctx: ProverContext) =
@@ -1170,7 +1165,7 @@ proc proveStmt*(s: Stmt; env: Env, ctx: ProverContext) =
     of skReturn: "return statement"
     else: $s.kind
 
-  verboseProverLog(ctx.flags, "Analyzing " & stmtKindStr & (if ctx.fnContext != "": " in " & ctx.fnContext else: ""))
+  logProver(ctx.flags, "Analyzing " & stmtKindStr & (if ctx.fnContext != "": " in " & ctx.fnContext else: ""))
 
   case s.kind
   of skVar: proveVar(s, env, ctx)

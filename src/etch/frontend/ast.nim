@@ -3,17 +3,10 @@
 
 
 import std/[tables, options, strutils]
-
-
-const
-  AST_VERSION* = 2
+import ../common/types
 
 
 type
-  Pos* = object
-    line*, col*: int
-    filename*: string
-
   TypeKind* = enum
     tkInt, tkFloat, tkString, tkChar, tkBool, tkVoid, tkRef, tkGeneric, tkArray, tkOption, tkResult
 
@@ -24,7 +17,6 @@ type
 
   TypeEnv* = Table[string, EtchType]
 
-  # Generic parameter: name
   TyParam* = object
     name*: string
     koncept*: Option[string]

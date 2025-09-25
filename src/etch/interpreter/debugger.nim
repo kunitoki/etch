@@ -2,6 +2,7 @@
 # Simple debugger implementation without interfaces
 
 import std/[tables, json, options, sequtils]
+import ../common/constants
 
 type
   StepMode* = enum
@@ -121,7 +122,7 @@ proc getCurrentStackFrame*(debugger: EtchDebugger): DebugStackFrame =
   else:
     # Return main frame if no frames exist
     return DebugStackFrame(
-      functionName: "main",
+      functionName: MAIN_FUNCTION_NAME,
       fileName: "",
       line: 0,
       isBuiltIn: false,

@@ -1,11 +1,12 @@
 # vm.nim
 # Simple AST interpreter acting as Etch VM (used both at runtime and for comptime eval)
 
-import std/[tables, strformat, strutils, random, json, algorithm]
+import std/[tables, strformat, strutils, random, json]
 import ../frontend/ast, bytecode, debugger
+import ../common/constants
+
 
 type
-
   V* = object
     kind*: TypeKind
     ival*: int64
@@ -112,7 +113,7 @@ proc getVar(vm: VM, name: string): V =
   if vm.globals.hasKey(name):
     return vm.globals[name]
 
-  raise newException(ValueError, "Unknown variable: " & name)
+  raise newException(ValueError, &"Unknown variable: {name}")
 
 proc setVar(vm: VM, name: string, value: V) =
   # Set in current frame if we're in a function, otherwise global
@@ -133,158 +134,167 @@ proc opLoadNilImpl(vm: VM, instr: Instruction) = vm.push(vRef(-1))
 proc opPopImpl(vm: VM, instr: Instruction) = discard vm.pop()
 proc opDupImpl(vm: VM, instr: Instruction) = vm.push(vm.peek())
 
-proc opAddImpl(vm: VM, instr: Instruction) =
+proc executeBinaryOp(vm: VM, operationName: string, intOp: proc(a, b: int64): int64, floatOp: proc(a, b: float64): float64, stringOp: proc(a, b: string): string = nil, arrayOp: proc(a, b: seq[V]): seq[V] = nil, supportsStrings: bool = false, supportsArrays: bool = false, intValidator: proc(a, b: int64): void = nil, floatValidator: proc(a, b: float64): void = nil) =
   let b = vm.pop()
   let a = vm.pop()
+
   if a.kind != b.kind:
-    raise newException(ValueError, "Type mismatch in addition")
-  if a.kind == tkInt:
-    vm.push(vInt(a.ival + b.ival))
-  elif a.kind == tkFloat:
-    vm.push(vFloat(a.fval + b.fval))
-  elif a.kind == tkString:
-    vm.push(vString(a.sval & b.sval))
-  elif a.kind == tkArray:
-    vm.push(vArray(a.aval & b.aval))
+    raise newException(ValueError, "Type mismatch in " & operationName)
+
+  case a.kind:
+  of tkInt:
+    if intValidator != nil:
+      intValidator(a.ival, b.ival)
+    vm.push(vInt(intOp(a.ival, b.ival)))
+  of tkFloat:
+    if floatValidator != nil:
+      floatValidator(a.fval, b.fval)
+    vm.push(vFloat(floatOp(a.fval, b.fval)))
+  of tkString:
+    if supportsStrings and stringOp != nil:
+      vm.push(vString(stringOp(a.sval, b.sval)))
+    else:
+      raise newException(ValueError, "Unsupported types in " & operationName)
+  of tkArray:
+    if supportsArrays and arrayOp != nil:
+      vm.push(vArray(arrayOp(a.aval, b.aval)))
+    else:
+      raise newException(ValueError, "Unsupported types in " & operationName)
   else:
-    raise newException(ValueError, "Unsupported types in addition")
+    raise newException(ValueError, "Unsupported types in " & operationName)
+
+proc executeUnaryOp(vm: VM, operationName: string, intOp: proc(a: int64): int64, floatOp: proc(a: float64): float64) =
+  let a = vm.pop()
+  case a.kind:
+  of tkInt:
+    vm.push(vInt(intOp(a.ival)))
+  of tkFloat:
+    vm.push(vFloat(floatOp(a.fval)))
+  else:
+    raise newException(ValueError, operationName & " requires numeric type")
+
+proc executeComparisonOp(vm: VM, operationName: string, intOp: proc(a, b: int64): bool, floatOp: proc(a, b: float64): bool, stringOp: proc(a, b: string): bool = nil, charOp: proc(a, b: char): bool = nil, boolOp: proc(a, b: bool): bool = nil, refOp: proc(a, b: int): bool = nil, supportsStrings: bool = false, supportsChars: bool = false, supportsBools: bool = false, supportsRefs: bool = false) =
+  let b = vm.pop()
+  let a = vm.pop()
+
+  if a.kind != b.kind:
+    raise newException(ValueError, "Type mismatch in " & operationName)
+
+  let result = case a.kind:
+  of tkInt:
+    intOp(a.ival, b.ival)
+  of tkFloat:
+    floatOp(a.fval, b.fval)
+  of tkString:
+    if supportsStrings and stringOp != nil:
+      stringOp(a.sval, b.sval)
+    else:
+      raise newException(ValueError, "Unsupported types in " & operationName)
+  of tkChar:
+    if supportsChars and charOp != nil:
+      charOp(a.cval, b.cval)
+    else:
+      raise newException(ValueError, "Unsupported types in " & operationName)
+  of tkBool:
+    if supportsBools and boolOp != nil:
+      boolOp(a.bval, b.bval)
+    else:
+      raise newException(ValueError, "Unsupported types in " & operationName)
+  of tkRef:
+    if supportsRefs and refOp != nil:
+      refOp(a.refId, b.refId)
+    else:
+      raise newException(ValueError, "Unsupported types in " & operationName)
+  else:
+    raise newException(ValueError, "Unsupported types in " & operationName)
+
+  vm.push(vBool(result))
+
+proc opAddImpl(vm: VM, instr: Instruction) =
+  executeBinaryOp(vm, "addition",
+    proc(a, b: int64): int64 = a + b,
+    proc(a, b: float64): float64 = a + b,
+    proc(a, b: string): string = a & b,
+    proc(a, b: seq[V]): seq[V] = a & b,
+    supportsStrings = true,
+    supportsArrays = true)
 
 proc opSubImpl(vm: VM, instr: Instruction) =
-  let b = vm.pop()
-  let a = vm.pop()
-  if a.kind != b.kind:
-    raise newException(ValueError, "Type mismatch in subtraction")
-  if a.kind == tkInt:
-    vm.push(vInt(a.ival - b.ival))
-  elif a.kind == tkFloat:
-    vm.push(vFloat(a.fval - b.fval))
-  else:
-    raise newException(ValueError, "Unsupported types in subtraction")
+  executeBinaryOp(vm, "subtraction",
+    proc(a, b: int64): int64 = a - b,
+    proc(a, b: float64): float64 = a - b)
 
 proc opMulImpl(vm: VM, instr: Instruction) =
-  let b = vm.pop()
-  let a = vm.pop()
-  if a.kind != b.kind:
-    raise newException(ValueError, "Type mismatch in multiplication")
-  if a.kind == tkInt:
-    vm.push(vInt(a.ival * b.ival))
-  elif a.kind == tkFloat:
-    vm.push(vFloat(a.fval * b.fval))
-  else:
-    raise newException(ValueError, "Unsupported types in multiplication")
+  executeBinaryOp(vm, "multiplication",
+    proc(a, b: int64): int64 = a * b,
+    proc(a, b: float64): float64 = a * b)
 
 proc opDivImpl(vm: VM, instr: Instruction) =
-  let b = vm.pop()
-  let a = vm.pop()
-  if a.kind != b.kind:
-    raise newException(ValueError, "Type mismatch in division")
-  if a.kind == tkInt:
-    if b.ival == 0:
-      raise newException(ValueError, "Division by zero")
-    vm.push(vInt(a.ival div b.ival))
-  elif a.kind == tkFloat:
-    if b.fval == 0.0:
-      raise newException(ValueError, "Division by zero")
-    vm.push(vFloat(a.fval / b.fval))
-  else:
-    raise newException(ValueError, "Unsupported types in division")
+  executeBinaryOp(vm, "division",
+    proc(a, b: int64): int64 = a div b,
+    proc(a, b: float64): float64 = a / b,
+    intValidator = proc(a, b: int64): void =
+      if b == 0: raise newException(ValueError, "Division by zero"),
+    floatValidator = proc(a, b: float64): void =
+      if b == 0.0: raise newException(ValueError, "Division by zero"))
 
 proc opModImpl(vm: VM, instr: Instruction) =
-  let b = vm.pop()
-  let a = vm.pop()
-  if a.kind != b.kind:
-    raise newException(ValueError, "Type mismatch in modulo")
-  if a.kind == tkInt:
-    if b.ival == 0:
-      raise newException(ValueError, "Modulo by zero")
-    vm.push(vInt(a.ival mod b.ival))
-  else:
-    raise newException(ValueError, "Unsupported types in modulo")
+  executeBinaryOp(vm, "modulo",
+    proc(a, b: int64): int64 = a mod b,
+    proc(a, b: float64): float64 = 0.0, # Not used - modulo doesn't support floats
+    intValidator = proc(a, b: int64): void =
+      if b == 0: raise newException(ValueError, "Modulo by zero"))
 
 proc opNegImpl(vm: VM, instr: Instruction) =
-  let a = vm.pop()
-  if a.kind == tkInt:
-    vm.push(vInt(-a.ival))
-  elif a.kind == tkFloat:
-    vm.push(vFloat(-a.fval))
-  else:
-    raise newException(ValueError, "Negation requires numeric type")
+  executeUnaryOp(vm, "Negation",
+    proc(a: int64): int64 = -a,
+    proc(a: float64): float64 = -a)
 
 proc opEqImpl(vm: VM, instr: Instruction) =
-  let b = vm.pop()
-  let a = vm.pop()
-  if a.kind != b.kind:
-    raise newException(ValueError, "Type mismatch in comparison")
-  let res = case a.kind:
-    of tkInt: a.ival == b.ival
-    of tkFloat: a.fval == b.fval
-    of tkBool: a.bval == b.bval
-    of tkString: a.sval == b.sval
-    of tkChar: a.cval == b.cval
-    else: false
-  vm.push(vBool(res))
+  executeComparisonOp(vm, "equality",
+    proc(a, b: int64): bool = a == b,
+    proc(a, b: float64): bool = a == b,
+    proc(a, b: string): bool = a == b,
+    proc(a, b: char): bool = a == b,
+    proc(a, b: bool): bool = a == b,
+    proc(a, b: int): bool = a == b,
+    supportsStrings = true,
+    supportsChars = true,
+    supportsBools = true,
+    supportsRefs = true)
 
 proc opNeImpl(vm: VM, instr: Instruction) =
-  let b = vm.pop()
-  let a = vm.pop()
-  if a.kind != b.kind:
-    raise newException(ValueError, "Type mismatch in comparison")
-  let res = case a.kind:
-    of tkInt: a.ival != b.ival
-    of tkFloat: a.fval != b.fval
-    of tkBool: a.bval != b.bval
-    of tkString: a.sval != b.sval
-    of tkChar: a.cval != b.cval
-    else: true
-  vm.push(vBool(res))
+  executeComparisonOp(vm, "inequality",
+    proc(a, b: int64): bool = a != b,
+    proc(a, b: float64): bool = a != b,
+    proc(a, b: string): bool = a != b,
+    proc(a, b: char): bool = a != b,
+    proc(a, b: bool): bool = a != b,
+    proc(a, b: int): bool = a != b,
+    supportsStrings = true,
+    supportsChars = true,
+    supportsBools = true,
+    supportsRefs = true)
 
 proc opLtImpl(vm: VM, instr: Instruction) =
-  let b = vm.pop()
-  let a = vm.pop()
-  if a.kind != b.kind:
-    raise newException(ValueError, "Type mismatch in comparison")
-  if a.kind == tkInt:
-    vm.push(vBool(a.ival < b.ival))
-  elif a.kind == tkFloat:
-    vm.push(vBool(a.fval < b.fval))
-  else:
-    raise newException(ValueError, "Unsupported types in comparison")
+  executeComparisonOp(vm, "less than",
+    proc(a, b: int64): bool = a < b,
+    proc(a, b: float64): bool = a < b)
 
 proc opLeImpl(vm: VM, instr: Instruction) =
-  let b = vm.pop()
-  let a = vm.pop()
-  if a.kind != b.kind:
-    raise newException(ValueError, "Type mismatch in comparison")
-  if a.kind == tkInt:
-    vm.push(vBool(a.ival <= b.ival))
-  elif a.kind == tkFloat:
-    vm.push(vBool(a.fval <= b.fval))
-  else:
-    raise newException(ValueError, "Unsupported types in comparison")
+  executeComparisonOp(vm, "less than or equal",
+    proc(a, b: int64): bool = a <= b,
+    proc(a, b: float64): bool = a <= b)
 
 proc opGtImpl(vm: VM, instr: Instruction) =
-  let b = vm.pop()
-  let a = vm.pop()
-  if a.kind != b.kind:
-    raise newException(ValueError, "Type mismatch in comparison")
-  if a.kind == tkInt:
-    vm.push(vBool(a.ival > b.ival))
-  elif a.kind == tkFloat:
-    vm.push(vBool(a.fval > b.fval))
-  else:
-    raise newException(ValueError, "Unsupported types in comparison")
+  executeComparisonOp(vm, "greater than",
+    proc(a, b: int64): bool = a > b,
+    proc(a, b: float64): bool = a > b)
 
 proc opGeImpl(vm: VM, instr: Instruction) =
-  let b = vm.pop()
-  let a = vm.pop()
-  if a.kind != b.kind:
-    raise newException(ValueError, "Type mismatch in comparison")
-  if a.kind == tkInt:
-    vm.push(vBool(a.ival >= b.ival))
-  elif a.kind == tkFloat:
-    vm.push(vBool(a.fval >= b.fval))
-  else:
-    raise newException(ValueError, "Unsupported types in comparison")
+  executeComparisonOp(vm, "greater than or equal",
+    proc(a, b: int64): bool = a >= b,
+    proc(a, b: float64): bool = a >= b)
 
 proc opAndImpl(vm: VM, instr: Instruction) =
   let b = vm.pop()
@@ -668,8 +678,8 @@ proc opCallImpl(vm: VM, instr: Instruction): bool =
   var args: seq[V] = @[]
   for i in 0..<argCount:
     args.add(vm.pop())
-  # Reverse args to get them in correct parameter order
-  args.reverse()
+  # Arguments are already in correct order after popping from reverse-pushed stack
+  # No need to reverse
 
   # Get parameter names from function debug info
   if vm.program.functionInfo.hasKey(funcName):
@@ -724,7 +734,7 @@ proc vmDebuggerBeforeInstruction*(vm: VM) =
     case instr.op:
     of opCall:
       let funcName = instr.sarg
-      let currentFile = if instr.debug.sourceFile.len > 0: instr.debug.sourceFile else: "main"
+      let currentFile = if instr.debug.sourceFile.len > 0: instr.debug.sourceFile else: MAIN_FUNCTION_NAME
       let isBuiltIn = not vm.program.functions.hasKey(funcName)
       vm.debugger.pushStackFrame(funcName, currentFile, instr.debug.line, isBuiltIn)
     of opReturn:
@@ -901,16 +911,24 @@ proc runBytecode*(vm: VM): int =
         else:
           vm.globals[globalName] = vInt(0)  # Default for unsupported types
       else:
+        # For globals without pre-computed values, initialize with default
+        # The runtime initialization code will set the correct values
         vm.globals[globalName] = vInt(0)  # Default initialization
 
+    # Execute global initialization function if it exists
+    if vm.program.functions.hasKey("__global_init__"):
+      vm.pc = vm.program.functions["__global_init__"]
+      while vm.executeInstruction():
+        discard
+
     # Start execution from main function if it exists
-    if vm.program.functions.hasKey("main"):
-      vm.pc = vm.program.functions["main"]
+    if vm.program.functions.hasKey(MAIN_FUNCTION_NAME):
+      vm.pc = vm.program.functions[MAIN_FUNCTION_NAME]
     else:
       echo "No main function found"
       return 1
 
-    # Execute instructions
+    # Execute main function
     while vm.executeInstruction():
       discard
 
@@ -1001,8 +1019,22 @@ proc evalExprWithBytecode*(prog: Program, expr: Expr, globals: Table[string, V] 
   # First, compile all functions from the program so they're available for calls
   for name, funDecl in pairs(prog.funInstances):
     ctx.currentFunction = funDecl.name
+    ctx.localVars = @[]
+
+    # Add function parameters to local vars
+    for param in funDecl.params:
+      ctx.localVars.add(param.name)
+
     let startAddr = bytecodeProgram.instructions.len
     bytecodeProgram.functions[funDecl.name] = startAddr
+
+    # Store function debug info for parameter handling
+    var paramNames: seq[string] = @[]
+    for param in funDecl.params:
+      paramNames.add(param.name)
+    bytecodeProgram.functionInfo[funDecl.name] = FunctionInfo(
+      parameterNames: paramNames
+    )
 
     # Compile function body
     for stmt in funDecl.body:

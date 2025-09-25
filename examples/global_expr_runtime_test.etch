@@ -1,4 +1,5 @@
 fn computeValue(x: int) -> int {
+    print("Computing value...");
     return x * 2 + 1;
 }
 

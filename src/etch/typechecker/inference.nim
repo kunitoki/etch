@@ -2,7 +2,7 @@
 # Return type inference for functions
 
 import std/[strformat, options]
-import ../frontend/ast, ../errors
+import ../frontend/ast, ../common/errors
 import types, expressions
 
 

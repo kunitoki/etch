@@ -2,7 +2,8 @@
 # Expression type inference for the type checker
 
 import std/[strformat, options, sequtils, tables, strutils]
-import ../frontend/ast, ../errors
+import ../frontend/ast, ../common/[errors, types as commonTypes]
+import ../common/builtins
 import types
 
 
@@ -30,150 +31,14 @@ proc isOperatorFunction(name: string): bool =
   let baseName = if "_" in name: name.split("_")[0] else: name
   baseName in ["+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">="]
 
+# Helper to convert EtchError to TypecheckError for built-in type checking
+proc convertBuiltinError(err: ref EtchError, pos: Pos): ref TypecheckError =
+  newTypecheckError(pos, err.msg)
 
 proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst; expectedTy: EtchType = nil): EtchType
 
 
-# Builtin function type inference
-proc inferCallBuiltinPrint(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  if e.args.len != 1: raise newTypecheckError(e.pos, "print expects 1 argument")
-  let t0 = inferExprTypes(prog, nil, sc, e.args[0], subst)
-  if not (t0.kind in {tkBool, tkInt, tkFloat, tkString, tkChar}): raise newTypecheckError(e.pos, "print supports bool/int/float/string/char")
-  e.instTypes = @[]
-  e.typ = tVoid()
-  return e.typ
-
-
-proc inferCallBuiltinNew(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  if e.args.len != 1: raise newTypecheckError(e.pos, "new expects 1 argument")
-  let t0 = inferExprTypes(prog, nil, sc, e.args[0], subst)
-  let rt = tRef(t0)
-  e.typ = rt
-  return rt
-
-
-proc inferCallBuiltinDeref(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  if e.args.len != 1: raise newTypecheckError(e.pos, "deref expects 1 argument")
-  let t0 = inferExprTypes(prog, nil, sc, e.args[0], subst)
-  if t0.kind != tkRef: raise newTypecheckError(e.pos, "deref expects ref[...]")
-  e.typ = t0.inner
-  return e.typ
-
-
-proc inferCallBuiltinRand(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  if e.args.len < 1 or e.args.len > 2:
-    raise newTypecheckError(e.pos, "rand expects 1 or 2 arguments")
-  # First arg is max (required)
-  let maxType = inferExprTypes(prog, nil, sc, e.args[0], subst)
-  if maxType.kind != tkInt:
-    raise newTypecheckError(e.pos, "rand max argument must be int")
-  # Second arg is min (optional, defaults to 0)
-  if e.args.len == 2:
-    let minType = inferExprTypes(prog, nil, sc, e.args[1], subst)
-    if minType.kind != tkInt:
-      raise newTypecheckError(e.pos, "rand min argument must be int")
-  e.instTypes = @[]
-  e.typ = tInt()
-  return e.typ
-
-
-proc inferCallBuiltinReadFile(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  if e.args.len != 1: raise newTypecheckError(e.pos, "readFile expects 1 argument")
-  let pathType = inferExprTypes(prog, nil, sc, e.args[0], subst)
-  if pathType.kind != tkString:
-    raise newTypecheckError(e.pos, "readFile expects string path")
-  e.instTypes = @[]
-  e.typ = tString()
-  return e.typ
-
-
-proc inferCallBuiltinInject(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  if e.args.len != 3: raise newTypecheckError(e.pos, "inject expects 3 arguments: name, type, value")
-  let nameType = inferExprTypes(prog, nil, sc, e.args[0], subst)
-  let typeType = inferExprTypes(prog, nil, sc, e.args[1], subst)
-  discard inferExprTypes(prog, nil, sc, e.args[2], subst)  # value can be any type
-  if nameType.kind != tkString or typeType.kind != tkString:
-    raise newTypecheckError(e.pos, "inject name and type arguments must be strings")
-  e.instTypes = @[]
-  e.typ = tVoid()
-  return e.typ
-
-
-proc inferCallBuiltinSeed(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  if e.args.len > 1: raise newTypecheckError(e.pos, "seed expects 0 or 1 argument")
-  if e.args.len == 1:
-    let seedType = inferExprTypes(prog, nil, sc, e.args[0], subst)
-    if seedType.kind != tkInt:
-      raise newTypecheckError(e.pos, "seed expects int argument")
-  e.instTypes = @[]
-  e.typ = tVoid()
-  return e.typ
-
-
-proc inferCallBuiltinParseInt(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  if e.args.len != 1: raise newTypecheckError(e.pos, "parseInt expects 1 argument")
-  let argType = inferExprTypes(prog, nil, sc, e.args[0], subst)
-  if argType.kind != tkString: raise newTypecheckError(e.pos, "parseInt expects string argument")
-  e.instTypes = @[]
-  e.typ = tOption(tInt())
-  return e.typ
-
-proc inferCallBuiltinParseFloat(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  if e.args.len != 1: raise newTypecheckError(e.pos, "parseFloat expects 1 argument")
-  let argType = inferExprTypes(prog, nil, sc, e.args[0], subst)
-  if argType.kind != tkString: raise newTypecheckError(e.pos, "parseFloat expects string argument")
-  e.instTypes = @[]
-  e.typ = tOption(tFloat())
-  return e.typ
-
-proc inferCallBuiltinParseBool(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  if e.args.len != 1: raise newTypecheckError(e.pos, "parseBool expects 1 argument")
-  let argType = inferExprTypes(prog, nil, sc, e.args[0], subst)
-  if argType.kind != tkString: raise newTypecheckError(e.pos, "parseBool expects string argument")
-  e.instTypes = @[]
-  e.typ = tOption(tBool())
-  return e.typ
-
-proc inferCallBuiltinToString(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  if e.args.len != 1: raise newTypecheckError(e.pos, "toString expects 1 argument")
-  let argType = inferExprTypes(prog, nil, sc, e.args[0], subst)
-  if not (argType.kind in {tkBool, tkInt, tkFloat, tkChar}):
-    raise newTypecheckError(e.pos, "toString supports bool/int/float/char")
-  e.instTypes = @[]
-  e.typ = tString()
-  return e.typ
-
-proc inferCallBuiltinIsSome(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  if e.args.len != 1: raise newTypecheckError(e.pos, "isSome expects 1 argument")
-  let argType = inferExprTypes(prog, nil, sc, e.args[0], subst)
-  if argType.kind != tkOption: raise newTypecheckError(e.pos, "isSome expects option[T] argument")
-  e.instTypes = @[]
-  e.typ = tBool()
-  return e.typ
-
-proc inferCallBuiltinIsNone(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  if e.args.len != 1: raise newTypecheckError(e.pos, "isNone expects 1 argument")
-  let argType = inferExprTypes(prog, nil, sc, e.args[0], subst)
-  if argType.kind != tkOption: raise newTypecheckError(e.pos, "isNone expects option[T] argument")
-  e.instTypes = @[]
-  e.typ = tBool()
-  return e.typ
-
-proc inferCallBuiltinIsOk(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  if e.args.len != 1: raise newTypecheckError(e.pos, "isOk expects 1 argument")
-  let argType = inferExprTypes(prog, nil, sc, e.args[0], subst)
-  if argType.kind != tkResult: raise newTypecheckError(e.pos, "isOk expects result[T] argument")
-  e.instTypes = @[]
-  e.typ = tBool()
-  return e.typ
-
-proc inferCallBuiltinIsErr(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =
-  if e.args.len != 1: raise newTypecheckError(e.pos, "isErr expects 1 argument")
-  let argType = inferExprTypes(prog, nil, sc, e.args[0], subst)
-  if argType.kind != tkResult: raise newTypecheckError(e.pos, "isErr expects result[T] argument")
-  e.instTypes = @[]
-  e.typ = tBool()
-  return e.typ
+# All built-in function type checking is now handled by the unified registry in common/builtins.nim
 
 
 # Function call type checking and monomorphization
@@ -422,26 +287,25 @@ proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var 
       if lt.kind != tkBool or rt.kind != tkBool: raise newTypecheckError(e.pos, "and/or expects bool")
       e.typ = tBool(); return e.typ
   of ekCall:
-    # Handle builtins first
-    case e.fname
-      of "print": return inferCallBuiltinPrint(prog, sc, e, subst)
-      of "new": return inferCallBuiltinNew(prog, sc, e, subst)
-      of "deref": return inferCallBuiltinDeref(prog, sc, e, subst)
-      of "rand": return inferCallBuiltinRand(prog, sc, e, subst)
-      of "readFile": return inferCallBuiltinReadFile(prog, sc, e, subst)
-      of "inject": return inferCallBuiltinInject(prog, sc, e, subst)
-      of "seed": return inferCallBuiltinSeed(prog, sc, e, subst)
-      of "parseInt": return inferCallBuiltinParseInt(prog, sc, e, subst)
-      of "parseFloat": return inferCallBuiltinParseFloat(prog, sc, e, subst)
-      of "parseBool": return inferCallBuiltinParseBool(prog, sc, e, subst)
-      of "toString": return inferCallBuiltinToString(prog, sc, e, subst)
-      of "isSome": return inferCallBuiltinIsSome(prog, sc, e, subst)
-      of "isNone": return inferCallBuiltinIsNone(prog, sc, e, subst)
-      of "isOk": return inferCallBuiltinIsOk(prog, sc, e, subst)
-      of "isErr": return inferCallBuiltinIsErr(prog, sc, e, subst)
-      else:
-        # Regular function call - handle monomorphization
-        return inferCall(prog, sc, e, subst)
+    # Handle builtins first using unified registry
+    if isBuiltin(e.fname):
+      # Get argument types by inferring each argument
+      var argTypes: seq[EtchType] = @[]
+      for arg in e.args:
+        let argType = inferExprTypes(prog, fd, sc, arg, subst)
+        argTypes.add(argType)
+
+      # Perform built-in type checking using unified registry
+      try:
+        let resultType = performBuiltinTypeCheck(e.fname, argTypes, e.pos)
+        e.instTypes = @[]
+        e.typ = resultType
+        return resultType
+      except EtchError as err:
+        raise convertBuiltinError(err, e.pos)
+    else:
+      # Regular function call - handle monomorphization
+      return inferCall(prog, sc, e, subst)
   of ekNewRef:
     let t0 = inferExprTypes(prog, fd, sc, e.init, subst)
     e.refInner = t0

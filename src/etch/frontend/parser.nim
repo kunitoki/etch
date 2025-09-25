@@ -2,7 +2,7 @@
 # Pratt parser for Etch using tokens from lexer
 
 import std/[strformat, tables, options, strutils]
-import ast, lexer, ../errors, ../typechecker/core
+import ast, lexer, ../common/[errors, types], ../typechecker/core
 
 type
   Parser* = ref object

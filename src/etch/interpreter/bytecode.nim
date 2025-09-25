@@ -1,8 +1,9 @@
 # bytecode.nim
 # Bytecode generation for Etch programs
 
-import std/[tables, options, hashes, sequtils, strformat]
+import std/[tables, options, hashes, sequtils, strformat, strutils]
 import ../frontend/ast, serialize
+import ../common/[logging, types]
 export serialize
 
 type
@@ -72,20 +73,21 @@ proc compileBinOp*(prog: var BytecodeProgram, op: BinOp, pos: Pos, ctx: Compilat
   of boAnd: prog.emit(opAnd, pos = pos, ctx = ctx)
   of boOr: prog.emit(opOr, pos = pos, ctx = ctx)
 
+proc compileConstantExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext, op: OpCode, getValue: proc(e: Expr): string) =
+  let idx = prog.addConstant(getValue(e))
+  prog.emit(op, idx, pos = e.pos, ctx = ctx)
+
 proc compileIntExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
   prog.emit(opLoadInt, e.ival, pos = e.pos, ctx = ctx)
 
 proc compileFloatExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
-  let idx = prog.addConstant($e.fval)
-  prog.emit(opLoadFloat, idx, pos = e.pos, ctx = ctx)
+  compileConstantExpr(prog, e, ctx, opLoadFloat, proc(e: Expr): string = $e.fval)
 
 proc compileStringExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
-  let idx = prog.addConstant(e.sval)
-  prog.emit(opLoadString, idx, pos = e.pos, ctx = ctx)
+  compileConstantExpr(prog, e, ctx, opLoadString, proc(e: Expr): string = e.sval)
 
 proc compileCharExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
-  let idx = prog.addConstant($e.cval)
-  prog.emit(opLoadChar, idx, pos = e.pos, ctx = ctx)
+  compileConstantExpr(prog, e, ctx, opLoadChar, proc(e: Expr): string = $e.cval)
 
 proc compileBoolExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
   prog.emit(opLoadBool, if e.bval: 1 else: 0, pos = e.pos, ctx = ctx)
@@ -124,18 +126,47 @@ proc compileBinaryExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationC
 
 proc compileCallExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
   var totalArgCount = e.args.len
+  var resolvedFunctionName = e.fname
 
-  # Check if this is a user-defined function with default parameters
+  # Try to find the function instance, first by exact name, then by resolving overloads
+  var foundFunction: FunDecl = nil
   if ctx.astProgram.funInstances.hasKey(e.fname):
-    let fn = ctx.astProgram.funInstances[e.fname]
-    totalArgCount = fn.params.len
+    foundFunction = ctx.astProgram.funInstances[e.fname]
+    resolvedFunctionName = e.fname
+  else:
+    # Function not found by simple name, try to resolve by finding matching signatures
+    # Look for functions that match the base name
+    for instanceName, fn in ctx.astProgram.funInstances:
+      # Check if this is an overload of our function
+      # The mangled name format is: functionName__paramTypes_returnType
+      if instanceName.startsWith(e.fname & "__"):
+        # For simple resolution, just check if the parameter count matches
+        # In a full implementation, we'd want to check parameter types too
+        if fn.params.len == e.args.len:
+          foundFunction = fn
+          resolvedFunctionName = instanceName
+          break
+        elif fn.params.len > e.args.len:
+          # Check if remaining parameters have defaults
+          var hasDefaults = true
+          for i in e.args.len..<fn.params.len:
+            if not fn.params[i].defaultValue.isSome:
+              hasDefaults = false
+              break
+          if hasDefaults:
+            foundFunction = fn
+            resolvedFunctionName = instanceName
+            break
+
+  if foundFunction != nil:
+    totalArgCount = foundFunction.params.len
 
     # Push all arguments (provided + defaults) in reverse order
-    for i in countdown(fn.params.high, 0):
+    for i in countdown(foundFunction.params.high, 0):
       if i < e.args.len:
         prog.compileExpr(e.args[i], ctx)
-      elif fn.params[i].defaultValue.isSome:
-        prog.compileExpr(fn.params[i].defaultValue.get, ctx)
+      elif foundFunction.params[i].defaultValue.isSome:
+        prog.compileExpr(foundFunction.params[i].defaultValue.get, ctx)
       else:
         prog.emit(opLoadInt, 0, pos = e.pos, ctx = ctx)
   else:
@@ -143,7 +174,11 @@ proc compileCallExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationCon
     for i in countdown(e.args.high, 0):
       prog.compileExpr(e.args[i], ctx)
 
-  prog.emit(opCall, totalArgCount, e.fname, e.pos, ctx)
+  # Debug output for function resolution
+  if prog.compilerFlags.verbose:
+    echo &"[BYTECODE] Function call: {e.fname} -> {resolvedFunctionName} (args: {totalArgCount})"
+
+  prog.emit(opCall, totalArgCount, resolvedFunctionName, e.pos, ctx)
 
 proc compileNewRefExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationContext) =
   prog.compileExpr(e.init, ctx)
@@ -548,6 +583,22 @@ proc compileMatchExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationCo
   for jump in endJumps:
     prog.instructions[jump].arg = prog.instructions.len
 
+proc canEvaluateConstantExpr(expr: Expr): bool =
+  ## Check if an expression can be safely evaluated at compile time
+  ## Returns true for simple constants and arithmetic, false for function calls
+  case expr.kind
+  of ekInt, ekFloat, ekBool, ekString, ekChar:
+    return true
+  of ekBin:
+    # Binary expressions can be evaluated if both operands can be evaluated
+    return canEvaluateConstantExpr(expr.lhs) and canEvaluateConstantExpr(expr.rhs)
+  of ekCall, ekVar:
+    # Function calls and variables need runtime evaluation
+    return false
+  else:
+    # For safety, assume complex expressions need runtime evaluation
+    return false
+
 proc evaluateConstantExpr(expr: Expr): GlobalValue =
   ## Evaluate simple constant expressions for global variable initialization
   ## For complex expressions, this will be handled by the compilation pipeline
@@ -589,14 +640,10 @@ proc evaluateConstantExpr(expr: Expr): GlobalValue =
     return GlobalValue(kind: tkInt, ival: 0)
 
 
-proc verboseLog*(flags: CompilerFlags, msg: string) =
-  ## Print verbose debug message if verbose flag is enabled
-  if flags.verbose:
-    echo "[BYTECODE] ", msg
 
 proc compileProgram*(astProg: Program, sourceHash: string, sourceFile: string = "", flags: CompilerFlags = CompilerFlags()): BytecodeProgram =
   ## Compile an AST program to bytecode
-  verboseLog(flags, "Starting bytecode generation")
+  logBytecode(flags, "Starting bytecode generation")
 
   result = BytecodeProgram(
     instructions: @[],
@@ -620,27 +667,50 @@ proc compileProgram*(astProg: Program, sourceHash: string, sourceFile: string = 
   )
 
   # Compile global variables
-  verboseLog(flags, "Compiling " & $astProg.globals.len & " global variables")
+  logBytecode(flags, "Compiling " & $astProg.globals.len & " global variables")
+  var globalInitCode: seq[Stmt] = @[]
+
   for g in astProg.globals:
     if g.kind == skVar:
-      verboseLog(flags, "Compiling global variable: " & g.vname)
+      logBytecode(flags, "Compiling global variable: " & g.vname)
       result.globals.add(g.vname)
       ctx.localVars.add(g.vname)
 
-      # Evaluate and store global variable value
+      # For simple constant expressions, evaluate at compile time for optimization
+      # For complex expressions (like function calls), let them execute at runtime
       if g.vinit.isSome():
-        let globalVal = evaluateConstantExpr(g.vinit.get())
-        result.globalValues[g.vname] = globalVal
+        if canEvaluateConstantExpr(g.vinit.get()):
+          let globalVal = evaluateConstantExpr(g.vinit.get())
+          result.globalValues[g.vname] = globalVal
+          # Skip runtime bytecode generation for pre-computed values
+        else:
+          # Complex expression - add to global initialization function
+          globalInitCode.add(g)
       else:
         # Default initialization based on type
         result.globalValues[g.vname] = GlobalValue(kind: tkInt, ival: 0)
+        # No runtime bytecode needed for default initialization
 
-      result.compileStmt(g, ctx)
+  # Create global initialization function if needed
+  if globalInitCode.len > 0:
+    logBytecode(flags, "Creating global initialization function with " & $globalInitCode.len & " statements")
+    ctx.currentFunction = "__global_init__"
+    ctx.localVars = @[]
+
+    let globalInitAddr = result.instructions.len
+    result.functions["__global_init__"] = globalInitAddr
+
+    # Compile all global initialization statements
+    for stmt in globalInitCode:
+      result.compileStmt(stmt, ctx)
+
+    # End with return
+    result.emit(opReturn, ctx = ctx)
 
   # Compile function instances
-  verboseLog(flags, "Compiling " & $astProg.funInstances.len & " function instances")
+  logBytecode(flags, "Compiling " & $astProg.funInstances.len & " function instances")
   for name, fn in astProg.funInstances:
-    verboseLog(flags, "Compiling function: " & name)
+    logBytecode(flags, "Compiling function: " & name)
     ctx.currentFunction = name
     ctx.localVars = @[]
 

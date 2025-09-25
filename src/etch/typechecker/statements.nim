@@ -2,7 +2,7 @@
 # Statement type checking
 
 import std/[strformat, options, tables, strutils]
-import ../frontend/ast, ../errors
+import ../frontend/ast, ../common/errors
 import types, expressions
 
 

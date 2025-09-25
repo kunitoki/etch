@@ -2,7 +2,7 @@
 # PEG (npeg) based tokenizer for Etch
 
 import std/[sequtils, strutils]
-import ../errors, ast
+import ../common/[errors, types], ast
 
 type
   TokKind* = enum

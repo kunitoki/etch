@@ -6,12 +6,8 @@ import frontend/[ast, lexer, parser]
 import typechecker/[core, types, statements, inference]
 import interpreter/[vm, bytecode]
 import prover/[core]
-import comptime, errors
-
-proc verboseLog*(flags: CompilerFlags, msg: string) =
-  ## Print verbose debug message if verbose flag is enabled
-  if flags.verbose:
-    echo "[COMPILER] ", msg
+import comptime, common/errors
+import common/[constants, logging]
 
 type
   CompilerResult* = object
@@ -54,7 +50,7 @@ proc shouldRecompile*(sourceFile, bytecodeFile: string, options: CompilerOptions
 
 proc ensureMainInst(prog: Program) =
   ## Ensure main function instance exists if main template is non-generic
-  let mainOverloads = prog.getFunctionOverloads("main")
+  let mainOverloads = prog.getFunctionOverloads(MAIN_FUNCTION_NAME)
   if mainOverloads.len > 0:
     # For main, we expect only one overload with no arguments
     var mainFunc: FunDecl = nil
@@ -64,7 +60,7 @@ proc ensureMainInst(prog: Program) =
         break
 
     if mainFunc != nil:
-      let key = "main"
+      let key = MAIN_FUNCTION_NAME
       if not prog.funInstances.hasKey(key):
         prog.funInstances[key] = FunDecl(
           name: key, typarams: @[], params: mainFunc.params, ret: mainFunc.ret, body: mainFunc.body)
@@ -73,7 +69,7 @@ proc ensureAllNonGenericInst(prog: Program, flags: CompilerFlags) =
   ## Instantiate all non-generic functions so they're available for comptime evaluation
   for name, overloads in prog.funs:
     for f in overloads:
-      if f.typarams.len == 0 and f.name != "main":  # Non-generic function, skip main (handled separately)
+      if f.typarams.len == 0 and f.name != MAIN_FUNCTION_NAME:  # Non-generic function, skip main (handled separately)
         # Generate unique key for overload
         let key = generateOverloadSignature(f)
         if flags.verbose:
@@ -82,27 +78,87 @@ proc ensureAllNonGenericInst(prog: Program, flags: CompilerFlags) =
           prog.funInstances[key] = FunDecl(
             name: key, typarams: @[], params: f.params, ret: f.ret, body: f.body)
 
+# Forward declarations
+proc hasImpureCall(expr: Expr): bool
+proc hasImpureCallInStmt(stmt: Stmt): bool
+
+proc hasImpureCall(expr: Expr): bool =
+  ## Simple check for expressions with side effects
+  case expr.kind
+  of ekCall:
+    # Known impure built-in functions
+    if expr.fname in ["print", "readFile", "rand", "println"]:
+      return true
+    # Check arguments first
+    for arg in expr.args:
+      if hasImpureCall(arg):
+        return true
+    return false
+  of ekBin:
+    return hasImpureCall(expr.lhs) or hasImpureCall(expr.rhs)
+  else:
+    return false
+
+proc hasImpureCallInStmt(stmt: Stmt): bool =
+  ## Check if a statement contains impure calls
+  case stmt.kind
+  of skExpr:
+    return hasImpureCall(stmt.sexpr)
+  of skReturn:
+    if stmt.re.isSome:
+      return hasImpureCall(stmt.re.get)
+  of skVar:
+    if stmt.vinit.isSome:
+      return hasImpureCall(stmt.vinit.get)
+  of skAssign:
+    return hasImpureCall(stmt.aval)
+  else:
+    return false
+
+proc hasImpureCallInFunction(fn: FunDecl): bool =
+  ## Check if a function body contains impure calls
+  for stmt in fn.body:
+    if hasImpureCallInStmt(stmt):
+      return true
+  return false
+
+proc canEvaluateAtCompileTime(expr: Expr, prog: Program): bool =
+  ## Check if an expression should be evaluated at compile time
+  ## Returns false for expressions with side effects
+  case expr.kind
+  of ekCall:
+    # Check if this is a user-defined function with side effects
+    if prog.funInstances.hasKey(expr.fname):
+      let fn = prog.funInstances[expr.fname]
+      if hasImpureCallInFunction(fn):
+        return false
+    # Also check if it's a built-in impure function
+    return not hasImpureCall(expr)
+  else:
+    return not hasImpureCall(expr)
+
 proc evaluateGlobalVariables(prog: Program): Table[string, V] =
   ## Evaluate global variable initialization expressions using bytecode
   ## Returns a table of evaluated global values for bytecode compilation
+  ## For complex expressions, returns empty table to let runtime handle them
   var globalVars = initTable[string, V]()
 
-  # Evaluate each global variable in order (supports dependencies)
+  # Only evaluate expressions without side effects at compile time
+  # Let expressions with side effects execute at runtime
   for g in prog.globals:
     if g.kind == skVar and g.vinit.isSome():
-      try:
-        # Evaluate the initialization expression with access to previous globals
-        let res = evalExprWithBytecode(prog, g.vinit.get(), globalVars)
-        # Store the evaluated value for subsequent globals
-        globalVars[g.vname] = res
-      except:
-        # TODO - should we log this ? at least in verbose mode ?
-        # If evaluation fails, store default value (silently)
-        # The actual error will be caught by the compiler's type checker
-        globalVars[g.vname] = V(kind: tkInt, ival: 0)
-    elif g.kind == skVar:
-      # Default initialization for variables without initializers
-      globalVars[g.vname] = V(kind: tkInt, ival: 0)
+      # Check if this expression has side effects
+      if canEvaluateAtCompileTime(g.vinit.get(), prog):
+        try:
+          # Evaluate pure expressions at compile time for optimization
+          let res = evalExprWithBytecode(prog, g.vinit.get(), globalVars)
+          globalVars[g.vname] = res
+        except:
+          # If evaluation fails, let runtime handle it
+          discard
+      # For expressions with side effects, don't pre-evaluate
+      # Let the runtime bytecode handle the initialization so side effects occur at runtime
+    # Don't set default values here - let the bytecode compilation handle defaults
 
   return globalVars
 
@@ -119,39 +175,39 @@ proc parseAndTypecheck*(options: CompilerOptions): (Program, string, Table[strin
   ## Parse source file and perform type checking, return AST, hash, and evaluated globals
   let flags = CompilerFlags(verbose: options.verbose, debug: options.debug)
 
-  verboseLog(flags, "Starting compilation of " & options.sourceFile)
+  logCompiler(flags, "Starting compilation of " & options.sourceFile)
 
   # Set up error reporting context
   errors.loadSourceLines(options.sourceFile)
 
   let src = readFile(options.sourceFile)
-  verboseLog(flags, "Read source file (" & $src.len & " characters)")
+  logCompiler(flags, "Read source file (" & $src.len & " characters)")
 
   let srcHash = hashSourceAndFlags(src, flags)
-  verboseLog(flags, "Source hash: " & srcHash)
+  logCompiler(flags, "Source hash: " & srcHash)
 
   let toks = lex(src)
-  verboseLog(flags, "Lexed " & $toks.len & " tokens")
+  logCompiler(flags, "Lexed " & $toks.len & " tokens")
 
   var prog = parseProgram(toks, options.sourceFile)
-  verboseLog(flags, "Parsed AST with " & $prog.funs.len & " functions and " & $prog.globals.len & " globals")
+  logCompiler(flags, "Parsed AST with " & $prog.funs.len & " functions and " & $prog.globals.len & " globals")
 
   # For this MVP, instantiation occurs when functions are called during typecheck inference.
   # We need a shallow pass to trigger calls in bodies:
-  verboseLog(flags, "Starting type checking phase")
+  logCompiler(flags, "Starting type checking phase")
   typecheck(prog)
-  verboseLog(flags, "Type checking complete")
+  logCompiler(flags, "Type checking complete")
 
   # Force monomorphization for main if it is non-generic:
-  verboseLog(flags, "Ensuring main function instance")
+  logCompiler(flags, "Ensuring main function instance")
   ensureMainInst(prog)
 
   # Instantiate all non-generic functions so they're available for comptime evaluation
-  verboseLog(flags, "Instantiating non-generic functions")
+  logCompiler(flags, "Instantiating non-generic functions")
   ensureAllNonGenericInst(prog, flags)
 
   # Fold compile-time expressions BEFORE final type checking so injected variables are available
-  verboseLog(flags, "Folding compile-time expressions")
+  logCompiler(flags, "Folding compile-time expressions")
   foldComptime(prog, prog)
 
   # Now do full type checking with injected variables available
@@ -188,16 +244,16 @@ proc parseAndTypecheck*(options: CompilerOptions): (Program, string, Table[strin
     for s in f.body: typecheckStmt(prog, f, sc, s, subst)
 
   # Evaluate global variables with full expression support
-  verboseLog(flags, "Evaluating global variables")
+  logCompiler(flags, "Evaluating global variables")
   let evaluatedGlobals = evaluateGlobalVariables(prog)
-  verboseLog(flags, "Evaluated " & $evaluatedGlobals.len & " global variables")
+  logCompiler(flags, "Evaluated " & $evaluatedGlobals.len & " global variables")
 
   # Run safety prover to ensure all variables are initialized
-  verboseLog(flags, "Running safety prover")
+  logCompiler(flags, "Running safety prover")
   prove(prog, options.sourceFile, flags)
-  verboseLog(flags, "Safety proof complete")
+  logCompiler(flags, "Safety proof complete")
 
-  verboseLog(flags, "Parse and typecheck phase complete")
+  logCompiler(flags, "Parse and typecheck phase complete")
   return (prog, srcHash, evaluatedGlobals)
 
 proc runCachedBytecode*(bytecodeFile: string): CompilerResult =
@@ -228,31 +284,31 @@ proc compileAndRun*(options: CompilerOptions): CompilerResult =
   let flags = CompilerFlags(verbose: options.verbose, debug: options.debug)
 
   echo "Compiling: ", options.sourceFile
-  verboseLog(flags, "Compilation options: runVM=" & $options.runVM & ", verbose=" & $options.verbose)
+  logCompiler(flags, "Compilation options: runVM=" & $options.runVM & ", verbose=" & $options.verbose)
 
   try:
     # Parse and typecheck
     let (prog, srcHash, evaluatedGlobals) = parseAndTypecheck(options)
 
     # Compile to bytecode
-    verboseLog(flags, "Compiling to bytecode")
+    logCompiler(flags, "Compiling to bytecode")
     let bytecodeProg = compileProgramWithGlobals(prog, srcHash, evaluatedGlobals, options.sourceFile, flags)
-    verboseLog(flags, "Bytecode compilation complete (" & $bytecodeProg.instructions.len & " instructions)")
+    logCompiler(flags, "Bytecode compilation complete (" & $bytecodeProg.instructions.len & " instructions)")
 
     # Save bytecode to cache
     let bytecodeFile = getBytecodeFileName(options.sourceFile)
-    verboseLog(flags, "Saving bytecode cache to: " & bytecodeFile)
+    logCompiler(flags, "Saving bytecode cache to: " & bytecodeFile)
     saveBytecodeToCache(bytecodeProg, bytecodeFile)
 
     # Check if we should run the VM
     var exitCode = 0
     if options.runVM:
-      verboseLog(flags, "Starting VM execution")
+      logCompiler(flags, "Starting VM execution")
       let vm = newBytecodeVM(bytecodeProg)
       exitCode = vm.runBytecode()
-      verboseLog(flags, "VM execution finished with exit code: " & $exitCode)
+      logCompiler(flags, "VM execution finished with exit code: " & $exitCode)
 
-    verboseLog(flags, "Compilation completed successfully")
+    logCompiler(flags, "Compilation completed successfully")
     return CompilerResult(success: true, exitCode: 0)
 
   except EtchError as e:
@@ -269,20 +325,20 @@ proc tryRunCachedOrCompile*(options: CompilerOptions): CompilerResult =
   let flags = CompilerFlags(verbose: options.verbose, debug: options.debug)
   let bytecodeFile = getBytecodeFileName(options.sourceFile)
 
-  verboseLog(flags, "Checking for cached bytecode at: " & bytecodeFile)
+  logCompiler(flags, "Checking for cached bytecode at: " & bytecodeFile)
 
   # Check if we can use cached bytecode
   if options.runVM and not shouldRecompile(options.sourceFile, bytecodeFile, options):
-    verboseLog(flags, "Using cached bytecode")
+    logCompiler(flags, "Using cached bytecode")
     let cachedResult = runCachedBytecode(bytecodeFile)
     if cachedResult.success:
-      verboseLog(flags, "Cached bytecode execution successful")
+      logCompiler(flags, "Cached bytecode execution successful")
       return cachedResult
     else:
-      verboseLog(flags, "Cached bytecode execution failed: " & cachedResult.error)
+      logCompiler(flags, "Cached bytecode execution failed: " & cachedResult.error)
       echo cachedResult.error
       echo "Recompiling..."
 
   # Compile from source
-  verboseLog(flags, "Compiling from source")
+  logCompiler(flags, "Compiling from source")
   return compileAndRun(options)

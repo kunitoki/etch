@@ -1,5 +1,5 @@
 import strformat, strutils
-import frontend/ast
+import types
 
 # Etch-specific exception types
 type
@@ -37,7 +37,7 @@ proc formatError*(pos: Pos, msg: string): string =
     # Show the error line
     result.add &"  {pos.line} | {line}\n"
 
-    # Show the caret pointing to the error column  
+    # Show the caret pointing to the error column
     let prefixLen = 2 + len($pos.line) + 3 # "  " + line number + " | "
     let caretPos = max(0, pos.col - 1)  # convert to 0-based for spacing calculation
     let totalSpaces = prefixLen + caretPos
