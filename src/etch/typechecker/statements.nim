@@ -14,15 +14,11 @@ proc typecheckVar(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TyS
   if s.vtype.kind == tkGeneric:
     raise newTypecheckError(s.pos, "generic variable type not allowed at runtime scope")
 
-  # Resolve user-defined types
+  # Resolve user-defined types (including nested ones in references, arrays, etc.)
   var resolvedVtype = s.vtype
-  if s.vtype.kind == tkUserDefined:
-    let userType = resolveUserType(sc, s.vtype.name)
-    if userType == nil:
-      raise newTypecheckError(s.pos, &"unknown type '{s.vtype.name}'")
-    resolvedVtype = userType
-    # Update the statement's type to the resolved type for later use
-    s.vtype = resolvedVtype
+  resolvedVtype = resolveNestedUserTypes(sc, resolvedVtype, s.pos)
+  # Update the statement's type to the resolved type for later use
+  s.vtype = resolvedVtype
   if s.vinit.isSome():
     # Two-phase approach: First check type compatibility assuming all variables exist,
     # then check for undeclared variables if type check passes
@@ -64,7 +60,14 @@ proc typecheckAssign(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var 
   if sc.flags.hasKey(s.aname) and sc.flags[s.aname] == vfLet:
     raise newTypecheckError(s.pos, &"cannot assign to immutable variable '{s.aname}'")
   let t0 = inferExprTypes(prog, fd, sc, s.aval, subst)
-  if not typeEq(t0, sc.types[s.aname]):
+  let varType = sc.types[s.aname]
+
+  # Allow nil (ref[void]) to be assigned to any reference type
+  var typesCompatible = typeEq(t0, varType)
+  if not typesCompatible and t0.kind == tkRef and t0.inner.kind == tkVoid and varType.kind == tkRef:
+    typesCompatible = true  # nil can be assigned to any reference type
+
+  if not typesCompatible:
     if t0.kind == tkVoid:
       raise newTypecheckError(s.pos, &"cannot assign void function result to variable '{s.aname}'")
     else:

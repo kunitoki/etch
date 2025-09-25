@@ -1,8 +1,8 @@
 # types.nim
 # Type utilities and operations for the type checker
 
-import std/[tables]
-import ../frontend/ast
+import std/[tables, strformat]
+import ../frontend/ast, ../common/errors, ../common/types
 
 
 type
@@ -80,3 +80,48 @@ proc canAssignDistinct*(targetType: EtchType, sourceType: EtchType): bool =
   else:
     # Regular type equality
     return typeEq(targetType, sourceType)
+
+
+proc resolveNestedUserTypes*(sc: Scope, typ: EtchType, pos: Pos): EtchType =
+  ## Recursively resolve user-defined types in nested type structures
+  ## like ref[Person], array[Person], etc.
+  if typ == nil:
+    return typ
+
+  case typ.kind
+  of tkUserDefined:
+    # Resolve this user-defined type
+    if not sc.userTypes.hasKey(typ.name):
+      raise newTypecheckError(pos, &"unknown type '{typ.name}'")
+    return sc.userTypes[typ.name]
+  of tkRef:
+    # Recursively resolve the inner type
+    let resolvedInner = resolveNestedUserTypes(sc, typ.inner, pos)
+    return tRef(resolvedInner)
+  of tkArray:
+    # Recursively resolve the element type
+    let resolvedInner = resolveNestedUserTypes(sc, typ.inner, pos)
+    return tArray(resolvedInner)
+  of tkOption:
+    # Recursively resolve the inner type
+    let resolvedInner = resolveNestedUserTypes(sc, typ.inner, pos)
+    return tOption(resolvedInner)
+  of tkResult:
+    # Recursively resolve the inner type
+    let resolvedInner = resolveNestedUserTypes(sc, typ.inner, pos)
+    return tResult(resolvedInner)
+  else:
+    # For primitive types and other types, no resolution needed
+    return typ
+
+# Helper functions for common type inference patterns
+proc inferLiteralType*(kind: ExprKind): EtchType =
+  ## Infer type for simple literal expressions
+  case kind
+  of ekInt: return tInt()
+  of ekFloat: return tFloat()
+  of ekString: return tString()
+  of ekChar: return tChar()
+  of ekBool: return tBool()
+  of ekNil: return tRef(tVoid())
+  else: return nil  # Not a simple literal

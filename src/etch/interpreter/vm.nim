@@ -530,13 +530,23 @@ proc opObjectGetImpl(vm: VM, instr: Instruction) =
   let fieldName = instr.sarg  # Field name is stored in instruction
   let obj = vm.pop()          # Object to access
 
-  if obj.kind != tkObject:
-    vm.raiseRuntimeError(&"field access requires object type, got '{obj.kind}'")
+  # Handle automatic dereferencing for reference types
+  var actualObj = obj
+  if obj.kind == tkRef:
+    if obj.refId < 0 or obj.refId >= vm.heap.len:
+      vm.raiseRuntimeError("invalid reference")
+    let cell = vm.heap[obj.refId]
+    if cell.isNil or not cell.alive:
+      vm.raiseRuntimeError("attempted to access field on null reference")
+    actualObj = cell.val
 
-  if not obj.oval.hasKey(fieldName):
+  if actualObj.kind != tkObject:
+    vm.raiseRuntimeError(&"field access requires object type, got '{actualObj.kind}'")
+
+  if not actualObj.oval.hasKey(fieldName):
     vm.raiseRuntimeError(&"object has no field '{fieldName}'")
 
-  vm.push(obj.oval[fieldName])
+  vm.push(actualObj.oval[fieldName])
 
 proc opJumpImpl(vm: VM, instr: Instruction) =
   vm.pc = int(instr.arg)

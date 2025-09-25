@@ -246,6 +246,23 @@ proc `$`*(t: ExprKind): string =
   else: "unknown kind"
 
 
+proc `$`*(bop: BinOp): string =
+  case bop
+  of boAdd: "+"
+  of boSub: "-"
+  of boMul: "*"
+  of boDiv: "/"
+  of boMod: "%"
+  of boEq: "=="
+  of boNe: "!="
+  of boLt: "<"
+  of boLe: "<="
+  of boGt: ">"
+  of boGe: ">="
+  of boAnd: "and"
+  of boOr: "or"
+
+
 proc copyType*(t: EtchType): EtchType =
   case t.kind
   of tkVoid: tVoid()

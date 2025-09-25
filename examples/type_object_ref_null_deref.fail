@@ -1,0 +1,5 @@
+examples/type_object_ref_null_deref.etch:14:12: error: potential null dereference: field access on variable 'p' that may be nil
+  13 |     p = nil;
+  14 |     print(p.name);
+                  ^
+  15 |     print(@p.age);

@@ -391,7 +391,15 @@ proc analyzeNewRefExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
 
 proc analyzeDerefExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
   let i0 = analyzeExpr(e.refExpr, env, ctx)
-  if not i0.nonNil: raise newException(ValueError, "Prover: cannot prove ref non-nil before deref")
+
+  # Check if dereferencing a variable that is tracked as nil
+  if e.refExpr.kind == ekVar and env.nils.hasKey(e.refExpr.vname) and env.nils[e.refExpr.vname]:
+    raise newProverError(e.pos, &"potential null dereference: dereferencing variable '{e.refExpr.vname}' that may be nil")
+
+  # Original check for expressions that can't be proven non-nil
+  if not i0.nonNil:
+    raise newProverError(e.pos, "cannot prove reference is non-nil before dereferencing")
+
   infoUnknown()
 
 
@@ -713,7 +721,18 @@ proc analyzeExpr*(e: Expr; env: Env, ctx: ProverContext): Info =
       discard analyzeExpr(field.value, env, ctx)
     return Info(known: false, initialized: true, nonNil: true)
   of ekFieldAccess:
-    # Field access is unknown for now
+    # Analyze the object being accessed for safety
+    discard analyzeExpr(e.objectExpr, env, ctx)
+
+    # Check if accessing field on a potentially nil reference
+    if e.objectExpr.kind == ekVar and env.nils.hasKey(e.objectExpr.vname) and env.nils[e.objectExpr.vname]:
+      raise newProverError(e.pos, &"potential null dereference: field access on variable '{e.objectExpr.vname}' that may be nil")
+    elif e.objectExpr.kind == ekDeref:
+      # Check dereferencing of potentially nil reference
+      if e.objectExpr.refExpr.kind == ekVar and env.nils.hasKey(e.objectExpr.refExpr.vname) and env.nils[e.objectExpr.refExpr.vname]:
+        raise newProverError(e.pos, &"potential null dereference: dereferencing variable '{e.objectExpr.refExpr.vname}' that may be nil")
+
+    # Field access result is unknown for now
     return Info(known: false, cval: 0)
   of ekNew:
     # new(value) or new[Type]{value} - analyze initialization expression if present
@@ -763,7 +782,8 @@ proc proveAssign(s: Stmt; env: Env, ctx: ProverContext) =
   newInfo.initialized = true
   env.vals[s.aname] = newInfo
   env.exprs[s.aname] = s.aval  # Store original expression
-  if info.nonNil: env.nils[s.aname] = false
+  # Track nil status: true if assigning nil, false if assigning non-nil
+  env.nils[s.aname] = not info.nonNil
   if info.known:
     logProver(ctx.flags, "Variable " & s.aname & " assigned constant value: " & $info.cval)
   else:

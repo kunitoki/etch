@@ -2,28 +2,12 @@
 # Expression type inference for the type checker
 
 import std/[strformat, options, sequtils, tables, strutils]
-import ../frontend/ast, ../common/[errors, types as commonTypes]
+import ../frontend/ast, ../common/[errors, types]
 import ../common/builtins
 import types
 
 
-
-# Convert BinOp to operator symbol string for user-defined operator lookup
-proc binOpToString(bop: BinOp): string =
-  case bop
-  of boAdd: "+"
-  of boSub: "-"
-  of boMul: "*"
-  of boDiv: "/"
-  of boMod: "%"
-  of boEq: "=="
-  of boNe: "!="
-  of boLt: "<"
-  of boLe: "<="
-  of boGt: ">"
-  of boGe: ">="
-  of boAnd: "and"  # These remain keywords, not symbols
-  of boOr: "or"
+proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst; expectedTy: EtchType = nil): EtchType
 
 
 # Check if a function name represents an operator function (including mangled names)
@@ -31,17 +15,12 @@ proc isOperatorFunction(name: string): bool =
   let baseName = if "_" in name: name.split("_")[0] else: name
   baseName in ["+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">="]
 
+
 # Helper to convert EtchError to TypecheckError for built-in type checking
 proc convertBuiltinError(err: ref EtchError, pos: Pos): ref TypecheckError =
   newTypecheckError(pos, err.msg)
 
-proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst; expectedTy: EtchType = nil): EtchType
 
-
-# All built-in function type checking is now handled by the unified registry in common/builtins.nim
-
-
-# Function call type checking and monomorphization
 # Overload resolution helper
 proc resolveOverload(prog: Program; sc: Scope; e: Expr; subst: var TySubst): FunDecl =
   ## Resolve function overload based on argument types
@@ -182,330 +161,393 @@ proc inferCall(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType 
   return retT
 
 
+proc inferUnOp(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  let t0 = inferExprTypes(prog, fd, sc, e.ue, subst)
+  case e.uop
+  of uoNeg:
+    if t0.kind == tkInt:
+      e.typ = tInt(); return e.typ
+    elif t0.kind == tkFloat:
+      e.typ = tFloat(); return e.typ
+    else:
+      raise newTypecheckError(e.pos, "unary - requires int or float")
+  of uoNot:
+    if t0.kind != tkBool: raise newTypecheckError(e.pos, "not on non-bool")
+    e.typ = tBool(); return e.typ
+
+
+proc inferLiteralExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  e.typ = inferLiteralType(e.kind)
+  return e.typ
+
+
+proc inferVarExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  if not sc.types.hasKey(e.vname):
+    raise newTypecheckError(e.pos, &"use of undeclared variable '{e.vname}'")
+  e.typ = sc.types[e.vname]
+  return e.typ
+
+
+proc inferFieldAccessExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  # obj.field - get type of object and look up field type
+  let objType = inferExprTypes(prog, fd, sc, e.objectExpr, subst)
+
+  # Handle reference types - dereference automatically
+  var actualObjType = objType
+  if objType.kind == tkRef:
+    actualObjType = objType.inner
+
+  if actualObjType.kind == tkObject:
+    # Look up field in object type
+    for field in actualObjType.fields:
+      if field.name == e.fieldName:
+        e.typ = field.fieldType
+        return field.fieldType
+    raise newTypecheckError(e.pos, &"object type '{actualObjType.name}' has no field '{e.fieldName}'")
+  else:
+    raise newTypecheckError(e.pos, &"field access requires object type, got '{objType}'")
+
+
+proc inferNewExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  # new(Type) or new(Type, initExpr) or new(value) with type inference - returns ref[Type]
+  let targetType = e.newType
+  var resolvedType: EtchType
+
+  if targetType == nil:
+    # Type inference from initialization expression: new(42) -> ref[int]
+    if e.initExpr.isNone:
+      raise newTypecheckError(e.pos, "new() requires either a type or initialization value for type inference")
+    let initType = inferExprTypes(prog, fd, sc, e.initExpr.get, subst)
+    resolvedType = initType
+  else:
+    # Explicit type provided: new[int] or new[int]{42}
+    resolvedType = targetType
+  # Resolve user-defined types
+  if resolvedType.kind == tkUserDefined:
+    let userType = resolveUserType(sc, resolvedType.name)
+    if userType == nil:
+      raise newTypecheckError(e.pos, &"unknown type '{resolvedType.name}'")
+    resolvedType = userType
+
+  # If there's an initialization expression, type check it
+  if e.initExpr.isSome:
+    let initType = inferExprTypes(prog, fd, sc, e.initExpr.get, subst, resolvedType)
+    if not canAssignDistinct(resolvedType, initType):
+      raise newTypecheckError(e.pos, &"cannot initialize '{resolvedType}' with '{initType}'")
+
+  let refType = tRef(resolvedType)
+  e.typ = refType
+  return refType
+
+
+proc inferObjectLiteralExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst; expectedTy: EtchType): EtchType =
+  # Object literal: try to infer type from expected type or error
+  if expectedTy == nil or expectedTy.kind != tkObject:
+    raise newTypecheckError(e.pos, "object literal requires explicit type annotation")
+
+  # Verify all required fields are provided and types match
+  let objType = expectedTy
+  var providedFields: seq[string] = @[]
+  for fieldInit in e.fieldInits:
+    providedFields.add(fieldInit.name)
+
+    # Find field in object type
+    var fieldType: EtchType = nil
+    for objField in objType.fields:
+      if objField.name == fieldInit.name:
+        fieldType = objField.fieldType
+        break
+
+    if fieldType == nil:
+      raise newTypecheckError(e.pos, &"object type '{objType.name}' has no field '{fieldInit.name}'")
+
+    # Type check the field value
+    let valueType = inferExprTypes(prog, fd, sc, fieldInit.value, subst, fieldType)
+    if not canAssignDistinct(fieldType, valueType):
+      raise newTypecheckError(e.pos, &"field '{fieldInit.name}' expects type '{fieldType}', got '{valueType}'")
+
+  # Check that all required fields are provided (those without defaults)
+  for objField in objType.fields:
+    if objField.defaultValue.isNone and objField.name notin providedFields:
+      raise newTypecheckError(e.pos, &"missing required field '{objField.name}' in object literal")
+
+  e.typ = objType
+  e.objectType = objType
+  return objType
+
+
+proc inferMatchExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  # Match expressions need special handling - implemented in statements due to circular import
+  # Return a default type for now - the real type will be set by inferMatchExpr
+  if e.typ == nil:
+    return tVoid()  # Placeholder
+  else:
+    return e.typ
+
+
+proc inferResultOkExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  let innerType = inferExprTypes(prog, fd, sc, e.okExpr, subst)
+  e.typ = tResult(innerType)
+  return e.typ
+
+
+proc inferResultErrExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst; expectedTy: EtchType): EtchType =
+  # Try to use expected type if available
+  if expectedTy != nil and expectedTy.kind == tkResult:
+    let errTy = inferExprTypes(prog, fd, sc, e.errExpr, subst)
+    if errTy.kind != tkString:
+      raise newTypecheckError(e.pos, "error constructor requires string argument")
+    return expectedTy
+  else:
+    # error requires explicit type annotation to determine result type
+    raise newTypecheckError(e.pos, "error requires explicit type annotation")
+
+
+proc inferOptionSomeExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  let innerType = inferExprTypes(prog, fd, sc, e.someExpr, subst)
+  e.typ = tOption(innerType)
+  return e.typ
+
+
+proc inferOptionNoneExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst; expectedTy: EtchType): EtchType =
+  # Try to use expected type if available
+  if expectedTy != nil and expectedTy.kind == tkOption:
+    return expectedTy
+  else:
+    # none requires explicit type annotation to determine option type
+    raise newTypecheckError(e.pos, "none requires explicit type annotation")
+
+
+proc inferCastExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  # Explicit type cast: type(expr)
+  let fromType = inferExprTypes(prog, fd, sc, e.castExpr, subst)
+  let toType = e.castType
+
+  # Define allowed conversions
+  var castAllowed = false
+  if (fromType.kind == tkInt and toType.kind == tkFloat) or
+     (fromType.kind == tkFloat and toType.kind == tkInt) or
+     (fromType.kind == tkInt and toType.kind == tkString) or
+     (fromType.kind == tkFloat and toType.kind == tkString):
+    castAllowed = true
+  # Allow casting from distinct types to their base type
+  elif fromType.kind == tkDistinct and typeEq(fromType.inner, toType):
+    castAllowed = true
+  # Allow casting from base type to distinct type
+  elif toType.kind == tkDistinct and typeEq(fromType, toType.inner):
+    castAllowed = true
+
+  if not castAllowed:
+    raise newTypecheckError(e.pos, &"invalid cast from {fromType} to {toType}")
+
+  e.typ = toType
+  return e.typ
+
+
+proc inferArrayLenExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  # Array/String length operator: #array/#string -> int
+  let arrayType = inferExprTypes(prog, fd, sc, e.lenExpr, subst)
+  if arrayType.kind notin {tkArray, tkString}:
+    raise newTypecheckError(e.pos, &"length operator # requires array or string type, got {arrayType}")
+  e.typ = tInt()
+  return e.typ
+
+
+proc inferSliceExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  let arrayType = inferExprTypes(prog, fd, sc, e.sliceExpr, subst)
+  if arrayType.kind notin {tkArray, tkString}:
+    raise newTypecheckError(e.pos, &"slicing requires array or string type, got {arrayType}")
+  # Check start expression if present
+  if e.startExpr.isSome:
+    let startType = inferExprTypes(prog, fd, sc, e.startExpr.get, subst)
+    if startType.kind != tkInt:
+      raise newTypecheckError(e.startExpr.get.pos, &"slice start must be int, got {startType}")
+  # Check end expression if present
+  if e.endExpr.isSome:
+    let endType = inferExprTypes(prog, fd, sc, e.endExpr.get, subst)
+    if endType.kind != tkInt:
+      raise newTypecheckError(e.endExpr.get.pos, &"slice end must be int, got {endType}")
+  # Slicing returns the same array type
+  e.typ = arrayType
+  return e.typ
+
+
+proc inferIndexExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  let arrayType = inferExprTypes(prog, fd, sc, e.arrayExpr, subst)
+  let indexType = inferExprTypes(prog, fd, sc, e.indexExpr, subst)
+  if arrayType.kind notin {tkArray, tkString}:
+    raise newTypecheckError(e.pos, &"indexing requires array or string type, got {arrayType}")
+  if indexType.kind != tkInt:
+    raise newTypecheckError(e.indexExpr.pos, &"index must be int, got {indexType}")
+  if arrayType.kind == tkString:
+    e.typ = tChar()
+  else:
+    e.typ = arrayType.inner
+  return e.typ
+
+
+proc inferArrayExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  # Array literal: [elem1, elem2, ...] - infer element type from first element
+  if e.elements.len == 0:
+    raise newTypecheckError(e.pos, "empty arrays not supported - cannot infer element type")
+  let elemType = inferExprTypes(prog, fd, sc, e.elements[0], subst)
+  # Verify all elements have the same type
+  for i in 1..<e.elements.len:
+    let t = inferExprTypes(prog, fd, sc, e.elements[i], subst)
+    if not typeEq(elemType, t):
+      raise newTypecheckError(e.elements[i].pos, &"array element type mismatch: expected {elemType}, got {t}")
+  e.typ = tArray(elemType)
+  return e.typ
+
+
+proc inferDerefExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  let t0 = inferExprTypes(prog, fd, sc, e.refExpr, subst)
+  if t0.kind != tkRef: raise newTypecheckError(e.pos, "deref expects Ref[...]")
+  # Resolve user-defined types in the dereferenced result
+  var innerType = t0.inner
+  if innerType.kind == tkUserDefined:
+    let resolvedType = resolveUserType(sc, innerType.name)
+    if resolvedType == nil:
+      raise newTypecheckError(e.pos, &"unknown type '{innerType.name}'")
+    innerType = resolvedType
+  e.typ = innerType
+  return innerType
+
+
+proc inferNewRefExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  let t0 = inferExprTypes(prog, fd, sc, e.init, subst)
+  e.refInner = t0
+  e.typ = tRef(t0)
+  return e.typ
+
+
+proc inferCallExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  # Handle builtins first using unified registry
+  if isBuiltin(e.fname):
+    # Get argument types by inferring each argument
+    var argTypes: seq[EtchType] = @[]
+    for arg in e.args:
+      let argType = inferExprTypes(prog, fd, sc, arg, subst)
+      argTypes.add(argType)
+
+    # Perform built-in type checking using unified registry
+    try:
+      let resultType = performBuiltinTypeCheck(e.fname, argTypes, e.pos)
+      e.instTypes = @[]
+      e.typ = resultType
+      return resultType
+    except EtchError as err:
+      raise convertBuiltinError(err, e.pos)
+  else:
+    # Regular function call - handle monomorphization
+    return inferCall(prog, sc, e, subst)
+
+
+proc inferBinOp(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+  let lt = inferExprTypes(prog, fd, sc, e.lhs, subst)
+  let rt = inferExprTypes(prog, fd, sc, e.rhs, subst)
+
+  # Try user-defined operator overload first (except for logical operators)
+  # Skip operator overloading if we're currently inside an operator function to avoid infinite recursion
+  if e.bop notin {boAnd, boOr} and (fd == nil or not isOperatorFunction(fd.name)):
+    let opName = $e.bop
+    # Check if a user-defined operator exists for these argument types
+    for fname, fdecls in prog.funs:
+      if fname == opName:
+        for fdecl in fdecls:
+          if fdecl.params.len == 2:
+            # Try to match parameter types with our argument types
+            let param1Type = fdecl.params[0].typ
+            let param2Type = fdecl.params[1].typ
+
+            # Check if types match (simplified matching for now)
+            if param1Type.kind == lt.kind and param2Type.kind == rt.kind:
+              # Create function call expression
+              let callExpr = Expr(
+                kind: ekCall,
+                fname: opName,
+                args: @[e.lhs, e.rhs],
+                pos: e.pos
+              )
+
+              let resultType = inferCall(prog, sc, callExpr, subst)
+              # Replace this binary expression with a function call
+              e[] = Expr(
+                kind: ekCall,
+                fname: callExpr.fname,  # Use the mangled name from inferCall
+                args: @[e.lhs, e.rhs],
+                instTypes: callExpr.instTypes,
+                typ: resultType,
+                pos: e.pos
+              )[]
+              return resultType
+
+  # Built-in operator handling
+  case e.bop
+  of boAdd:
+    if lt.kind == tkInt and rt.kind == tkInt:
+      e.typ = tInt(); return e.typ
+    elif lt.kind == tkFloat and rt.kind == tkFloat:
+      e.typ = tFloat(); return e.typ
+    elif lt.kind == tkString and rt.kind == tkString:
+      # String concatenation (strings are array[char])
+      e.typ = tString(); return e.typ
+    elif lt.kind == tkArray and rt.kind == tkArray:
+      # Array concatenation - types must match
+      if not typeEq(lt.inner, rt.inner):
+        raise newTypecheckError(e.pos, &"array concatenation requires matching element types, got array[{lt.inner}] + array[{rt.inner}]")
+      e.typ = tArray(lt.inner); return e.typ
+    else:
+      raise newTypecheckError(e.pos, &"+ operator requires matching types (int, float, string, or array), got {lt} and {rt}. Use explicit casts like int(x) or float(x)")
+  of boSub, boMul, boDiv, boMod:
+    if lt.kind == tkInt and rt.kind == tkInt:
+      e.typ = tInt(); return e.typ
+    elif lt.kind == tkFloat and rt.kind == tkFloat:
+      e.typ = tFloat(); return e.typ
+    else:
+      raise newTypecheckError(e.pos, &"arithmetic operation requires matching types, got {lt} and {rt}. Use explicit casts like int(x) or float(x)")
+  of boEq, boNe, boLt, boLe, boGt, boGe:
+    # Special handling for nil comparisons
+    if (lt.kind == tkRef and rt.kind == tkRef) and
+       (lt.inner.kind == tkVoid or rt.inner.kind == tkVoid):
+      # Allow comparison between any reference type and nil (Ref[void])
+      if e.bop notin {boEq, boNe}:
+        raise newTypecheckError(e.pos, &"only == and != are allowed for reference comparisons")
+      e.typ = tBool(); return e.typ
+    elif lt.kind != rt.kind:
+      raise newTypecheckError(e.pos, &"comparison type mismatch: {lt} vs {rt}")
+    else:
+      # Only allow comparison operators on comparable types
+      if lt.kind notin {tkInt, tkFloat, tkString, tkChar, tkBool, tkRef}:
+        raise newTypecheckError(e.pos, &"comparison not supported for type {lt}")
+      # Only equality operators allowed for references
+      if lt.kind == tkRef and e.bop notin {boEq, boNe}:
+        raise newTypecheckError(e.pos, &"only == and != are allowed for reference comparisons")
+      e.typ = tBool(); return e.typ
+  of boAnd, boOr:
+    if lt.kind != tkBool or rt.kind != tkBool: raise newTypecheckError(e.pos, "and/or expects bool")
+    e.typ = tBool(); return e.typ
+
+
 proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst; expectedTy: EtchType = nil): EtchType =
   case e.kind
-  of ekInt: e.typ = tInt(); return e.typ
-  of ekFloat: e.typ = tFloat(); return e.typ
-  of ekString: e.typ = tString(); return e.typ
-  of ekChar: e.typ = tChar(); return e.typ
-  of ekBool: e.typ = tBool(); return e.typ
-  of ekNil:
-    # nil has a special type that can be compared to any reference type
-    e.typ = tRef(tVoid()); return e.typ  # Use Ref[void] as the nil type
-  of ekVar:
-    if not sc.types.hasKey(e.vname):
-      raise newTypecheckError(e.pos, &"use of undeclared variable '{e.vname}'")
-    e.typ = sc.types[e.vname]; return e.typ
-  of ekUn:
-    let t0 = inferExprTypes(prog, fd, sc, e.ue, subst)
-    case e.uop
-    of uoNeg:
-      if t0.kind == tkInt:
-        e.typ = tInt(); return e.typ
-      elif t0.kind == tkFloat:
-        e.typ = tFloat(); return e.typ
-      else:
-        raise newTypecheckError(e.pos, "unary - requires int or float")
-    of uoNot:
-      if t0.kind != tkBool: raise newTypecheckError(e.pos, "not on non-bool")
-      e.typ = tBool(); return e.typ
-  of ekBin:
-    let lt = inferExprTypes(prog, fd, sc, e.lhs, subst)
-    let rt = inferExprTypes(prog, fd, sc, e.rhs, subst)
-
-    # Try user-defined operator overload first (except for logical operators)
-    # Skip operator overloading if we're currently inside an operator function to avoid infinite recursion
-    if e.bop notin {boAnd, boOr} and (fd == nil or not isOperatorFunction(fd.name)):
-      let opName = binOpToString(e.bop)
-      # Check if a user-defined operator exists for these argument types
-      for fname, fdecls in prog.funs:
-        if fname == opName:
-          for fdecl in fdecls:
-            if fdecl.params.len == 2:
-              # Try to match parameter types with our argument types
-              let param1Type = fdecl.params[0].typ
-              let param2Type = fdecl.params[1].typ
-
-              # Check if types match (simplified matching for now)
-              if param1Type.kind == lt.kind and param2Type.kind == rt.kind:
-                # Create function call expression
-                let callExpr = Expr(
-                  kind: ekCall,
-                  fname: opName,
-                  args: @[e.lhs, e.rhs],
-                  pos: e.pos
-                )
-
-                let resultType = inferCall(prog, sc, callExpr, subst)
-                # Replace this binary expression with a function call
-                e[] = Expr(
-                  kind: ekCall,
-                  fname: callExpr.fname,  # Use the mangled name from inferCall
-                  args: @[e.lhs, e.rhs],
-                  instTypes: callExpr.instTypes,
-                  typ: resultType,
-                  pos: e.pos
-                )[]
-                return resultType
-
-    # Built-in operator handling
-    case e.bop
-    of boAdd:
-      if lt.kind == tkInt and rt.kind == tkInt:
-        e.typ = tInt(); return e.typ
-      elif lt.kind == tkFloat and rt.kind == tkFloat:
-        e.typ = tFloat(); return e.typ
-      elif lt.kind == tkString and rt.kind == tkString:
-        # String concatenation (strings are array[char])
-        e.typ = tString(); return e.typ
-      elif lt.kind == tkArray and rt.kind == tkArray:
-        # Array concatenation - types must match
-        if not typeEq(lt.inner, rt.inner):
-          raise newTypecheckError(e.pos, &"array concatenation requires matching element types, got array[{lt.inner}] + array[{rt.inner}]")
-        e.typ = tArray(lt.inner); return e.typ
-      else:
-        raise newTypecheckError(e.pos, &"+ operator requires matching types (int, float, string, or array), got {lt} and {rt}. Use explicit casts like int(x) or float(x)")
-    of boSub, boMul, boDiv, boMod:
-      if lt.kind == tkInt and rt.kind == tkInt:
-        e.typ = tInt(); return e.typ
-      elif lt.kind == tkFloat and rt.kind == tkFloat:
-        e.typ = tFloat(); return e.typ
-      else:
-        raise newTypecheckError(e.pos, &"arithmetic operation requires matching types, got {lt} and {rt}. Use explicit casts like int(x) or float(x)")
-    of boEq, boNe, boLt, boLe, boGt, boGe:
-      # Special handling for nil comparisons
-      if (lt.kind == tkRef and rt.kind == tkRef) and
-         (lt.inner.kind == tkVoid or rt.inner.kind == tkVoid):
-        # Allow comparison between any reference type and nil (Ref[void])
-        if e.bop notin {boEq, boNe}:
-          raise newTypecheckError(e.pos, &"only == and != are allowed for reference comparisons")
-        e.typ = tBool(); return e.typ
-      elif lt.kind != rt.kind:
-        raise newTypecheckError(e.pos, &"comparison type mismatch: {lt} vs {rt}")
-      else:
-        # Only allow comparison operators on comparable types
-        if lt.kind notin {tkInt, tkFloat, tkString, tkChar, tkBool, tkRef}:
-          raise newTypecheckError(e.pos, &"comparison not supported for type {lt}")
-        # Only equality operators allowed for references
-        if lt.kind == tkRef and e.bop notin {boEq, boNe}:
-          raise newTypecheckError(e.pos, &"only == and != are allowed for reference comparisons")
-        e.typ = tBool(); return e.typ
-    of boAnd, boOr:
-      if lt.kind != tkBool or rt.kind != tkBool: raise newTypecheckError(e.pos, "and/or expects bool")
-      e.typ = tBool(); return e.typ
-  of ekCall:
-    # Handle builtins first using unified registry
-    if isBuiltin(e.fname):
-      # Get argument types by inferring each argument
-      var argTypes: seq[EtchType] = @[]
-      for arg in e.args:
-        let argType = inferExprTypes(prog, fd, sc, arg, subst)
-        argTypes.add(argType)
-
-      # Perform built-in type checking using unified registry
-      try:
-        let resultType = performBuiltinTypeCheck(e.fname, argTypes, e.pos)
-        e.instTypes = @[]
-        e.typ = resultType
-        return resultType
-      except EtchError as err:
-        raise convertBuiltinError(err, e.pos)
-    else:
-      # Regular function call - handle monomorphization
-      return inferCall(prog, sc, e, subst)
-  of ekNewRef:
-    let t0 = inferExprTypes(prog, fd, sc, e.init, subst)
-    e.refInner = t0
-    e.typ = tRef(t0)
-    return e.typ
-  of ekDeref:
-    let t0 = inferExprTypes(prog, fd, sc, e.refExpr, subst)
-    if t0.kind != tkRef: raise newTypecheckError(e.pos, "deref expects Ref[...]")
-    e.typ = t0.inner
-    return e.typ
-  of ekArray:
-    # Array literal: [elem1, elem2, ...] - infer element type from first element
-    if e.elements.len == 0:
-      raise newTypecheckError(e.pos, "empty arrays not supported - cannot infer element type")
-    let elemType = inferExprTypes(prog, fd, sc, e.elements[0], subst)
-    # Verify all elements have the same type
-    for i in 1..<e.elements.len:
-      let t = inferExprTypes(prog, fd, sc, e.elements[i], subst)
-      if not typeEq(elemType, t):
-        raise newTypecheckError(e.elements[i].pos, &"array element type mismatch: expected {elemType}, got {t}")
-    e.typ = tArray(elemType)
-    return e.typ
-  of ekIndex:
-    let arrayType = inferExprTypes(prog, fd, sc, e.arrayExpr, subst)
-    let indexType = inferExprTypes(prog, fd, sc, e.indexExpr, subst)
-    if arrayType.kind notin {tkArray, tkString}:
-      raise newTypecheckError(e.pos, &"indexing requires array or string type, got {arrayType}")
-    if indexType.kind != tkInt:
-      raise newTypecheckError(e.indexExpr.pos, &"index must be int, got {indexType}")
-    if arrayType.kind == tkString:
-      e.typ = tChar()
-    else:
-      e.typ = arrayType.inner
-    return e.typ
-  of ekSlice:
-    let arrayType = inferExprTypes(prog, fd, sc, e.sliceExpr, subst)
-    if arrayType.kind notin {tkArray, tkString}:
-      raise newTypecheckError(e.pos, &"slicing requires array or string type, got {arrayType}")
-    # Check start expression if present
-    if e.startExpr.isSome:
-      let startType = inferExprTypes(prog, fd, sc, e.startExpr.get, subst)
-      if startType.kind != tkInt:
-        raise newTypecheckError(e.startExpr.get.pos, &"slice start must be int, got {startType}")
-    # Check end expression if present
-    if e.endExpr.isSome:
-      let endType = inferExprTypes(prog, fd, sc, e.endExpr.get, subst)
-      if endType.kind != tkInt:
-        raise newTypecheckError(e.endExpr.get.pos, &"slice end must be int, got {endType}")
-    # Slicing returns the same array type
-    e.typ = arrayType
-    return e.typ
-  of ekArrayLen:
-    # Array/String length operator: #array/#string -> int
-    let arrayType = inferExprTypes(prog, fd, sc, e.lenExpr, subst)
-    if arrayType.kind notin {tkArray, tkString}:
-      raise newTypecheckError(e.pos, &"length operator # requires array or string type, got {arrayType}")
-    e.typ = tInt()
-    return e.typ
-  of ekCast:
-    # Explicit type cast: type(expr)
-    let fromType = inferExprTypes(prog, fd, sc, e.castExpr, subst)
-    let toType = e.castType
-
-    # Define allowed conversions
-    var castAllowed = false
-    if (fromType.kind == tkInt and toType.kind == tkFloat) or
-       (fromType.kind == tkFloat and toType.kind == tkInt) or
-       (fromType.kind == tkInt and toType.kind == tkString) or
-       (fromType.kind == tkFloat and toType.kind == tkString):
-      castAllowed = true
-    # Allow casting from distinct types to their base type
-    elif fromType.kind == tkDistinct and typeEq(fromType.inner, toType):
-      castAllowed = true
-    # Allow casting from base type to distinct type
-    elif toType.kind == tkDistinct and typeEq(fromType, toType.inner):
-      castAllowed = true
-
-    if not castAllowed:
-      raise newTypecheckError(e.pos, &"invalid cast from {fromType} to {toType}")
-
-    e.typ = toType
-    return e.typ
-  of ekOptionSome:
-    let innerType = inferExprTypes(prog, fd, sc, e.someExpr, subst)
-    e.typ = tOption(innerType)
-    return e.typ
-  of ekOptionNone:
-    # Try to use expected type if available
-    if expectedTy != nil and expectedTy.kind == tkOption:
-      return expectedTy
-    else:
-      # none requires explicit type annotation to determine option type
-      raise newTypecheckError(e.pos, "none requires explicit type annotation")
-  of ekResultOk:
-    let innerType = inferExprTypes(prog, fd, sc, e.okExpr, subst)
-    e.typ = tResult(innerType)
-    return e.typ
-  of ekResultErr:
-    # Try to use expected type if available
-    if expectedTy != nil and expectedTy.kind == tkResult:
-      let errTy = inferExprTypes(prog, fd, sc, e.errExpr, subst)
-      if errTy.kind != tkString:
-        raise newTypecheckError(e.pos, "error constructor requires string argument")
-      return expectedTy
-    else:
-      # error requires explicit type annotation to determine result type
-      raise newTypecheckError(e.pos, "error requires explicit type annotation")
-  of ekMatch:
-    # Match expressions need special handling - implemented in statements due to circular import
-    # Return a default type for now - the real type will be set by inferMatchExpr
-    if e.typ == nil:
-      return tVoid()  # Placeholder
-    else:
-      return e.typ
-  of ekObjectLiteral:
-    # Object literal: try to infer type from expected type or error
-    if expectedTy != nil and expectedTy.kind == tkObject:
-      # Verify all required fields are provided and types match
-      let objType = expectedTy
-      var providedFields: seq[string] = @[]
-      for fieldInit in e.fieldInits:
-        providedFields.add(fieldInit.name)
-
-        # Find field in object type
-        var fieldType: EtchType = nil
-        for objField in objType.fields:
-          if objField.name == fieldInit.name:
-            fieldType = objField.fieldType
-            break
-
-        if fieldType == nil:
-          raise newTypecheckError(e.pos, &"object type '{objType.name}' has no field '{fieldInit.name}'")
-
-        # Type check the field value
-        let valueType = inferExprTypes(prog, fd, sc, fieldInit.value, subst, fieldType)
-        if not canAssignDistinct(fieldType, valueType):
-          raise newTypecheckError(e.pos, &"field '{fieldInit.name}' expects type '{fieldType}', got '{valueType}'")
-
-      # Check that all required fields are provided (those without defaults)
-      for objField in objType.fields:
-        if objField.defaultValue.isNone and objField.name notin providedFields:
-          raise newTypecheckError(e.pos, &"missing required field '{objField.name}' in object literal")
-
-      e.typ = objType
-      e.objectType = objType
-      return objType
-    else:
-      raise newTypecheckError(e.pos, "object literal requires explicit type annotation")
-  of ekFieldAccess:
-    # obj.field - get type of object and look up field type
-    let objType = inferExprTypes(prog, fd, sc, e.objectExpr, subst)
-
-    # Handle reference types - dereference automatically
-    var actualObjType = objType
-    if objType.kind == tkRef:
-      actualObjType = objType.inner
-
-    if actualObjType.kind == tkObject:
-      # Look up field in object type
-      for field in actualObjType.fields:
-        if field.name == e.fieldName:
-          e.typ = field.fieldType
-          return field.fieldType
-      raise newTypecheckError(e.pos, &"object type '{actualObjType.name}' has no field '{e.fieldName}'")
-    else:
-      raise newTypecheckError(e.pos, &"field access requires object type, got '{objType}'")
-  of ekNew:
-    # new(Type) or new(Type, initExpr) or new(value) with type inference - returns ref[Type]
-    let targetType = e.newType
-    var resolvedType: EtchType
-
-    if targetType == nil:
-      # Type inference from initialization expression: new(42) -> ref[int]
-      if e.initExpr.isNone:
-        raise newTypecheckError(e.pos, "new() requires either a type or initialization value for type inference")
-      let initType = inferExprTypes(prog, fd, sc, e.initExpr.get, subst)
-      resolvedType = initType
-    else:
-      # Explicit type provided: new[int] or new[int]{42}
-      resolvedType = targetType
-    # Resolve user-defined types
-    if resolvedType.kind == tkUserDefined:
-      let userType = resolveUserType(sc, resolvedType.name)
-      if userType == nil:
-        raise newTypecheckError(e.pos, &"unknown type '{resolvedType.name}'")
-      resolvedType = userType
-
-    # If there's an initialization expression, type check it
-    if e.initExpr.isSome:
-      let initType = inferExprTypes(prog, fd, sc, e.initExpr.get, subst, resolvedType)
-      if not canAssignDistinct(resolvedType, initType):
-        raise newTypecheckError(e.pos, &"cannot initialize '{resolvedType}' with '{initType}'")
-
-    let refType = tRef(resolvedType)
-    e.typ = refType
-    return refType
+  of ekInt, ekFloat, ekString, ekChar, ekBool, ekNil: return inferLiteralExpr(prog, fd, sc, e, subst)
+  of ekVar: return inferVarExpr(prog, fd, sc, e, subst)
+  of ekUn: return inferUnOp(prog, fd, sc, e, subst)
+  of ekBin: return inferBinOp(prog, fd, sc, e, subst)
+  of ekCall: return inferCallExpr(prog, fd, sc, e, subst)
+  of ekNewRef: return inferNewRefExpr(prog, fd, sc, e, subst)
+  of ekDeref: return inferDerefExpr(prog, fd, sc, e, subst)
+  of ekArray: return inferArrayExpr(prog, fd, sc, e, subst)
+  of ekIndex: return inferIndexExpr(prog, fd, sc, e, subst)
+  of ekSlice: return inferSliceExpr(prog, fd, sc, e, subst)
+  of ekArrayLen: return inferArrayLenExpr(prog, fd, sc, e, subst)
+  of ekCast: return inferCastExpr(prog, fd, sc, e, subst)
+  of ekOptionSome: return inferOptionSomeExpr(prog, fd, sc, e, subst)
+  of ekOptionNone: return inferOptionNoneExpr(prog, fd, sc, e, subst, expectedTy)
+  of ekResultOk: return inferResultOkExpr(prog, fd, sc, e, subst)
+  of ekResultErr: return inferResultErrExpr(prog, fd, sc, e, subst, expectedTy)
+  of ekMatch: return inferMatchExpr(prog, fd, sc, e, subst)
+  of ekObjectLiteral: return inferObjectLiteralExpr(prog, fd, sc, e, subst, expectedTy)
+  of ekFieldAccess: return inferFieldAccessExpr(prog, fd, sc, e, subst)
+  of ekNew: return inferNewExpr(prog, fd, sc, e, subst)

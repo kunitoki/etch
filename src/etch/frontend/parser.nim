@@ -98,9 +98,9 @@ proc getOperatorPrecedence(op: string): int =
   of "<",">","<=",">=": 4
   of "+","-": 5
   of "*","/","%": 6
-  of "@": 7  # deref has high precedence
-  of "[": 8  # array indexing/slicing has highest precedence
-  of ".": 8  # UFCS method calls have same precedence as array indexing
+  of "@": 9  # deref has very high precedence, higher than field access
+  of "[": 8  # array indexing/slicing has high precedence
+  of ".": 7  # field access and UFCS method calls
   else: 0
 
 proc binOp(op: string): BinOp =
@@ -152,9 +152,8 @@ proc parseBuiltinKeywordExpr(p: Parser; t: Token): Expr =
       var initExpr = none(Expr)
       # Check for optional {value} initialization
       if p.cur.kind == tkSymbol and p.cur.lex == "{":
-        discard p.eat()  # consume "{"
+        # Let parseExpr handle the entire object literal including the braces
         initExpr = some(p.parseExpr())
-        discard p.expect(tkSymbol, "}")
 
       return Expr(kind: ekNew, newType: typeExpr, initExpr: initExpr, pos: p.posOf(t))
     else:
@@ -308,7 +307,7 @@ proc parseSymbolExpr(p: Parser; t: Token): Expr =
     let e = p.parseExpr(6)
     return Expr(kind: ekUn, uop: uoNot, ue: e, pos: p.posOf(t))
   of "@":
-    let e = p.parseExpr(6)
+    let e = p.parseExpr(100)  # Maximum precedence
     return Expr(kind: ekDeref, refExpr: e, pos: p.posOf(t))
   of "#":
     let e = p.parseExpr(6)

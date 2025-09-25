@@ -35,11 +35,8 @@ proc inferTypeFromExpr*(expr: Expr): EtchType =
   ## Simple type inference for parsing context - infer type without full context
   ## This is used when no type annotation is provided in variable declarations
   case expr.kind
-  of ekInt: return tInt()
-  of ekFloat: return tFloat()
-  of ekString: return tString()
-  of ekBool: return tBool()
-  of ekNil: return tRef(tVoid())  # nil has type Ref[void]
+  of ekInt, ekFloat, ekString, ekChar, ekBool, ekNil:
+    return inferLiteralType(expr.kind)
   of ekCast: return expr.castType  # cast expression has the target cast type
   of ekArray:
     if expr.elements.len == 0:
@@ -129,6 +126,35 @@ proc inferTypeFromExpr*(expr: Expr): EtchType =
   of ekResultErr:
     # error(msg) cannot be type-inferred without context - requires type annotation
     return nil
+  of ekBin:
+    # Handle binary expressions
+    let leftType = inferTypeFromExpr(expr.lhs)
+    let rightType = inferTypeFromExpr(expr.rhs)
+    if leftType == nil or rightType == nil:
+      return nil
+
+    case expr.bop
+    of boAdd, boSub, boMul, boDiv, boMod:
+      # Arithmetic operations: int + int = int, float + float = float
+      if leftType.kind == tkInt and rightType.kind == tkInt:
+        return tInt()
+      elif leftType.kind == tkFloat and rightType.kind == tkFloat:
+        return tFloat()
+      # Mixed operations (int + float) would require promotion, but for simplicity return nil
+      else:
+        return nil
+    of boEq, boNe, boLt, boLe, boGt, boGe:
+      # Comparison operations always return bool
+      if typeEq(leftType, rightType):
+        return tBool()
+      else:
+        return nil
+    of boAnd, boOr:
+      # Logical operations: bool && bool = bool
+      if leftType.kind == tkBool and rightType.kind == tkBool:
+        return tBool()
+      else:
+        return nil
   of ekObjectLiteral:
     # Object literals need type checking context to resolve their type
     return nil
@@ -148,6 +174,9 @@ proc inferTypeFromExpr*(expr: Expr): EtchType =
         return nil
     else:
       return nil
+  of ekArrayLen:
+    # Array length always returns int
+    return tInt()
   else:
     # For other expressions (variables, etc.), we cannot infer the type
     # without a type checker - return nil to indicate type annotation is required

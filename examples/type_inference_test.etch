@@ -41,4 +41,9 @@ fn main() -> void {
   let explicit_limit: int = 100; // explicitly typed
   print(inferred_count);
   print(explicit_limit);
+
+  // Was failing
+  seed(42);
+  var xxx = rand(10) % 2;
+  print(xxx);
 }
