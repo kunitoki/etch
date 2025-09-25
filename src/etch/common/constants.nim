@@ -20,13 +20,11 @@ const
   BYTECODE_CACHE_DIR* = "__etch__"
   BYTECODE_FILE_EXTENSION* = ".etcx"
 
-# Version constants
-const
-  AST_VERSION* = 2
-
 # Global names
 const
   MAIN_FUNCTION_NAME* = "main"
+  GLOBAL_INIT_FUNC_NAME* = "__global_init__"
+  GLOBAL_FINI_FUNC_NAME* = "__global_fini__"
 
 # Runtime constants
 const

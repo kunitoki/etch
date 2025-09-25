@@ -3,7 +3,7 @@
 
 import std/[tables, options, hashes, sequtils, strformat, strutils]
 import ../frontend/ast, serialize
-import ../common/[logging, types]
+import ../common/[logging, types, constants]
 export serialize
 
 type
@@ -694,11 +694,11 @@ proc compileProgram*(astProg: Program, sourceHash: string, sourceFile: string = 
   # Create global initialization function if needed
   if globalInitCode.len > 0:
     logBytecode(flags, "Creating global initialization function with " & $globalInitCode.len & " statements")
-    ctx.currentFunction = "__global_init__"
+    ctx.currentFunction = GLOBAL_INIT_FUNC_NAME
     ctx.localVars = @[]
 
     let globalInitAddr = result.instructions.len
-    result.functions["__global_init__"] = globalInitAddr
+    result.functions[GLOBAL_INIT_FUNC_NAME] = globalInitAddr
 
     # Compile all global initialization statements
     for stmt in globalInitCode:

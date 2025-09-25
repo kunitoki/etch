@@ -3,7 +3,7 @@
 
 import std/[tables, strformat, strutils, random, json]
 import ../frontend/ast, bytecode, debugger
-import ../common/constants
+import ../common/[constants, errors, types]
 
 
 type
@@ -42,14 +42,9 @@ type
     program*: BytecodeProgram
     pc*: int  # Program counter
     globals*: Table[string, V]
-    mode*: VMMode
 
     # Debugger support (optional - zero cost when nil)
     debugger*: EtchDebugger
-
-  VMMode* = enum
-    vmAST,      # AST interpretation mode
-    vmBytecode  # Bytecode execution mode
 
 proc vInt(x: int64): V = V(kind: tkInt, ival: x)
 proc vFloat(x: float64): V = V(kind: tkFloat, fval: x)
@@ -87,19 +82,35 @@ proc truthy(v: V): bool =
   of tkFloat: v.fval != 0.0
   else: false
 
+proc getCurrentPos(vm: VM): Pos =
+  ## Get current source position from the executing instruction
+  if vm.pc > 0 and vm.pc <= vm.program.instructions.len:
+    let instr = vm.program.instructions[vm.pc - 1]
+    return Pos(
+      line: instr.debug.line,
+      col: instr.debug.col,
+      filename: instr.debug.sourceFile
+    )
+  else:
+    return Pos()
+
+proc raiseRuntimeError(vm: VM, msg: string) =
+  ## Raise a runtime error with current position information
+  raise newRuntimeError(vm.getCurrentPos(), msg)
+
 # Bytecode VM functionality
 proc push(vm: VM; val: V) =
   vm.stack.add(val)
 
 proc pop(vm: VM): V =
   if vm.stack.len == 0:
-    raise newException(ValueError, "Stack underflow")
+    vm.raiseRuntimeError("Stack underflow")
   result = vm.stack[^1]
   vm.stack.setLen(vm.stack.len - 1)
 
 proc peek(vm: VM): V =
   if vm.stack.len == 0:
-    raise newException(ValueError, "Stack empty")
+    vm.raiseRuntimeError("Stack empty")
   vm.stack[^1]
 
 proc getVar(vm: VM, name: string): V =
@@ -113,7 +124,7 @@ proc getVar(vm: VM, name: string): V =
   if vm.globals.hasKey(name):
     return vm.globals[name]
 
-  raise newException(ValueError, &"Unknown variable: {name}")
+  vm.raiseRuntimeError(&"Unknown variable: {name}")
 
 proc setVar(vm: VM, name: string, value: V) =
   # Set in current frame if we're in a function, otherwise global
@@ -134,12 +145,20 @@ proc opLoadNilImpl(vm: VM, instr: Instruction) = vm.push(vRef(-1))
 proc opPopImpl(vm: VM, instr: Instruction) = discard vm.pop()
 proc opDupImpl(vm: VM, instr: Instruction) = vm.push(vm.peek())
 
-proc executeBinaryOp(vm: VM, operationName: string, intOp: proc(a, b: int64): int64, floatOp: proc(a, b: float64): float64, stringOp: proc(a, b: string): string = nil, arrayOp: proc(a, b: seq[V]): seq[V] = nil, supportsStrings: bool = false, supportsArrays: bool = false, intValidator: proc(a, b: int64): void = nil, floatValidator: proc(a, b: float64): void = nil) =
+proc executeBinaryOp(vm: VM, operationName: string,
+    intOp: proc(a, b: int64): int64,
+    floatOp: proc(a, b: float64): float64,
+    stringOp: proc(a, b: string): string = nil,
+    arrayOp: proc(a, b: seq[V]): seq[V] = nil,
+    supportsStrings: bool = false,
+    supportsArrays: bool = false,
+    intValidator: proc(a, b: int64): void = nil,
+    floatValidator: proc(a, b: float64): void = nil) =
   let b = vm.pop()
   let a = vm.pop()
 
   if a.kind != b.kind:
-    raise newException(ValueError, "Type mismatch in " & operationName)
+    vm.raiseRuntimeError("Type mismatch in " & operationName)
 
   case a.kind:
   of tkInt:
@@ -154,16 +173,18 @@ proc executeBinaryOp(vm: VM, operationName: string, intOp: proc(a, b: int64): in
     if supportsStrings and stringOp != nil:
       vm.push(vString(stringOp(a.sval, b.sval)))
     else:
-      raise newException(ValueError, "Unsupported types in " & operationName)
+      vm.raiseRuntimeError("Unsupported types in " & operationName)
   of tkArray:
     if supportsArrays and arrayOp != nil:
       vm.push(vArray(arrayOp(a.aval, b.aval)))
     else:
-      raise newException(ValueError, "Unsupported types in " & operationName)
+      vm.raiseRuntimeError("Unsupported types in " & operationName)
   else:
-    raise newException(ValueError, "Unsupported types in " & operationName)
+    vm.raiseRuntimeError("Unsupported types in " & operationName)
 
-proc executeUnaryOp(vm: VM, operationName: string, intOp: proc(a: int64): int64, floatOp: proc(a: float64): float64) =
+proc executeUnaryOp(vm: VM, operationName: string,
+    intOp: proc(a: int64): int64,
+    floatOp: proc(a: float64): float64) =
   let a = vm.pop()
   case a.kind:
   of tkInt:
@@ -171,14 +192,24 @@ proc executeUnaryOp(vm: VM, operationName: string, intOp: proc(a: int64): int64,
   of tkFloat:
     vm.push(vFloat(floatOp(a.fval)))
   else:
-    raise newException(ValueError, operationName & " requires numeric type")
+    vm.raiseRuntimeError(operationName & " requires numeric type")
 
-proc executeComparisonOp(vm: VM, operationName: string, intOp: proc(a, b: int64): bool, floatOp: proc(a, b: float64): bool, stringOp: proc(a, b: string): bool = nil, charOp: proc(a, b: char): bool = nil, boolOp: proc(a, b: bool): bool = nil, refOp: proc(a, b: int): bool = nil, supportsStrings: bool = false, supportsChars: bool = false, supportsBools: bool = false, supportsRefs: bool = false) =
+proc executeComparisonOp(vm: VM, operationName: string,
+    intOp: proc(a, b: int64): bool,
+    floatOp: proc(a, b: float64): bool,
+    stringOp: proc(a, b: string): bool = nil,
+    charOp: proc(a, b: char): bool = nil,
+    boolOp: proc(a, b: bool): bool = nil,
+    refOp: proc(a, b: int): bool = nil,
+    supportsStrings: bool = false,
+    supportsChars: bool = false,
+    supportsBools: bool = false,
+    supportsRefs: bool = false) =
   let b = vm.pop()
   let a = vm.pop()
 
   if a.kind != b.kind:
-    raise newException(ValueError, "Type mismatch in " & operationName)
+    vm.raiseRuntimeError("Type mismatch in " & operationName)
 
   let result = case a.kind:
   of tkInt:
@@ -189,24 +220,29 @@ proc executeComparisonOp(vm: VM, operationName: string, intOp: proc(a, b: int64)
     if supportsStrings and stringOp != nil:
       stringOp(a.sval, b.sval)
     else:
-      raise newException(ValueError, "Unsupported types in " & operationName)
+      vm.raiseRuntimeError("Unsupported types in " & operationName)
+      false  # This will never be reached due to exception, but needed for compilation
   of tkChar:
     if supportsChars and charOp != nil:
       charOp(a.cval, b.cval)
     else:
-      raise newException(ValueError, "Unsupported types in " & operationName)
+      vm.raiseRuntimeError("Unsupported types in " & operationName)
+      false  # This will never be reached due to exception, but needed for compilation
   of tkBool:
     if supportsBools and boolOp != nil:
       boolOp(a.bval, b.bval)
     else:
-      raise newException(ValueError, "Unsupported types in " & operationName)
+      vm.raiseRuntimeError("Unsupported types in " & operationName)
+      false  # This will never be reached due to exception, but needed for compilation
   of tkRef:
     if supportsRefs and refOp != nil:
       refOp(a.refId, b.refId)
     else:
-      raise newException(ValueError, "Unsupported types in " & operationName)
+      vm.raiseRuntimeError("Unsupported types in " & operationName)
+      false  # This will never be reached due to exception, but needed for compilation
   else:
-    raise newException(ValueError, "Unsupported types in " & operationName)
+    vm.raiseRuntimeError("Unsupported types in " & operationName)
+    false  # This will never be reached due to exception, but needed for compilation
 
   vm.push(vBool(result))
 
@@ -234,16 +270,16 @@ proc opDivImpl(vm: VM, instr: Instruction) =
     proc(a, b: int64): int64 = a div b,
     proc(a, b: float64): float64 = a / b,
     intValidator = proc(a, b: int64): void =
-      if b == 0: raise newException(ValueError, "Division by zero"),
+      if b == 0: vm.raiseRuntimeError("Division by zero"),
     floatValidator = proc(a, b: float64): void =
-      if b == 0.0: raise newException(ValueError, "Division by zero"))
+      if b == 0.0: vm.raiseRuntimeError("Division by zero"))
 
 proc opModImpl(vm: VM, instr: Instruction) =
   executeBinaryOp(vm, "modulo",
     proc(a, b: int64): int64 = a mod b,
     proc(a, b: float64): float64 = 0.0, # Not used - modulo doesn't support floats
     intValidator = proc(a, b: int64): void =
-      if b == 0: raise newException(ValueError, "Modulo by zero"))
+      if b == 0: vm.raiseRuntimeError("Modulo by zero"))
 
 proc opNegImpl(vm: VM, instr: Instruction) =
   executeUnaryOp(vm, "Negation",
@@ -300,20 +336,20 @@ proc opAndImpl(vm: VM, instr: Instruction) =
   let b = vm.pop()
   let a = vm.pop()
   if a.kind != tkBool or b.kind != tkBool:
-    raise newException(ValueError, "Logical AND requires bools")
+    vm.raiseRuntimeError("Logical AND requires bools")
   vm.push(vBool(a.bval and b.bval))
 
 proc opOrImpl(vm: VM, instr: Instruction) =
   let b = vm.pop()
   let a = vm.pop()
   if a.kind != tkBool or b.kind != tkBool:
-    raise newException(ValueError, "Logical OR requires bools")
+    vm.raiseRuntimeError("Logical OR requires bools")
   vm.push(vBool(a.bval or b.bval))
 
 proc opNotImpl(vm: VM, instr: Instruction) =
   let a = vm.pop()
   if a.kind != tkBool:
-    raise newException(ValueError, "Logical NOT requires bool")
+    vm.raiseRuntimeError("Logical NOT requires bool")
   vm.push(vBool(not a.bval))
 
 proc opNewRefImpl(vm: VM, instr: Instruction) =
@@ -323,12 +359,12 @@ proc opNewRefImpl(vm: VM, instr: Instruction) =
 proc opDerefImpl(vm: VM, instr: Instruction) =
   let refVal = vm.pop()
   if refVal.kind != tkRef:
-    raise newException(ValueError, "Deref expects reference")
+    vm.raiseRuntimeError("Deref expects reference")
   if refVal.refId < 0 or refVal.refId >= vm.heap.len:
-    raise newException(ValueError, "Invalid reference")
+    vm.raiseRuntimeError("Invalid reference")
   let cell = vm.heap[refVal.refId]
   if not cell.alive:
-    raise newException(ValueError, "Dereferencing dead reference")
+    vm.raiseRuntimeError("Dereferencing dead reference")
   vm.push(cell.val)
 
 proc opMakeArrayImpl(vm: VM, instr: Instruction) =
@@ -342,18 +378,18 @@ proc opArrayGetImpl(vm: VM, instr: Instruction) =
   let index = vm.pop()
   let array = vm.pop()
   if index.kind != tkInt:
-    raise newException(ValueError, "Index must be int")
+    vm.raiseRuntimeError("Index must be int")
   case array.kind
   of tkArray:
     if index.ival < 0 or index.ival >= array.aval.len:
-      raise newException(ValueError, &"Array index {index.ival} out of bounds")
+      vm.raiseRuntimeError(&"Array index {index.ival} out of bounds")
     vm.push(array.aval[index.ival])
   of tkString:
     if index.ival < 0 or index.ival >= array.sval.len:
-      raise newException(ValueError, &"String index {index.ival} out of bounds")
+      vm.raiseRuntimeError(&"String index {index.ival} out of bounds")
     vm.push(vChar(array.sval[index.ival]))
   else:
-    raise newException(ValueError, "Indexing requires array or string type")
+    vm.raiseRuntimeError("Indexing requires array or string type")
 
 proc opArraySliceImpl(vm: VM, instr: Instruction) =
   let endVal = vm.pop()
@@ -378,7 +414,7 @@ proc opArraySliceImpl(vm: VM, instr: Instruction) =
     else:
       vm.push(vString(array.sval[actualStart..<actualEnd]))
   else:
-    raise newException(ValueError, "Slicing requires array or string type")
+    vm.raiseRuntimeError("Slicing requires array or string type")
 
 proc opArrayLenImpl(vm: VM, instr: Instruction) =
   let array = vm.pop()
@@ -388,7 +424,7 @@ proc opArrayLenImpl(vm: VM, instr: Instruction) =
   of tkString:
     vm.push(vInt(array.sval.len.int64))
   else:
-    raise newException(ValueError, "Length operator requires array or string type")
+    vm.raiseRuntimeError("Length operator requires array or string type")
 
 proc opCastImpl(vm: VM, instr: Instruction) =
   let source = vm.pop()
@@ -397,19 +433,19 @@ proc opCastImpl(vm: VM, instr: Instruction) =
     case source.kind:
     of tkFloat: vm.push(vInt(source.fval.int64))
     of tkInt: vm.push(source)
-    else: raise newException(ValueError, "invalid cast to int")
+    else: vm.raiseRuntimeError("invalid cast to int")
   of 2:
     case source.kind:
     of tkInt: vm.push(vFloat(source.ival.float64))
     of tkFloat: vm.push(source)
-    else: raise newException(ValueError, "invalid cast to float")
+    else: vm.raiseRuntimeError("invalid cast to float")
   of 3:
     case source.kind:
     of tkInt: vm.push(vString($source.ival))
     of tkFloat: vm.push(vString($source.fval))
-    else: raise newException(ValueError, "invalid cast to string")
+    else: vm.raiseRuntimeError("invalid cast to string")
   else:
-    raise newException(ValueError, "unsupported cast type")
+    vm.raiseRuntimeError("unsupported cast type")
 
 proc opMakeOptionSomeImpl(vm: VM, instr: Instruction) =
   let value = vm.pop()
@@ -457,21 +493,21 @@ proc opExtractSomeImpl(vm: VM, instr: Instruction) =
   if option.kind == tkOption and option.hasValue and option.wrappedVal != nil:
     vm.push(option.wrappedVal[])
   else:
-    raise newException(ValueError, "extractSome: not a Some value")
+    vm.raiseRuntimeError("extractSome: not a Some value")
 
 proc opExtractOkImpl(vm: VM, instr: Instruction) =
   let result = vm.pop()
   if result.kind == tkResult and result.hasValue and result.wrappedVal != nil:
     vm.push(result.wrappedVal[])
   else:
-    raise newException(ValueError, "extractOk: not an Ok value")
+    vm.raiseRuntimeError("extractOk: not an Ok value")
 
 proc opExtractErrImpl(vm: VM, instr: Instruction) =
   let result = vm.pop()
   if result.kind == tkResult and not result.hasValue and result.wrappedVal != nil:
     vm.push(result.wrappedVal[])
   else:
-    raise newException(ValueError, "extractErr: not an Err value")
+    vm.raiseRuntimeError("extractErr: not an Err value")
 
 proc opJumpImpl(vm: VM, instr: Instruction) =
   vm.pc = int(instr.arg)
@@ -523,10 +559,10 @@ proc opCallImpl(vm: VM, instr: Instruction): bool =
   if funcName == "deref":
     let refVal = vm.pop()
     if refVal.kind != tkRef:
-      raise newException(ValueError, "deref on non-ref")
+      vm.raiseRuntimeError("deref on non-ref")
     let cell = vm.heap[refVal.refId]
     if cell.isNil or not cell.alive:
-      raise newException(ValueError, "nil ref")
+      vm.raiseRuntimeError("nil ref")
     vm.push(cell.val)
     return true
 
@@ -666,7 +702,7 @@ proc opCallImpl(vm: VM, instr: Instruction): bool =
 
   # User-defined function call
   if not vm.program.functions.hasKey(funcName):
-    raise newException(ValueError, "Unknown function: " & funcName)
+    vm.raiseRuntimeError("Unknown function: " & funcName)
 
   # Create new frame
   let newFrame = Frame(
@@ -772,7 +808,7 @@ proc vmGetVariableValue*(vm: VM, name: string): V =
   if vm.globals.hasKey(name):
     return vm.globals[name]
 
-  raise newException(ValueError, &"Variable '{name}' not found")
+  vm.raiseRuntimeError(&"Variable '{name}' not found")
 
 proc vmInspectArrayElement*(vm: VM, arrayName: string, index: int): string =
   ## Inspect a specific array element for debugger
@@ -1067,7 +1103,6 @@ proc runBytecode*(vm: VM): int =
 proc newBytecodeVM*(program: BytecodeProgram): VM =
   ## Create a new bytecode VM instance
   VM(
-    mode: vmBytecode,
     stack: @[],
     heap: @[],
     callStack: @[],
@@ -1080,7 +1115,6 @@ proc newBytecodeVM*(program: BytecodeProgram): VM =
 proc newBytecodeVMWithDebugger*(program: BytecodeProgram, debugger: EtchDebugger): VM =
   ## Create a new bytecode VM instance with debugger attached
   VM(
-    mode: vmBytecode,
     stack: @[],
     heap: @[],
     callStack: @[],
