@@ -113,11 +113,21 @@ proc analyzeUnaryExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
   let i0 = analyzeExpr(e.ue, env, ctx)
   case e.uop
   of uoNeg:
-    if i0.known: return infoConst(-i0.cval)
+    if i0.known:
+      # Check for negation overflow: -IMin would overflow
+      if i0.cval == IMin:
+        raise newProverError(e.pos, "negation overflow: cannot negate minimum integer")
+      return infoConst(-i0.cval)
+
+    # For range negation, check if the range contains IMin
+    if i0.minv == IMin:
+      raise newProverError(e.pos, "potential negation overflow: range contains minimum integer")
+
     return Info(known: false, minv: (if i0.maxv == IMax: IMin else: -i0.maxv),
-                maxv: (if i0.minv == IMin: IMax else: -i0.minv), initialized: true)
+                maxv: (if i0.minv == IMin: IMax else: -i0.minv),
+                nonZero: i0.nonZero, initialized: true)
   of uoNot:
-    return infoBool(false) # boolean domain is tiny; not needed for arithmetic safety
+    return infoBool(if i0.known: (i0.cval == 0) else: false) # boolean domain is tiny; not needed for arithmetic safety
 
 
 proc analyzeBinaryExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
@@ -145,12 +155,14 @@ proc analyzeRandCall*(e: Expr, env: Env, ctx: ProverContext): Info =
   if e.args.len == 1:
     let maxInfo = analyzeExpr(e.args[0], env, ctx)
     if maxInfo.known:
-      # rand(max) returns 0 to max inclusive - can be zero unless min > 0
-      return Info(known: false, minv: 0, maxv: maxInfo.cval, nonZero: false, initialized: true)
+      # rand(max) returns 0 to max inclusive
+      let isNonZero = maxInfo.cval < 0  # Only non-zero if max is negative (then range is [0, max] where max < 0 means no valid values)
+      return Info(known: false, minv: 0, maxv: maxInfo.cval, nonZero: isNonZero, initialized: true)
     else:
       # max is in a range, use the maximum possible value as the upper bound
-      # rand(max) where max is in range [a, b] returns values in range [0, b]
-      return Info(known: false, minv: 0, maxv: max(0, maxInfo.maxv), nonZero: false, initialized: true)
+      # rand(max) where max is in range [a, b] returns values in range [0, max(0,b)]
+      let upperBound = max(0, maxInfo.maxv)
+      return Info(known: false, minv: 0, maxv: upperBound, nonZero: false, initialized: true)
   elif e.args.len == 2:
     let maxInfo = analyzeExpr(e.args[0], env, ctx)
     let minInfo = analyzeExpr(e.args[1], env, ctx)
@@ -162,9 +174,9 @@ proc analyzeRandCall*(e: Expr, env: Env, ctx: ProverContext): Info =
       if actualMin == actualMax:
         return infoConst(actualMin)
       else:
-        # For compile-time safety analysis, treat rand with constant args as having known value
-        # This allows multiplication safety checks to pass
-        return infoConst(actualMax)
+        # rand(max, min) returns a value in range [actualMin, actualMax]
+        let isNonZero = actualMin > 0 or actualMax < 0
+        return Info(known: false, minv: actualMin, maxv: actualMax, nonZero: isNonZero, initialized: true)
     else:
       # Use range information even when not constant
       let actualMin = min(minInfo.minv, maxInfo.minv)

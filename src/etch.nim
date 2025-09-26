@@ -14,7 +14,7 @@ proc usage() =
   echo "Options:"
   echo "  --run         Execute the program (with bytecode caching)"
   echo "  --verbose     Enable verbose debug output"
-  echo "  --debug       Include debug information in bytecode"
+  echo "  --release     Optimize and skip debug information in bytecode"
   echo "  --debug-server Start debug server for VSCode integration"
   echo "  --dump-bytecode  Dump bytecode instructions with debug info"
   echo "  --test        Run tests in directory (default: tests/)"

@@ -169,6 +169,22 @@ proc analyzeBinaryMultiplication*(e: Expr, a: Info, b: Info): Info =
 proc analyzeBinaryDivision*(e: Expr, a: Info, b: Info, ctx: ProverContext): Info =
   if b.known:
     if b.cval == 0: raise newProverError(e.pos, if ctx.fnContext != "": &"division by zero in {ctx.fnContext}" else: "division by zero")
+
+    # When both operands are constants, compute exact result
+    if a.known:
+      return infoConst(a.cval div b.cval)
+
+    # When divisor is constant, we can compute better bounds
+    if b.cval > 0:
+      # Positive divisor: result has same sign as dividend, but smaller magnitude
+      let minResult = a.minv div b.cval
+      let maxResult = a.maxv div b.cval
+      return Info(known: false, minv: minResult, maxv: maxResult, nonZero: a.nonZero, initialized: true)
+    else:
+      # Negative divisor: result has opposite sign to dividend
+      let minResult = a.maxv div b.cval  # Note: order swapped due to negative divisor
+      let maxResult = a.minv div b.cval
+      return Info(known: false, minv: minResult, maxv: maxResult, nonZero: a.nonZero, initialized: true)
   else:
     # Skip overflow checks for float operations
     if e.typ != nil and e.typ.kind == tkFloat:
@@ -177,18 +193,27 @@ proc analyzeBinaryDivision*(e: Expr, a: Info, b: Info, ctx: ProverContext): Info
     if not b.nonZero:
       raise newProverError(e.pos, if ctx.fnContext != "": &"cannot prove divisor is non-zero in {ctx.fnContext}" else: "cannot prove divisor is non-zero")
 
-  # Range not needed for overflow on div; accept
-  return Info(known: false, minv: IMin, maxv: IMax, nonZero: true, initialized: true)
+  # When divisor range is unknown, we can't be precise but result is still non-zero if dividend is non-zero
+  return Info(known: false, minv: IMin, maxv: IMax, nonZero: a.nonZero, initialized: true)
 
 
 proc analyzeBinaryModulo*(e: Expr, a: Info, b: Info, ctx: ProverContext): Info =
   if b.known:
     if b.cval == 0: raise newProverError(e.pos, if ctx.fnContext != "": &"modulo by zero in {ctx.fnContext}" else: "modulo by zero")
+
+    # When divisor is a known constant, we can precisely determine the range
+    if b.cval > 0:
+      # For positive divisor, result is in range [0, divisor-1]
+      return Info(known: false, minv: 0, maxv: b.cval - 1, nonZero: false, initialized: true)
+    elif b.cval < 0:
+      # For negative divisor, result is in range [divisor+1, 0]
+      return Info(known: false, minv: b.cval + 1, maxv: 0, nonZero: false, initialized: true)
+
   else:
     if not b.nonZero:
       raise newProverError(e.pos, if ctx.fnContext != "": &"cannot prove divisor is non-zero in {ctx.fnContext}" else: "cannot prove divisor is non-zero")
 
-  # Modulo result is always less than divisor (for positive divisor)
+  # When divisor is unknown, we can't determine exact bounds
   return Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
 
 
