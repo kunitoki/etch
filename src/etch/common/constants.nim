@@ -29,10 +29,18 @@ const
 # Bytecode serialization constants
 const
   BYTECODE_MAGIC* = "ETCH"
-  BYTECODE_VERSION* = 13  # Bumped for type system support
+  BYTECODE_VERSION* = 13
 
 # Runtime constants
 const
-  DEFAULT_HEAP_SIZE* = 1024
-  MAX_RECURSION_DEPTH* = 1000
   MAX_LOOP_ITERATIONS* = 1_000_000
+
+# VM Optimization constants
+const
+  # Fast variable slots - number of local variables cached per frame
+  VM_FAST_SLOTS_COUNT* = 8
+
+# Bytecode Optimization constants
+const
+  # Enable bytecode optimization passes only in release builds
+  ENABLE_BYTECODE_OPTIMIZATION* = defined(release)

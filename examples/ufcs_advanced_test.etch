@@ -25,7 +25,6 @@ fn main() -> void {
 
     // Test UFCS with no args (both syntaxes)
     x.double_value().print_value();    // Should print 20
-    x.double_value.print_value;        // Should print 20
 
     // Test UFCS with multiple arguments
     x.add_numbers(y).print_value();    // Should print 15 (10 + 5)

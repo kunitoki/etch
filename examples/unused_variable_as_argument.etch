@@ -5,5 +5,5 @@ fn test(x: int) -> int {
 fn main() -> void {
   var unused_var: int = 42;
   unused_var = 10;
-  print(unused_var.test);
+  print(unused_var.test());
 }

@@ -31,6 +31,10 @@ type
   Frame* = ref object
     vars*: Table[string, V]
     returnAddress*: int  # For bytecode execution
+    # Fast slots for commonly accessed local variables (optimization)
+    fastVars*: array[VM_FAST_SLOTS_COUNT, V]
+    fastVarNames*: array[VM_FAST_SLOTS_COUNT, string]
+    fastVarCount*: int  # Number of fast slots currently used
 
   VM* = ref object
     # AST interpreter state
@@ -48,14 +52,46 @@ type
     # Debugger support (optional - zero cost when nil)
     debugger*: EtchDebugger
 
-proc vInt(x: int64): V = V(kind: tkInt, ival: x)
-proc vFloat(x: float64): V = V(kind: tkFloat, fval: x)
-proc vString(x: string): V = V(kind: tkString, sval: x)
-proc vChar(x: char): V = V(kind: tkChar, cval: x)
-proc vBool(x: bool): V = V(kind: tkBool, bval: x)
-proc vRef(id: int): V = V(kind: tkRef, refId: id)
-proc vArray(elements: seq[V]): V = V(kind: tkArray, aval: elements)
-proc vObject(fields: Table[string, V]): V = V(kind: tkObject, oval: fields)
+# Optimized value constructors with inline pragma for performance
+proc vInt(x: int64): V {.inline.} = V(kind: tkInt, ival: x)
+proc vFloat(x: float64): V {.inline.} = V(kind: tkFloat, fval: x)
+proc vString(x: string): V {.inline.} = V(kind: tkString, sval: x)
+proc vChar(x: char): V {.inline.} = V(kind: tkChar, cval: x)
+proc vBool(x: bool): V {.inline.} = V(kind: tkBool, bval: x)
+proc vRef(id: int): V {.inline.} = V(kind: tkRef, refId: id)
+proc vArray(elements: seq[V]): V {.inline.} = V(kind: tkArray, aval: elements)
+proc vObject(fields: Table[string, V]): V {.inline.} = V(kind: tkObject, oval: fields)
+
+# Pre-allocated common values to reduce allocation overhead
+let
+  vIntZero* = V(kind: tkInt, ival: 0)
+  vIntOne* = V(kind: tkInt, ival: 1)
+  vFloatZero* = V(kind: tkFloat, fval: 0.0)
+  vFloatOne* = V(kind: tkFloat, fval: 1.0)
+  vBoolTrue* = V(kind: tkBool, bval: true)
+  vBoolFalse* = V(kind: tkBool, bval: false)
+  vEmptyString* = V(kind: tkString, sval: "")
+  vNilRef* = V(kind: tkRef, refId: -1)
+  vVoidValue* = V(kind: tkVoid)
+
+# Fast constructors that use pre-allocated values when beneficial
+proc vIntFast*(x: int64): V {.inline.} =
+  case x:
+  of 0: vIntZero
+  of 1: vIntOne
+  else: V(kind: tkInt, ival: x)
+
+proc vFloatFast*(x: float64): V {.inline.} =
+  if x == 0.0: vFloatZero
+  elif x == 1.0: vFloatOne
+  else: V(kind: tkFloat, fval: x)
+
+proc vBoolFast*(x: bool): V {.inline.} =
+  if x: vBoolTrue else: vBoolFalse
+
+proc vStringFast*(x: string): V {.inline.} =
+  if x.len == 0: vEmptyString
+  else: V(kind: tkString, sval: x)
 
 proc vOptionSome(val: V): V =
   var refVal = new(V)
@@ -78,7 +114,7 @@ proc alloc(vm: VM; v: V): V =
   vm.heap.add HeapCell(alive: true, val: v)
   vRef(vm.heap.high)
 
-proc truthy(v: V): bool =
+proc truthy(v: V): bool {.inline.} =
   case v.kind
   of tkBool: v.bval
   of tkInt: v.ival != 0
@@ -101,25 +137,33 @@ proc raiseRuntimeError(vm: VM, msg: string) =
   ## Raise a runtime error with current position information
   raise newRuntimeError(vm.getCurrentPos(), msg)
 
-# Bytecode VM functionality
-proc push(vm: VM; val: V) =
+# Optimized bytecode VM functionality with inlined operations
+proc push(vm: VM; val: V) {.inline.} =
   vm.stack.add(val)
 
-proc pop(vm: VM): V =
+proc pop(vm: VM): V {.inline.} =
   if vm.stack.len == 0:
     vm.raiseRuntimeError("Stack underflow")
   result = vm.stack[^1]
   vm.stack.setLen(vm.stack.len - 1)
 
-proc peek(vm: VM): V =
+proc peek(vm: VM): V {.inline.} =
   if vm.stack.len == 0:
     vm.raiseRuntimeError("Stack empty")
   vm.stack[^1]
 
+# Optimized variable access with fast slot caching
 proc getVar(vm: VM, name: string): V =
   # Check current frame first
   if vm.callStack.len > 0:
     let frame = vm.callStack[^1]
+
+    # Fast path: check cached slots first
+    for i in 0..<frame.fastVarCount:
+      if frame.fastVarNames[i] == name:
+        return frame.fastVars[i]
+
+    # Slower path: check full table
     if frame.vars.hasKey(name):
       return frame.vars[name]
 
@@ -132,21 +176,37 @@ proc getVar(vm: VM, name: string): V =
 proc setVar(vm: VM, name: string, value: V) =
   # Set in current frame if we're in a function, otherwise global
   if vm.callStack.len > 0:
-    vm.callStack[^1].vars[name] = value
+    let frame = vm.callStack[^1]
+
+    # Fast path: try to update cached slots first
+    for i in 0..<frame.fastVarCount:
+      if frame.fastVarNames[i] == name:
+        frame.fastVars[i] = value
+        frame.vars[name] = value  # Keep table in sync
+        return
+
+    # If we have room in fast slots, add new variable there
+    if frame.fastVarCount < VM_FAST_SLOTS_COUNT:
+      let slot = frame.fastVarCount
+      frame.fastVarNames[slot] = name
+      frame.fastVars[slot] = value
+      frame.fastVarCount += 1
+
+    frame.vars[name] = value
   else:
     vm.globals[name] = value
 
-# Individual operation functions
-proc opLoadIntImpl(vm: VM, instr: Instruction) = vm.push(vInt(instr.arg))
-proc opLoadFloatImpl(vm: VM, instr: Instruction) = vm.push(vFloat(parseFloat(vm.program.constants[instr.arg])))
-proc opLoadStringImpl(vm: VM, instr: Instruction) = vm.push(vString(vm.program.constants[instr.arg]))
-proc opLoadCharImpl(vm: VM, instr: Instruction) = vm.push(vChar(vm.program.constants[instr.arg][0]))
-proc opLoadBoolImpl(vm: VM, instr: Instruction) = vm.push(vBool(instr.arg != 0))
-proc opLoadVarImpl(vm: VM, instr: Instruction) = vm.push(vm.getVar(instr.sarg))
-proc opStoreVarImpl(vm: VM, instr: Instruction) = vm.setVar(instr.sarg, vm.pop())
-proc opLoadNilImpl(vm: VM, instr: Instruction) = vm.push(vRef(-1))
-proc opPopImpl(vm: VM, instr: Instruction) = discard vm.pop()
-proc opDupImpl(vm: VM, instr: Instruction) = vm.push(vm.peek())
+# Optimized individual operation functions with inline pragma and fast constructors
+proc opLoadIntImpl(vm: VM, instr: Instruction) {.inline.} = vm.push(vIntFast(instr.arg))
+proc opLoadFloatImpl(vm: VM, instr: Instruction) {.inline.} = vm.push(vFloatFast(parseFloat(vm.program.constants[instr.arg])))
+proc opLoadStringImpl(vm: VM, instr: Instruction) {.inline.} = vm.push(vStringFast(vm.program.constants[instr.arg]))
+proc opLoadCharImpl(vm: VM, instr: Instruction) {.inline.} = vm.push(vChar(vm.program.constants[instr.arg][0]))
+proc opLoadBoolImpl(vm: VM, instr: Instruction) {.inline.} = vm.push(vBoolFast(instr.arg != 0))
+proc opLoadVarImpl(vm: VM, instr: Instruction) {.inline.} = vm.push(vm.getVar(instr.sarg))
+proc opStoreVarImpl(vm: VM, instr: Instruction) {.inline.} = vm.setVar(instr.sarg, vm.pop())
+proc opLoadNilImpl(vm: VM, instr: Instruction) {.inline.} = vm.push(vNilRef)
+proc opPopImpl(vm: VM, instr: Instruction) {.inline.} = discard vm.pop()
+proc opDupImpl(vm: VM, instr: Instruction) {.inline.} = vm.push(vm.peek())
 
 proc executeBinaryOp(vm: VM, operationName: string,
     intOp: proc(a, b: int64): int64,
@@ -370,14 +430,15 @@ proc opDerefImpl(vm: VM, instr: Instruction) =
     vm.raiseRuntimeError("Dereferencing dead reference")
   vm.push(cell.val)
 
-proc opMakeArrayImpl(vm: VM, instr: Instruction) =
+proc opMakeArrayImpl(vm: VM, instr: Instruction) {.inline.} =
   let count = instr.arg
-  var elements: seq[V] = @[]
-  for i in 0..<count:
-    elements.insert(vm.pop(), 0)
+  # Optimize: pre-allocate array and fill in reverse order to avoid inserts
+  var elements: seq[V] = newSeq[V](count)
+  for i in countdown(count-1, 0):
+    elements[i] = vm.pop()
   vm.push(vArray(elements))
 
-proc opArrayGetImpl(vm: VM, instr: Instruction) =
+proc opArrayGetImpl(vm: VM, instr: Instruction) {.inline.} =
   let index = vm.pop()
   let array = vm.pop()
   if index.kind != tkInt:
@@ -394,7 +455,7 @@ proc opArrayGetImpl(vm: VM, instr: Instruction) =
   else:
     vm.raiseRuntimeError("Indexing requires array or string type")
 
-proc opArraySliceImpl(vm: VM, instr: Instruction) =
+proc opArraySliceImpl(vm: VM, instr: Instruction) {.inline.} =
   let endVal = vm.pop()
   let startVal = vm.pop()
   let array = vm.pop()
@@ -413,19 +474,19 @@ proc opArraySliceImpl(vm: VM, instr: Instruction) =
     let actualStart = max(0, min(startIdx, array.sval.len))
     let actualEnd = max(actualStart, min(endIdx, array.sval.len))
     if actualStart >= actualEnd:
-      vm.push(vString(""))
+      vm.push(vEmptyString)
     else:
-      vm.push(vString(array.sval[actualStart..<actualEnd]))
+      vm.push(vStringFast(array.sval[actualStart..<actualEnd]))
   else:
     vm.raiseRuntimeError("Slicing requires array or string type")
 
-proc opArrayLenImpl(vm: VM, instr: Instruction) =
+proc opArrayLenImpl(vm: VM, instr: Instruction) {.inline.} =
   let array = vm.pop()
   case array.kind
   of tkArray:
-    vm.push(vInt(array.aval.len.int64))
+    vm.push(vIntFast(array.aval.len.int64))
   of tkString:
-    vm.push(vInt(array.sval.len.int64))
+    vm.push(vIntFast(array.sval.len.int64))
   else:
     vm.raiseRuntimeError("Length operator requires array or string type")
 
@@ -444,8 +505,8 @@ proc opCastImpl(vm: VM, instr: Instruction) =
     else: vm.raiseRuntimeError("invalid cast to float")
   of 3:
     case source.kind:
-    of tkInt: vm.push(vString($source.ival))
-    of tkFloat: vm.push(vString($source.fval))
+    of tkInt: vm.push(vStringFast($source.ival))
+    of tkFloat: vm.push(vStringFast($source.fval))
     else: vm.raiseRuntimeError("invalid cast to string")
   else:
     vm.raiseRuntimeError("unsupported cast type")
@@ -512,11 +573,11 @@ proc opExtractErrImpl(vm: VM, instr: Instruction) =
   else:
     vm.raiseRuntimeError("extractErr: not an Err value")
 
-proc opMakeObjectImpl(vm: VM, instr: Instruction) =
+proc opMakeObjectImpl(vm: VM, instr: Instruction) {.inline.} =
   # arg contains number of field pairs on stack
   # Stack format: value1, "field1", value2, "field2", ... (top of stack has last pair)
   let numFields = int(instr.arg)
-  var fields = initTable[string, V]()
+  var fields = initTable[string, V](numFields)  # Pre-allocate table capacity
 
   # Pop field-value pairs from stack (in reverse order)
   for i in 0..<numFields:
@@ -586,7 +647,7 @@ proc opCallImpl(vm: VM, instr: Instruction): bool =
     else:
       echo output
 
-    vm.push(V(kind: tkVoid))
+    vm.push(vVoidValue)
     return true
 
   if funcName == "new":
@@ -610,17 +671,17 @@ proc opCallImpl(vm: VM, instr: Instruction): bool =
       let maxVal = vm.pop()
       if maxVal.kind == tkInt and maxVal.ival > 0:
         let res = rand(int(maxVal.ival))
-        vm.push(vInt(int64(res)))
+        vm.push(vIntFast(int64(res)))
       else:
-        vm.push(vInt(0))
+        vm.push(vIntZero)
     elif argCount == 2:
       let maxVal = vm.pop()
       let minVal = vm.pop()
       if maxVal.kind == tkInt and minVal.kind == tkInt and maxVal.ival >= minVal.ival:
         let res = rand(int(maxVal.ival - minVal.ival)) + int(minVal.ival)
-        vm.push(vInt(int64(res)))
+        vm.push(vIntFast(int64(res)))
       else:
-        vm.push(vInt(0))
+        vm.push(vIntZero)
     return true
 
   if funcName == "seed":
@@ -630,7 +691,7 @@ proc opCallImpl(vm: VM, instr: Instruction): bool =
         randomize(int(seedVal.ival))
     elif argCount == 0:
       randomize()
-    vm.push(V(kind: tkVoid))
+    vm.push(vVoidValue)
     return true
 
   if funcName == "readFile":
@@ -639,11 +700,11 @@ proc opCallImpl(vm: VM, instr: Instruction): bool =
       if pathArg.kind == tkString:
         try:
           let content = readFile(pathArg.sval)
-          vm.push(vString(content))
+          vm.push(vStringFast(content))
         except:
-          vm.push(vString(""))
+          vm.push(vEmptyString)
       else:
-        vm.push(vString(""))
+        vm.push(vEmptyString)
     return true
 
   if funcName == "parseInt":
@@ -692,15 +753,15 @@ proc opCallImpl(vm: VM, instr: Instruction): bool =
       let arg = vm.pop()
       case arg.kind
       of tkInt:
-        vm.push(vString($arg.ival))
+        vm.push(vStringFast($arg.ival))
       of tkFloat:
-        vm.push(vString($arg.fval))
+        vm.push(vStringFast($arg.fval))
       of tkBool:
-        vm.push(vString($arg.bval))
+        vm.push(vStringFast($arg.bval))
       of tkChar:
-        vm.push(vString($arg.cval))
+        vm.push(vStringFast($arg.cval))
       else:
-        vm.push(vString(""))
+        vm.push(vEmptyString)
     return true
 
   if funcName == "isSome":
@@ -743,18 +804,19 @@ proc opCallImpl(vm: VM, instr: Instruction): bool =
   if not vm.program.functions.hasKey(funcName):
     vm.raiseRuntimeError("Unknown function: " & funcName)
 
-  # Create new frame
+  # Create new frame with fast slots initialization
   let newFrame = Frame(
     vars: initTable[string, V](),
-    returnAddress: vm.pc
+    returnAddress: vm.pc,
+    fastVarCount: 0
   )
 
-  # Pop arguments and collect them (they come off stack in reverse order)
-  var args: seq[V] = @[]
+  # Pop arguments and collect them (they come off stack in reverse order due to forward push)
+  # Optimize: pre-allocate args array to avoid repeated allocations
+  var args: seq[V] = newSeq[V](argCount)
   for i in 0..<argCount:
-    args.add(vm.pop())
-  # Arguments are already in correct order after popping from reverse-pushed stack
-  # No need to reverse
+    args[argCount-1-i] = vm.pop()
+  # Arguments are now in correct parameter order
 
   # Get parameter names from function debug info
   if vm.program.functionInfo.hasKey(funcName):

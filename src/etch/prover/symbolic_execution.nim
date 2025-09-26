@@ -3,10 +3,8 @@
 
 import std/[tables, options]
 import ../frontend/ast
+import ../common/constants
 import types
-
-
-const MAX_LOOP_ITERATIONS = 1000  # Prevent infinite symbolic execution
 
 
 type

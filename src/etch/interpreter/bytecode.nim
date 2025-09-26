@@ -161,8 +161,8 @@ proc compileCallExpr(prog: var BytecodeProgram, e: Expr, ctx: var CompilationCon
   if foundFunction != nil:
     totalArgCount = foundFunction.params.len
 
-    # Push all arguments (provided + defaults) in reverse order
-    for i in countdown(foundFunction.params.high, 0):
+    # Push all arguments (provided + defaults) in forward order
+    for i in 0..<foundFunction.params.len:
       if i < e.args.len:
         prog.compileExpr(e.args[i], ctx)
       elif foundFunction.params[i].defaultValue.isSome:
