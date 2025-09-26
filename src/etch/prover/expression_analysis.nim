@@ -471,15 +471,15 @@ proc analyzeArrayExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
       allKnown = false
 
   # Return info with known array size and element range information
-  var result = infoArray(e.elements.len.int64, sizeKnown = true)
+  var res = infoArray(e.elements.len.int64, sizeKnown = true)
 
   # If all elements have valid ranges, store the overall element range
   if e.elements.len > 0 and minElementValue != int64.high:
-    result.minv = minElementValue
-    result.maxv = maxElementValue
-    result.initialized = true
+    res.minv = minElementValue
+    res.maxv = maxElementValue
+    res.initialized = true
 
-  return result
+  return res
 
 
 proc analyzeIndexExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
