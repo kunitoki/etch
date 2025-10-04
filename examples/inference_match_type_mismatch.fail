@@ -1,0 +1,5 @@
+examples/inference_match_type_mismatch.etch:6:16: error: match arm 2 returns type string but previous arms return int. All match arms must return the same type
+  5 |   // This should fail: one arm returns int, other returns string
+  6 |   let result = match x {
+                     ^
+  7 |     some(value) => value

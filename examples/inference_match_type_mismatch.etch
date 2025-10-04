@@ -1,0 +1,16 @@
+// Test match with type mismatch - should fail at compile time
+fn test_type_mismatch() -> int {
+  let x: option[int] = some(42);
+
+  // This should fail: one arm returns int, other returns string
+  let result = match x {
+    some(value) => value
+    none => "zero"  // ERROR: type mismatch
+  };
+
+  return result;
+}
+
+fn main() -> void {
+  print(test_type_mismatch());
+}

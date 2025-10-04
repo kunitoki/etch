@@ -1,0 +1,16 @@
+// Test nested match expressions
+fn main() -> void {
+  let outer: option[option[int]] = some(some(42));
+
+  let result = match outer {
+    some(inner) => {
+      match inner {
+        some(value) => value  // Returns int
+        none => -1           // Returns int
+      };
+    }
+    none => 0  // Returns int
+  };
+
+  print(result);
+}

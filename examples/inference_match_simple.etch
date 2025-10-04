@@ -1,0 +1,12 @@
+// Test basic match type inference
+fn main() -> void {
+  let x: option[int] = some(42);
+
+  // Match should infer int type from both arms
+  let result = match x {
+    some(value) => value
+    none => 0
+  };
+
+  print(result);
+}

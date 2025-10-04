@@ -18,11 +18,19 @@ proc typecheckVar(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TyS
   if s.vtype.kind == tkInferred:
     if s.vinit.isNone():
       raise newTypecheckError(s.pos, &"variable '{s.vname}' with inferred type must have an initializer")
-    # Infer type from initializer expression with current scope context
-    let inferredType = inferTypeFromExpr(s.vinit.get(), sc)
-    if inferredType == nil:
-      raise newTypecheckError(s.pos, &"cannot infer type for variable '{s.vname}', please provide explicit type annotation")
-    s.vtype = inferredType
+
+    # Special handling for match expressions during deferred type inference
+    if s.vinit.get().kind == ekMatch:
+      # Infer match expression type directly using type checker
+      var tempSubst = subst
+      let inferredType = inferMatchExpr(prog, fd, sc, s.vinit.get(), tempSubst)
+      s.vtype = inferredType
+    else:
+      # Try regular type inference for other expressions
+      let inferredType = inferTypeFromExpr(s.vinit.get(), sc)
+      if inferredType == nil:
+        raise newTypecheckError(s.pos, &"cannot infer type for variable '{s.vname}', please provide explicit type annotation")
+      s.vtype = inferredType
 
   # Resolve user-defined types (including nested ones in references, arrays, etc.)
   var resolvedVtype = s.vtype
@@ -232,10 +240,23 @@ proc inferMatchExpr*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var 
     # Type check all statements in case body
     let caseType = typecheckStmtList(prog, fd, caseScope, matchCase.body, subst)
 
+    # Determine the actual type based on the case body
+    # If empty body or only void statements, type is void
+    # Otherwise, take the type of the last expression
+    var actualCaseType: EtchType = tVoid()
+
+    if matchCase.body.len > 0:
+      let lastStmt = matchCase.body[matchCase.body.len - 1]
+      if lastStmt.kind == skExpr and lastStmt.sexpr.typ != nil:
+        actualCaseType = lastStmt.sexpr.typ
+      elif caseType != nil:
+        actualCaseType = caseType
+
+    # Check type consistency across all match arms
     if resultType == nil:
-      resultType = caseType
-    elif not typeEq(resultType, caseType):
-      raise newTypecheckError(e.pos, &"match case {i+1} has type {caseType} but expected {resultType}")
+      resultType = actualCaseType
+    elif not typeEq(resultType, actualCaseType):
+      raise newTypecheckError(e.pos, &"match arm {i+1} returns type {actualCaseType} but previous arms return {resultType}. All match arms must return the same type")
 
   if not hasRelevantCases:
     raise newTypecheckError(e.pos, "match expression must have at least one relevant case")

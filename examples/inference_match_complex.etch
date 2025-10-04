@@ -1,0 +1,18 @@
+// Test match with complex expressions and blocks
+fn main() -> void {
+  let x: result[int] = ok(42);
+
+  // Match with block bodies - last expression determines type
+  let msg = match x {
+    ok(value) => {
+      print(value);
+      "success";  // Last expression: string
+    }
+    error(err) => {
+      print("error occurred");
+      err;  // Last expression: string
+    }
+  };
+
+  print(msg);
+}
