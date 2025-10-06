@@ -4,30 +4,6 @@
 import ../frontend/ast
 import ../common/[types, errors]
 
-#[ DO NOT REMOVE!!! FOR FUTURE REFERENCE
-import std/tables
-
-type
-  BuiltinTypeCheck = proc(argTypes: seq[EtchType], pos: Pos): EtchType
-  BuiltinProverAnalyze = proc(e: Expr, env: Env, ctx: ProverContext): Info
-  BuiltinOpExecuteVM = proc(vm: VM, instr: Instruction): bool
-
-  BuiltinFunc* = object
-    name*: string
-    isPure*: bool
-    returnType*: EtchType
-    typeCheck*: BuiltinTypeCheck
-    proverAnalyze*: BuiltinProverAnalyze
-    opExecuteVM*: BuiltinOpExecuteVM
-
-  BuiltinRegistry* = Table[string, BuiltinFunc]
-
-let builtinFunctions: BuiltinRegistry = {
-  "print": BuiltinFunc(name: "print", isPure: false, returnType: tVoid(), typeCheck: performBuiltinPrintTypeCheck, proverAnalyze: todo, opExecuteVM: todo),
-}.toTable()
-]#
-
-
 # Builtin function indices for ultra-fast VM dispatch
 type
   BuiltinFuncId* = enum
@@ -62,38 +38,28 @@ proc getBuiltinId*(funcName: string): BuiltinFuncId =
       return id
   raise newException(ValueError, "Unknown builtin function: " & funcName)
 
-# Simple function to check if a name is a builtin function
-proc isBuiltin*(name: string): bool =
-  case name
-  of "print", "new", "deref", "rand", "readFile", "seed",
-     "parseInt", "parseFloat", "parseBool", "toString", "isSome", "isNone", "isOk", "isErr":
-    return true
-  of "inject":
-    return false  # inject is a compiler directive, not a runtime function
-  else:
-    return false
-
 # Get all builtin names for automatic registration
 proc getBuiltinNames*(): seq[string] =
-  @["print", "new", "deref", "rand", "readFile", "seed",
-    "parseInt", "parseFloat", "parseBool", "toString", "isSome", "isNone", "isOk", "isErr"]
+  for id, name in BUILTIN_NAMES:
+    result.add(name)
+
+# Simple function to check if a name is a builtin function
+proc isBuiltin*(name: string): bool =
+  return name in getBuiltinNames()
 
 proc getBuiltinSignature*(fname: string): (seq[EtchType], EtchType) =
   ## Get the parameter types and return type for a builtin function
   ## Returns empty seq and tVoid if not found or if it has variable signatures
   case fname
   of "print":
-    # print accepts multiple types, return a generic signature
     return (@[tInferred()], tVoid())
   of "new":
-    return (@[tInferred()], tInferred())  # ref[T]
+    return (@[tInferred()], tInferred())
   of "deref":
-    return (@[tInferred()], tInferred())  # T
+    return (@[tInferred()], tInferred())
   of "rand":
-    # rand has 1-2 int params
     return (@[tInt()], tInt())
   of "seed":
-    # seed has 0-1 int params
     return (@[], tVoid())
   of "readFile":
     return (@[tString()], tString())
@@ -111,7 +77,6 @@ proc getBuiltinSignature*(fname: string): (seq[EtchType], EtchType) =
     return (@[tResult(tInferred())], tBool())
   else:
     return (@[], tVoid())
-
 
 # Perform basic type checking for builtin functions
 # This is simplified to avoid circular dependencies
