@@ -7,7 +7,7 @@ import typechecker/[core, types, statements, inference]
 import interpreter/[vm, bytecode, serialize]
 import prover/[core]
 import comptime, common/errors
-import common/[constants, logging, cffi]
+import common/[constants, logging, cffi, library_resolver]
 import module_system
 
 type
@@ -292,21 +292,27 @@ proc runCachedBytecode*(bytecodeFile: string): CompilerResult =
     for cffiInfo in prog.cffiInfo:
       # Try to load the library if not already loaded
       if cffiInfo.library notin globalCFFIRegistry.libraries:
-        # Determine library path based on platform
-        let libPath = when defined(windows):
-          cffiInfo.library & ".dll"
-        elif defined(macosx):
-          if cffiInfo.library == "math" or cffiInfo.library == "m":
-            "/usr/lib/libSystem.dylib"
-          else:
-            "lib" & cffiInfo.library & ".dylib"
-        else:
-          if cffiInfo.library == "math" or cffiInfo.library == "m":
-            "libm.so.6"
-          else:
-            "lib" & cffiInfo.library & ".so"
+        # Use shared library resolver for consistent resolution
+        let (normalizedName, actualPath) = resolveLibraryPath(cffiInfo.library)
 
-        discard globalCFFIRegistry.loadLibrary(cffiInfo.library, libPath)
+        var loaded = false
+        # Try with the resolved path first
+        if actualPath != "":
+          try:
+            discard globalCFFIRegistry.loadLibrary(normalizedName, actualPath)
+            loaded = true
+          except:
+            # Try searching in standard paths
+            let foundPath = findLibraryInSearchPaths(actualPath)
+            if foundPath != "":
+              try:
+                discard globalCFFIRegistry.loadLibrary(normalizedName, foundPath)
+                loaded = true
+              except:
+                discard
+
+        if not loaded:
+          raise newException(IOError, "Failed to load library: " & cffiInfo.library)
 
       # Convert string type kinds back to EtchType
       var paramSpecs: seq[cffi.ParamSpec] = @[]

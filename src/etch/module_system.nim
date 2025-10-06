@@ -1,9 +1,9 @@
 # module_system.nim
 # Module loading and resolution for Etch
 
-import std/[tables, os, strutils, sets, options]
+import std/[tables, os, sets, options]
 import frontend/[ast, parser, lexer]
-import common/[types, errors, cffi]
+import common/[types, errors, cffi, library_resolver]
 
 type
   ExportKind* = enum
@@ -208,91 +208,13 @@ proc processImports*(registry: ModuleRegistry, program: var Program, mainFile: s
     of "cffi":
       # Process FFI imports - load native functions from shared libraries
       # The import path should be the library name, alias, or relative path
-      var libName = importStmt.importPath
-      var actualLibPath = ""
-
-      # Check if this is a path (contains /)
-      if "/" in libName:
-        # This is a relative path like "clib/mathlib"
-        # We need to resolve it relative to the importing file's directory
-        let importingDir = if importStmt.pos.filename.len > 0:
-          parentDir(importStmt.pos.filename)
-        else:
-          "."
-
-        # Build the library filename based on platform
-        let libFileName = when defined(macosx):
-          "lib" & libName.split("/")[^1] & ".dylib"
-        elif defined(windows):
-          libName.split("/")[^1] & ".dll"
-        else:
-          "lib" & libName.split("/")[^1] & ".so"
-
-        # Build the full path to the library
-        # libName is "clib/mathlib", we want "examples/clib/libmathlib.dylib"
-        let pathParts = libName.split("/")
-        let dirPath = if pathParts.len > 1:
-          pathParts[0..^2].join($DirSep)
-        else:
-          ""
-        actualLibPath = if dirPath.len > 0:
-          importingDir / dirPath / libFileName
-        else:
-          importingDir / libFileName
-
-        # Simplify the libName for registration (just the last part)
-        libName = libName.split("/")[^1]
+      let importingDir = if importStmt.pos.filename.len > 0:
+        parentDir(importStmt.pos.filename)
       else:
-        # Map library aliases to actual libraries - ensure cross-platform compatibility
-        case libName
-        of "c", "libc":
-          # Standard C library functions
-          actualLibPath = when defined(macosx):
-            "/usr/lib/libSystem.dylib"
-          elif defined(windows):
-            "msvcrt.dll"
-          else:
-            "libc.so.6"
-          libName = "c"  # Normalize to "c"
+        "."
 
-        of "cmath", "math", "m":
-          # Math library functions
-          actualLibPath = when defined(macosx):
-            "/usr/lib/libSystem.dylib"  # Math is in libSystem on macOS
-          elif defined(windows):
-            "msvcrt.dll"  # Math is in msvcrt on Windows
-          else:
-            "libm.so.6"  # Separate libm on Linux
-          libName = "cmath"  # Normalize to "cmath"
-
-        of "pthread", "threads":
-          # Threading library
-          actualLibPath = when defined(macosx):
-            "/usr/lib/libSystem.dylib"  # pthreads is in libSystem on macOS
-          elif defined(windows):
-            "kernel32.dll"  # Windows threads
-          else:
-            "libpthread.so.0"  # Separate pthread on Linux
-          libName = "pthread"  # Normalize
-
-        of "dl", "dlfcn":
-          # Dynamic loading library
-          actualLibPath = when defined(macosx):
-            "/usr/lib/libSystem.dylib"  # dl functions in libSystem on macOS
-          elif defined(windows):
-            "kernel32.dll"  # Windows dynamic loading
-          else:
-            "libdl.so.2"  # Separate libdl on Linux
-          libName = "dl"  # Normalize
-
-        else:
-          # Custom library - determine path based on platform
-          actualLibPath = when defined(windows):
-            libName & ".dll"
-          elif defined(macosx):
-            "lib" & libName & ".dylib"
-          else:
-            "lib" & libName & ".so"
+      # Use shared library resolver for consistent resolution
+      let (libName, actualLibPath) = resolveLibraryPath(importStmt.importPath, importingDir)
 
       # Try to load the library if not already loaded
       if libName notin globalCFFIRegistry.libraries:
@@ -304,24 +226,18 @@ proc processImports*(registry: ModuleRegistry, program: var Program, mainFile: s
             discard globalCFFIRegistry.loadLibrary(libName, actualLibPath)
             loaded = true
           except:
-            # Fall back to normal search
-            discard
-
-        if not loaded:
-          # Try to load from standard locations
-          for searchPath in @[".", "lib", "/usr/local/lib", "/usr/lib", "/lib/x86_64-linux-gnu"]:
-            let fullPath = searchPath / actualLibPath
-            if fileExists(fullPath):
+            # Try searching in standard paths
+            let foundPath = findLibraryInSearchPaths(actualLibPath)
+            if foundPath != "":
               try:
-                discard globalCFFIRegistry.loadLibrary(libName, fullPath)
+                discard globalCFFIRegistry.loadLibrary(libName, foundPath)
                 loaded = true
-                break
               except:
-                continue
+                discard
 
         if not loaded:
           raise newParseError(importStmt.pos,
-            "Failed to load C library: " & libName)
+            "Failed to load C library: " & importStmt.importPath)
 
       # Load each function from the library
       for importItem in importStmt.importItems:
