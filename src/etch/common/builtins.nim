@@ -45,7 +45,10 @@ proc getBuiltinNames*(): seq[string] =
 
 # Simple function to check if a name is a builtin function
 proc isBuiltin*(name: string): bool =
-  return name in getBuiltinNames()
+  for id, name in BUILTIN_NAMES:
+    if name == funcName:
+      return true
+  return false
 
 proc getBuiltinSignature*(fname: string): (seq[EtchType], EtchType) =
   ## Get the parameter types and return type for a builtin function
