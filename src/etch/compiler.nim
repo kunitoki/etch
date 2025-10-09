@@ -5,7 +5,7 @@ import std/[os, tables, times, options, strformat]
 import frontend/[ast, lexer, parser]
 import typechecker/[core, types, statements, inference]
 import interpreter/[bytecode]  # Still needed for initial compilation
-import interpreter/[regvm, regcompiler, regvm_exec, regvm_serialize, regvm_dump]  # Register VM
+import interpreter/[regvm, regcompiler, regvm_exec, regvm_serialize]  # Register VM
 import prover/[core]
 import comptime, common/errors
 import common/[constants, logging, cffi, library_resolver]

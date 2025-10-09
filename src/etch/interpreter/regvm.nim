@@ -175,11 +175,9 @@ proc makeInt*(val: int64): V {.inline.} =
 proc makeFloat*(val: float64): V {.inline.} =
   # For floats, we need to store the full 64 bits somewhere
   # We'll use a secondary field for this
-  var result: V
   result.data = TAG_FLOAT shl 48 or (cast[uint64](val) and 0xFFFF)  # Store lower 16 bits in data
   # Store full float value - we need a new field for this
   result.fval = val
-  result
 
 proc makeBool*(val: bool): V {.inline.} =
   V(data: uint64(val) or (TAG_BOOL shl 48))
@@ -364,6 +362,3 @@ proc emitAsBx*(prog: var RegBytecodeProgram, op: RegOpCode, a: uint8, sbx: int16
     opType: 2,
     sbx: sbx
   )
-
-# Bytecode serialization is now in regvm_serialize.nim
-# Import that module separately when needed to avoid circular dependencies

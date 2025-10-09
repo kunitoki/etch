@@ -85,7 +85,7 @@ let
   vNilRef* = V(kind: tkRef, refId: -1)
   vVoidValue* = V(kind: tkVoid)
 
-proc internString(vm: VM, s: string): string {.inline.} =
+proc internString*(vm: VM, s: string): string {.inline.} =
   # Lua-style string interning for faster comparisons
   if vm.stringIntern.hasKey(s):
     return vm.stringIntern[s]
@@ -207,29 +207,6 @@ proc getVar(vm: VM, name: string): V =
     return vm.globals[name]
 
   vm.raiseRuntimeError(&"Unknown variable: {name}")
-
-proc setVar(vm: VM, name: string, value: V) =
-  # Set in current frame if we're in a function, otherwise global
-  if vm.callStack.len > 0:
-    let frame = vm.callStack[^1]
-
-    # Fast path: try to update cached slots first
-    for i in 0..<frame.fastVarCount:
-      if frame.fastVarNames[i] == name:
-        frame.fastVars[i] = value
-        frame.vars[name] = value  # Keep table in sync
-        return
-
-    # If we have room in fast slots, add new variable there
-    if frame.fastVarCount < VM_FAST_SLOTS_COUNT:
-      let slot = frame.fastVarCount
-      frame.fastVarNames[slot] = name
-      frame.fastVars[slot] = value
-      frame.fastVarCount += 1
-
-    frame.vars[name] = value
-  else:
-    vm.globals[name] = value
 
 # Optimized individual operation functions for jump table dispatch
 # All functions return bool: true to continue execution, false to halt

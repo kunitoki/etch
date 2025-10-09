@@ -103,7 +103,6 @@ proc typeToC(typ: EtchType): string =
   of tkGeneric, tkUserDefined, tkDistinct: &"etch_value*"  # Generic value type
   of tkRef: &"{typeToC(typ.inner)}*"  # Reference type
   of tkInferred: "etch_value*"  # Inferred type placeholder
-  else: "etch_value*"
 
 proc emitRuntime(gen: var CCodeGen) =
   ## Emit the C runtime support code
@@ -1764,9 +1763,6 @@ proc compileInstruction(gen: var CCodeGen, instr: Instruction, idx: int, labels:
   of opLoadVarIntLt:
     gen.emit(&"// Optimized load var int less than")
     gen.emit("push_bool(false); // Placeholder")
-
-  else:
-    gen.emit(&"// Unimplemented opcode: {instr.op}")
 
 proc compileFunction(gen: var CCodeGen, name: string, startIdx: int, endIdx: int) =
   ## Compile a function from bytecode instructions

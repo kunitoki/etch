@@ -36,16 +36,16 @@ proc doAdd(a, b: V): V {.inline.} =
     makeFloat(getFloat(a) + getFloat(b))
   elif getTag(a) == TAG_STRING and getTag(b) == TAG_STRING:
     # String concatenation
-    var result: V
-    result.data = TAG_STRING shl 48
-    result.sval = a.sval & b.sval
-    result
+    var res: V
+    res.data = TAG_STRING shl 48
+    res.sval = a.sval & b.sval
+    res
   elif getTag(a) == TAG_ARRAY and getTag(b) == TAG_ARRAY:
     # Array concatenation
-    var result: V
-    result.data = TAG_ARRAY shl 48
-    result.aval = a.aval & b.aval
-    result
+    var res: V
+    res.data = TAG_ARRAY shl 48
+    res.aval = a.aval & b.aval
+    res
   else:
     makeNil()  # Type error
 
@@ -320,24 +320,23 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
     of ropLtStore:
       let b = getReg(vm, instr.b)
       let c = getReg(vm, instr.c)
-      let result = makeBool(doLt(b, c))
+      let res = makeBool(doLt(b, c))
       if verbose:
-        echo "[REGVM] ropLtStore: reg", instr.a, " = reg", instr.b, "(", $b, ") < reg", instr.c, "(", $c, ") = ", $result
-      setReg(vm, instr.a, result)
+        echo "[REGVM] ropLtStore: reg", instr.a, " = reg", instr.b, "(", $b, ") < reg", instr.c, "(", $c, ") = ", $res
+      setReg(vm, instr.a, res)
 
     of ropLeStore:
       let b = getReg(vm, instr.b)
       let c = getReg(vm, instr.c)
-      let result = makeBool(doLe(b, c))
+      let res = makeBool(doLe(b, c))
       if verbose:
-        echo "[REGVM] ropLeStore: reg", instr.a, " = reg", instr.b, "(", $b, ") <= reg", instr.c, "(", $c, ") = ", $result
-      setReg(vm, instr.a, result)
+        echo "[REGVM] ropLeStore: reg", instr.a, " = reg", instr.b, "(", $b, ") <= reg", instr.c, "(", $c, ") = ", $res
+      setReg(vm, instr.a, res)
 
     # --- Logical Operations ---
     of ropNot:
       let val = getReg(vm, instr.b)
-      setReg(vm, instr.a, makeBool(getTag(val) == TAG_NIL or
-                                    (getTag(val) == TAG_BOOL and (val.data and 1) == 0)))
+      setReg(vm, instr.a, makeBool(getTag(val) == TAG_NIL or (getTag(val) == TAG_BOOL and (val.data and 1) == 0)))
 
     of ropAnd:
       let b = getReg(vm, instr.b)
@@ -371,55 +370,55 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
     of ropCast:
       let val = getReg(vm, instr.b)
       let castType = instr.c
-      var result: V
+      var res: V
 
       case castType:
       of 1:  # To int
         if isInt(val):
-          result = val
+          res = val
         elif isFloat(val):
-          result = makeInt(int64(getFloat(val)))
+          res = makeInt(int64(getFloat(val)))
         elif isString(val):
           # Try to parse string to int
           try:
-            result = makeInt(int64(parseInt(val.sval)))
+            res = makeInt(int64(parseInt(val.sval)))
           except:
-            result = makeNil()
+            res = makeNil()
         else:
-          result = makeNil()
+          res = makeNil()
 
       of 2:  # To float
         if isFloat(val):
-          result = val
+          res = val
         elif isInt(val):
-          result = makeFloat(float64(getInt(val)))
+          res = makeFloat(float64(getInt(val)))
         elif isString(val):
           # Try to parse string to float
           try:
-            result = makeFloat(parseFloat(val.sval))
+            res = makeFloat(parseFloat(val.sval))
           except:
-            result = makeNil()
+            res = makeNil()
         else:
-          result = makeNil()
+          res = makeNil()
 
       of 3:  # To string
         if isInt(val):
-          result = makeString($getInt(val))
+          res = makeString($getInt(val))
         elif isFloat(val):
-          result = makeString($getFloat(val))
+          res = makeString($getFloat(val))
         elif isString(val):
-          result = val
+          res = val
         elif isBool(val):
-          result = makeString(if getBool(val): "true" else: "false")
+          res = makeString(if getBool(val): "true" else: "false")
         elif isNil(val):
-          result = makeString("nil")
+          res = makeString("nil")
         else:
-          result = makeString("")
+          res = makeString("")
 
       else:
-        result = makeNil()
+        res = makeNil()
 
-      setReg(vm, instr.a, result)
+      setReg(vm, instr.a, res)
 
     # --- Option/Result handling ---
     of ropWrapSome:
@@ -524,15 +523,15 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
         let actualEnd = max(actualStart, min(int(endIdx), arr.sval.len))
 
         if actualStart >= actualEnd:
-          var result: V
-          result.data = TAG_STRING shl 48
-          result.sval = ""
-          setReg(vm, instr.a, result)
+          var res: V
+          res.data = TAG_STRING shl 48
+          res.sval = ""
+          setReg(vm, instr.a, res)
         else:
-          var result: V
-          result.data = TAG_STRING shl 48
-          result.sval = arr.sval[actualStart..<actualEnd]
-          setReg(vm, instr.a, result)
+          var res: V
+          res.data = TAG_STRING shl 48
+          res.sval = arr.sval[actualStart..<actualEnd]
+          setReg(vm, instr.a, res)
       elif getTag(arr) == TAG_ARRAY:
         let endIdx = if isInt(endVal):
           let val = getInt(endVal)
@@ -542,15 +541,15 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
         let actualEnd = max(actualStart, min(int(endIdx), arr.aval.len))
 
         if actualStart >= actualEnd:
-          var result: V
-          result.data = TAG_ARRAY shl 48
-          result.aval = @[]
-          setReg(vm, instr.a, result)
+          var res: V
+          res.data = TAG_ARRAY shl 48
+          res.aval = @[]
+          setReg(vm, instr.a, res)
         else:
-          var result: V
-          result.data = TAG_ARRAY shl 48
-          result.aval = arr.aval[actualStart..<actualEnd]
-          setReg(vm, instr.a, result)
+          var res: V
+          res.data = TAG_ARRAY shl 48
+          res.aval = arr.aval[actualStart..<actualEnd]
+          setReg(vm, instr.a, res)
       else:
         setReg(vm, instr.a, makeNil())
 
@@ -736,7 +735,7 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       # Get function name from the register
       let funcNameVal = getReg(vm, funcReg)
       if verbose:
-        echo "[REGVM] ropCall: funcReg=", funcReg, " numArgs=", numArgs
+        echo "[REGVM] ropCall: funcReg=", funcReg, " numArgs=", numArgs, " numResults=", numResults
         if getTag(funcNameVal) == TAG_STRING:
           echo "[REGVM] ropCall: funcName='", funcNameVal.sval, "'"
         else:
@@ -928,21 +927,21 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       of "toString":
         if numArgs == 1:
           let val = getReg(vm, funcReg + 1)
-          var result: V
-          result.data = TAG_STRING shl 48
+          var res: V
+          res.data = TAG_STRING shl 48
           if isInt(val):
-            result.sval = $getInt(val)
+            res.sval = $getInt(val)
           elif isFloat(val):
-            result.sval = $getFloat(val)
+            res.sval = $getFloat(val)
           elif isChar(val):
-            result.sval = $getChar(val)
+            res.sval = $getChar(val)
           elif getTag(val) == TAG_BOOL:
-            result.sval = if (val.data and 1) != 0: "true" else: "false"
+            res.sval = if (val.data and 1) != 0: "true" else: "false"
           elif getTag(val) == TAG_STRING:
-            result.sval = val.sval
+            res.sval = val.sval
           else:
-            result.sval = "nil"
-          setReg(vm, funcReg, result)
+            res.sval = "nil"
+          setReg(vm, funcReg, res)
 
       # Mock C functions for testing
       of "c_add":
@@ -1083,10 +1082,10 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
         # (This is a placeholder for unimplemented builtins)
         if verbose:
           echo "[REGVM] Unknown function: ", funcName, " - returning function name as string"
-        var result: V
-        result.data = TAG_STRING shl 48
-        result.sval = funcName
-        setReg(vm, funcReg, result)
+        var res: V
+        res.data = TAG_STRING shl 48
+        res.sval = funcName
+        setReg(vm, funcReg, res)
 
     of ropReturn:
       # Return from function

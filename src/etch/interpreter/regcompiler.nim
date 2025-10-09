@@ -3,7 +3,6 @@
 
 import std/[tables, options, strutils]
 import ../frontend/ast
-import ../common/types
 import regvm
 import serialize
 
@@ -77,7 +76,7 @@ proc tryFuseArithmetic(c: var RegCompiler, e: Expr): bool =
   # Pattern: (a + b) + c -> AddAdd
   if e.bop == boAdd and e.lhs.kind == ekBin and e.lhs.bop == boAdd:
     let destReg = c.allocator.allocReg()
-    var aReg, bReg, cReg, dReg: uint8
+    var aReg, bReg, cReg: uint8
 
     # Compile subexpressions to registers
     aReg = c.compileExpr(e.lhs.lhs)
@@ -530,11 +529,6 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
           if c.verbose:
             echo "[REGCOMPILER]   Bound type pattern variable '", matchCase.pattern.typeBind, "' to reg ", matchReg
 
-      else:
-        # Other patterns not yet implemented
-        if c.verbose:
-          echo "[REGCOMPILER]   Warning: Unhandled pattern kind: ", matchCase.pattern.kind
-
       # Compile the case body
       if matchCase.body.len > 0:
         if c.verbose:
@@ -666,12 +660,6 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
 
     if c.verbose:
       echo "[REGCOMPILER] Get field '", e.fieldName, "' (const[", fieldConstIdx, "]) from reg ", objReg, " to reg ", result
-
-  else:
-    if c.verbose:
-      echo "[REGCOMPILER] Warning: Unhandled expression kind: ", e.kind
-    result = c.allocator.allocReg()
-    c.prog.emitABC(ropLoadNil, result, result, 0)
 
 proc compileBinOp(c: var RegCompiler, op: BinOp, dest, left, right: uint8) =
   case op:
@@ -1248,9 +1236,6 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
       echo "[REGCOMPILER] Set field '", s.faTarget.fieldName, "' (const[", fieldConst, "]) in object at reg ", objReg, " to value at reg ", valReg
 
     c.allocator.freeReg(valReg)
-
-  else:
-    echo "Warning: Unimplemented statement kind: ", s.kind
 
 proc compileFunDecl*(c: var RegCompiler, name: string, params: seq[Param], retType: EtchType, body: seq[Stmt]) =
   # Reset allocator for new function - preserve max register count

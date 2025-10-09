@@ -4,7 +4,7 @@
 import std/[os, strutils, osproc, strformat]
 import ./etch/[compiler, tester, debug_server]
 import ./etch/interpreter/[bytecode, regvm_dump]
-import ./etch/backend/c/codegen
+#import ./etch/backend/c/codegen
 
 
 proc usage() =
@@ -117,6 +117,7 @@ when isMainModule:
 
       # Debug server not yet updated for register VM
       echo "Debug server not yet available for register VM"
+      discard bytecodeProgram
       # runDebugServer(bytecodeProgram, sourceFile)
     except Exception as e:
       # Send compilation error as JSON response for debug adapter
@@ -183,6 +184,7 @@ when isMainModule:
 
       # C code generation not yet updated for register VM
       echo "C code generation not yet available for register VM"
+      discard bytecodeProgram
       quit 1
       # let cCode = generateC(bytecodeProgram, verbose)
 
