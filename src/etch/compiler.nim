@@ -4,11 +4,11 @@
 import std/[os, tables, times, options, strformat]
 import frontend/[ast, lexer, parser]
 import typechecker/[core, types, statements, inference]
-import interpreter/[vm, bytecode, serialize]
-import interpreter/[regvm, regcompiler, regvm_exec]  # Register VM modules
+import interpreter/[bytecode]  # Still needed for initial compilation
+import interpreter/[regvm, regcompiler, regvm_exec, regvm_serialize, regvm_dump]  # Register VM
 import prover/[core]
 import comptime, common/errors
-import common/[constants, logging, cffi, library_resolver, compiler_hash]
+import common/[constants, logging, cffi, library_resolver]
 import module_system
 
 type
@@ -23,7 +23,6 @@ type
     verbose*: bool
     debug*: bool
     release*: bool
-    useRegisterVM*: bool  # Use register-based VM instead of stack-based
 
 proc getBytecodeFileName*(sourceFile: string): string =
   ## Get the .etcx filename for a source file in __etch__ subfolder
@@ -36,39 +35,14 @@ proc shouldRecompile*(sourceFile, bytecodeFile: string, options: CompilerOptions
   if not fileExists(bytecodeFile):
     return true
 
-  # Always recompile when using register VM (for now, until we cache regvm bytecode)
-  if options.useRegisterVM:
-    return true
-
   # Check modification times
   let sourceTime = getLastModificationTime(sourceFile)
   let bytecodeTime = getLastModificationTime(bytecodeFile)
   if sourceTime > bytecodeTime:
     return true
 
-  # Check source hash + compiler flags + compiler version
-  try:
-    let sourceContent = readFile(sourceFile)
-    let flags = CompilerFlags(verbose: options.verbose, debug: options.debug)
-    let currentHash = hashSourceAndFlags(sourceContent, flags)
-    let prog = loadBytecode(bytecodeFile)
-
-    # Check if source hash matches
-    if prog.sourceHash != currentHash:
-      return true
-
-    # Check if compiler version matches
-    let currentCompilerVersion = getCompilerVersionHash()
-    if prog.compilerVersion != currentCompilerVersion:
-      if options.verbose:
-        echo &"[COMPILER] Bytecode invalidated: compiler version changed"
-        echo &"  Cached version: {prog.compilerVersion}"
-        echo &"  Current version: {currentCompilerVersion}"
-      return true
-
-    return false
-  except:
-    return true  # Recompile if we can't read bytecode
+  # For now, always recompile - register VM caching will be improved later
+  return true
 
 proc ensureMainInst(prog: Program) =
   ## Ensure main function instance exists if main template is non-generic
@@ -175,59 +149,19 @@ proc canEvaluateAtCompileTime(expr: Expr, prog: Program): bool =
   else:
     return not hasImpureCall(expr)
 
-proc evaluateGlobalVariables(prog: Program): Table[string, vm.V] =
-  ## Evaluate global variable initialization expressions using bytecode
-  ## Returns a table of evaluated global values for bytecode compilation
-  ## For complex expressions, returns empty table to let runtime handle them
-  var globalVars = initTable[string, vm.V]()
+proc evaluateGlobalVariables(prog: Program): Table[string, GlobalValue] =
+  ## Skip compile-time evaluation of globals for now (register VM only)
+  ## All global initialization will happen at runtime
+  return initTable[string, GlobalValue]()
 
-  # Only evaluate expressions without side effects at compile time
-  # Let expressions with side effects execute at runtime
-  for g in prog.globals:
-    if g.kind == skVar and g.vinit.isSome():
-      # Check if this expression has side effects
-      if canEvaluateAtCompileTime(g.vinit.get(), prog):
-        try:
-          # Evaluate pure expressions at compile time for optimization
-          var res = evalExprWithBytecode(prog, g.vinit.get(), globalVars)
+proc compileProgramWithGlobals*(prog: Program, sourceHash: string, evaluatedGlobals: Table[string, GlobalValue], sourceFile: string = "", flags: CompilerFlags = CompilerFlags(verbose: false, debug: false)): RegBytecodeProgram =
+  ## Compile an AST program to register VM bytecode
+  # For now, just use the regular register compiler
+  # Global evaluation is handled at runtime
+  let oldBytecode = compileProgram(prog, sourceHash, sourceFile, flags)
+  result = regcompiler.compileProgram(prog, oldBytecode, optimizeLevel = 0, verbose = flags.verbose)
 
-          # If the variable type is a union, wrap the value
-          if g.vtype.kind == tkUnion and res.kind != tkUnion:
-            # Find which union type index this value corresponds to
-            for i, ut in g.vtype.unionTypes:
-              # Check if the value type matches this union type
-              let valueMatches = case res.kind:
-                of tkInt: ut.kind == tkInt
-                of tkFloat: ut.kind == tkFloat
-                of tkString: ut.kind == tkString
-                of tkChar: ut.kind == tkChar
-                of tkBool: ut.kind == tkBool
-                else: false
-
-              if valueMatches:
-                res = vUnion(i, res)
-                break
-
-          globalVars[g.vname] = res
-        except:
-          # If evaluation fails, let runtime handle it
-          discard
-      # For expressions with side effects, don't pre-evaluate
-      # Let the runtime bytecode handle the initialization so side effects occur at runtime
-    # Don't set default values here - let the bytecode compilation handle defaults
-
-  return globalVars
-
-proc compileProgramWithGlobals*(prog: Program, sourceHash: string, evaluatedGlobals: Table[string, vm.V], sourceFile: string = "", flags: CompilerFlags = CompilerFlags(verbose: false, debug: false)): BytecodeProgram =
-  ## Compile an AST program to bytecode with pre-evaluated global values
-  # Start with standard compilation
-  result = compileProgram(prog, sourceHash, sourceFile, flags)
-
-  # Override global values with evaluated ones
-  for name, value in evaluatedGlobals:
-    result.globalValues[name] = convertVMValueToGlobalValue(value)
-
-proc parseAndTypecheck*(options: CompilerOptions): (Program, string, Table[string, vm.V]) =
+proc parseAndTypecheck*(options: CompilerOptions): (Program, string, Table[string, GlobalValue]) =
   ## Parse source file and perform type checking, return AST, hash, and evaluated globals
   let flags = CompilerFlags(verbose: options.verbose, debug: options.debug)
 
@@ -322,13 +256,13 @@ proc parseAndTypecheck*(options: CompilerOptions): (Program, string, Table[strin
   return (prog, srcHash, evaluatedGlobals)
 
 proc runCachedBytecode*(bytecodeFile: string): CompilerResult =
-  ## Run cached bytecode if available
+  ## Run cached register VM bytecode if available
   echo "Using cached bytecode: ", bytecodeFile
   try:
-    let prog = loadBytecode(bytecodeFile)
+    let prog = loadRegBytecode(bytecodeFile)
 
     # Re-register CFFI functions from cached info
-    for cffiInfo in prog.cffiInfo:
+    for funcName, cffiInfo in prog.cffiInfo:
       # Try to load the library if not already loaded
       if cffiInfo.library notin globalCFFIRegistry.libraries:
         # Use shared library resolver for consistent resolution
@@ -379,22 +313,21 @@ proc runCachedBytecode*(bytecodeFile: string): CompilerResult =
       )
 
       # Re-register the function
-      globalCFFIRegistry.loadFunction(cffiInfo.library, cffiInfo.mangledName, cffiInfo.symbol, signature)
+      globalCFFIRegistry.loadFunction(cffiInfo.library, funcName, cffiInfo.symbol, signature)
 
-    let vm = newBytecodeVM(prog)
-    let exitCode = vm.runBytecode()
+    let exitCode = runRegProgram(prog, verbose = false)
     return CompilerResult(success: true, exitCode: exitCode)
   except Exception as e:
     return CompilerResult(success: false, error: "Failed to run cached bytecode: " & e.msg)
 
-proc saveBytecodeToCache*(bytecodeProg: BytecodeProgram, bytecodeFile: string) =
-  ## Save bytecode to cache file
+proc saveBytecodeToCache*(regProg: RegBytecodeProgram, bytecodeFile: string) =
+  ## Save register VM bytecode to cache file
   try:
     # Ensure __etch__ directory exists
     let bytecodeDir = bytecodeFile.splitFile.dir
     if not dirExists(bytecodeDir):
       createDir(bytecodeDir)
-    saveBytecode(bytecodeProg, bytecodeFile)
+    saveRegBytecode(regProg, bytecodeFile)
     echo "Cached bytecode to: ", bytecodeFile
   except Exception as e:
     echo "Warning: Failed to cache bytecode: ", e.msg
@@ -410,10 +343,10 @@ proc compileAndRun*(options: CompilerOptions): CompilerResult =
     # Parse and typecheck
     let (prog, srcHash, evaluatedGlobals) = parseAndTypecheck(options)
 
-    # Compile to bytecode
-    logCompiler(flags, "Compiling to bytecode")
-    var bytecodeProg = compileProgramWithGlobals(prog, srcHash, evaluatedGlobals, options.sourceFile, flags)
-    logCompiler(flags, "Bytecode compilation complete (" & $bytecodeProg.instructions.len & " instructions)")
+    # Compile to register VM bytecode
+    logCompiler(flags, "Compiling to register VM bytecode")
+    var regProg = compileProgramWithGlobals(prog, srcHash, evaluatedGlobals, options.sourceFile, flags)
+    logCompiler(flags, "Register VM bytecode compilation complete (" & $regProg.instructions.len & " instructions)")
 
     # Add CFFI info from the registry
     for funcName, cffiFunc in globalCFFIRegistry.functions:
@@ -421,34 +354,26 @@ proc compileAndRun*(options: CompilerOptions): CompilerResult =
       for param in cffiFunc.signature.params:
         paramTypes.add($param.typ.kind)
 
-      bytecodeProg.cffiInfo.add(serialize.CFFIInfo(
+      regProg.cffiInfo[funcName] = regvm.CFFIInfo(
         library: cffiFunc.library,
         symbol: cffiFunc.symbol,
-        mangledName: funcName,
+        baseName: cffiFunc.symbol,  # Use the actual C function name, not the mangled name
         paramTypes: paramTypes,
         returnType: $cffiFunc.signature.returnType.kind
-      ))
+      )
 
     # Save bytecode to cache
     let bytecodeFile = getBytecodeFileName(options.sourceFile)
     logCompiler(flags, "Saving bytecode cache to: " & bytecodeFile)
-    saveBytecodeToCache(bytecodeProg, bytecodeFile)
+    saveBytecodeToCache(regProg, bytecodeFile)
 
     # Check if we should run the VM
     var exitCode = 0
     if options.runVM:
-      if options.useRegisterVM:
-        # Use register-based VM for better performance
-        logCompiler(flags, "Starting Register VM execution")
-        let regProg = regcompiler.compileProgram(prog, bytecodeProg, optimizeLevel = 0, verbose = options.verbose)  # Disable optimizations during debugging
-        exitCode = runRegProgram(regProg, options.verbose)
-        logCompiler(flags, "Register VM execution finished with exit code: " & $exitCode)
-      else:
-        # Use traditional stack-based VM
-        logCompiler(flags, "Starting VM execution")
-        let vm = newBytecodeVM(bytecodeProg)
-        exitCode = vm.runBytecode()
-        logCompiler(flags, "VM execution finished with exit code: " & $exitCode)
+      # Always use register-based VM
+      logCompiler(flags, "Starting Register VM execution")
+      exitCode = runRegProgram(regProg, options.verbose)
+      logCompiler(flags, "Register VM execution finished with exit code: " & $exitCode)
 
     logCompiler(flags, "Compilation completed successfully")
     return CompilerResult(success: true, exitCode: 0)

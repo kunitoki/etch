@@ -1,9 +1,9 @@
 # regcompiler.nim
 # Register-based bytecode compiler with aggressive optimizations
 
-import std/[tables, sequtils, options, strutils]
+import std/[tables, options, strutils]
 import ../frontend/ast
-import ../common/[types, builtins, logging]
+import ../common/types
 import regvm
 import serialize
 

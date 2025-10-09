@@ -2,8 +2,7 @@
 # Register-based VM implementation (Lua-inspired architecture)
 # This provides significant performance improvements over stack-based VMs
 
-import std/[tables, streams]
-import bytecode
+import std/tables
 
 const
   MAX_REGISTERS* = 255  # Maximum number of registers per function frame (must fit in uint8)

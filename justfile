@@ -12,10 +12,6 @@ examples:
     @just libs
     nim r src/etch.nim --test examples/
 
-reg_examples:
-    @just libs
-    nim r src/etch.nim --regvm --test examples/
-
 # Test C backend by compiling examples to C and validating
 cexamples:
     @just libs
@@ -39,9 +35,9 @@ build:
 clean:
     find . -name "*.etcx" -delete
     find . -name "*.exe" -delete
+    find examples -name "*.c" -type f -exec rm -f {} + 2>/dev/null || true
+    find examples -name "*_c" -type f -exec rm -f {} + 2>/dev/null || true
     find . -name "nimcache" -type d -exec rm -rf {} + 2>/dev/null || true
-    find examples -name "*.c" -type d -exec rm -rf {} + 2>/dev/null || true
-    find examples -name "*_c" -type d -exec rm -rf {} + 2>/dev/null || true
 
 # Handle performance
 perf:

@@ -111,7 +111,7 @@ proc smartFilterOutput(execResult: ExecutionResult): string =
 
   normalizeOutput(lines.join("\n"))
 
-proc runSingleTest*(testFile: string, verbose: bool = false, useRegisterVM: bool = false, release: bool = false): TestResult =
+proc runSingleTest*(testFile: string, verbose: bool = false, release: bool = false): TestResult =
   ## Run a single test file and compare output with expected result
   let baseName = testFile.splitFile.name
   let testDir = testFile.splitFile.dir
@@ -146,7 +146,7 @@ proc runSingleTest*(testFile: string, verbose: bool = false, useRegisterVM: bool
   let etchExe = getAppFilename()
   var flags = "--run"
   if verbose: flags &= " --verbose"
-  if useRegisterVM: flags &= " --regvm"
+  # Register VM is now the default
   if release: flags &= " --release"
   let cmd = fmt"{etchExe} {flags} {testFile}"
   let execResult = executeWithSeparateStreams(cmd)
@@ -210,16 +210,16 @@ proc findTestFiles*(directory: string): seq[string] =
 
   result.sort()
 
-proc runTests*(path: string = "examples", verbose: bool = false, useRegisterVM: bool = false, release: bool = false): int =
+proc runTests*(path: string = "examples", verbose: bool = false, release: bool = false): int =
   ## Run tests - if path is a file, run single test; if directory, run all tests
 
   # Check if path is a file or directory
   if fileExists(path):
     # Single file test
     echo fmt"Running single test: {path}"
-    if verbose: echo fmt"  verbose: {verbose}, useRegisterVM: {useRegisterVM}, release: {release}"
+    if verbose: echo fmt"  verbose: {verbose}, release: {release}"
 
-    let res = runSingleTest(path, verbose, useRegisterVM, release)
+    let res = runSingleTest(path, verbose, release)
 
     if res.passed:
       echo "✓ PASSED"
@@ -254,7 +254,7 @@ proc runTests*(path: string = "examples", verbose: bool = false, useRegisterVM: 
 
     for testFile in testFiles:
       echo fmt"Running {testFile.splitFile.name}... "
-      let res = runSingleTest(testFile, verbose, useRegisterVM, release)
+      let res = runSingleTest(testFile, verbose, release)
       results.add(res)
 
       if res.passed:

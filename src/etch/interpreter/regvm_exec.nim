@@ -3,7 +3,6 @@
 
 import std/[tables, math, strutils]
 import regvm
-import ../common/types
 
 # C rand for consistency
 proc c_rand(): cint {.importc: "rand", header: "<stdlib.h>".}
@@ -125,6 +124,17 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
   var pc = vm.program.entryPoint
   let instructions = vm.program.instructions
   let maxInstr = instructions.len
+
+  # Output buffer for print statements - significantly improves performance
+  var outputBuffer: string = ""
+  var outputCount = 0
+  const BUFFER_SIZE = 8192  # Flush every 8KB or 100 lines
+
+  template flushOutput() =
+    if outputBuffer.len > 0:
+      stdout.write(outputBuffer)
+      outputBuffer.setLen(0)
+      outputCount = 0
 
   # Main dispatch loop - unrolled for common instructions
   while pc < maxInstr:
@@ -887,19 +897,32 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       of "print":
         if numArgs == 1:
           let val = getReg(vm, funcReg + 1)
-          if isInt(val):
-            echo getInt(val)
+          # Build the string to print
+          let output = if isInt(val):
+            $getInt(val)
           elif isFloat(val):
-            echo getFloat(val)
+            $getFloat(val)
           elif isChar(val):
-            echo getChar(val)
+            $getChar(val)
           elif getTag(val) == TAG_BOOL:
-            echo if (val.data and 1) != 0: "true" else: "false"
+            if (val.data and 1) != 0: "true" else: "false"
           elif getTag(val) == TAG_STRING:
-            echo val.sval
+            val.sval
           elif getTag(val) == TAG_ARRAY:
             # Print array elements (for debugging)
-            echo val.aval
+            $val.aval
+          else:
+            "nil"
+
+          # Add to output buffer for batched I/O
+          outputBuffer.add(output)
+          outputBuffer.add('\n')
+          outputCount.inc
+
+          # Flush if buffer is getting large or we have many lines
+          if outputBuffer.len >= BUFFER_SIZE or outputCount >= 100:
+            flushOutput()
+
           setReg(vm, funcReg, makeNil())
 
       of "toString":
@@ -1075,6 +1098,9 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
 
       # Check if we're returning from main (only 1 frame)
       if vm.frames.len <= 1:
+        # Flush output buffer before exiting
+        flushOutput()
+        stdout.flushFile()
         return 0
 
       # Get return value (if any)
@@ -1146,6 +1172,10 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       # Unimplemented instructions
       discard
 
+  # Flush any remaining buffered output
+  flushOutput()
+  # Ensure all output is written to terminal
+  stdout.flushFile()
   return 0
 
 # Run a register-based program

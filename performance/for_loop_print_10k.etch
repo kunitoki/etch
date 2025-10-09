@@ -1,7 +1,7 @@
 fn main() {
     seed(42);
     var x = rand(1000000, 1) % 10000;
-    for i in 0..<100000 {
+    for i in 0..<10000 {
         print(x + i);
     }
 }

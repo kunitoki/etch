@@ -3,7 +3,7 @@
 
 import std/[os, strutils, osproc, strformat]
 import ./etch/[compiler, tester, debug_server]
-import ./etch/interpreter/[bytecode, dump]
+import ./etch/interpreter/[bytecode, regvm_dump]
 import ./etch/backend/c/codegen
 
 
@@ -17,7 +17,6 @@ proc usage() =
   echo "  --run         Execute the program (with bytecode caching)"
   echo "  --verbose     Enable verbose debug output"
   echo "  --release     Optimize and skip debug information in bytecode"
-  echo "  --regvm       Use register-based VM (faster execution)"
   echo "  --emit c      Emit C code instead of running"
   echo "  --clang       Compile and run the emitted C code (use with --emit c)"
   echo "  --debug-server Start debug server for VSCode integration"
@@ -34,7 +33,6 @@ when isMainModule:
   # Parse flags first (before mode commands)
   var verbose = false
   var debug = true
-  var useRegisterVM = false
   var mode = ""
   var modeArg = ""
   var runVm = false
@@ -50,8 +48,6 @@ when isMainModule:
       verbose = true
     elif a == "--release":
       debug = false
-    elif a == "--regvm":
-      useRegisterVM = true
     elif a == "--run":
       runVm = true
     elif a == "--clang":
@@ -87,7 +83,7 @@ when isMainModule:
   # Handle test mode
   if mode == "test":
     let testDir = if modeArg != "": modeArg else: "tests"
-    quit runTests(testDir, verbose, useRegisterVM, not debug)
+    quit runTests(testDir, verbose, not debug)
 
   if mode == "test-c":
     let testDir = if modeArg != "": modeArg else: "tests"
@@ -110,8 +106,7 @@ when isMainModule:
       sourceFile: sourceFile,
       runVM: false,
       verbose: verbose,
-      debug: true,
-      useRegisterVM: useRegisterVM
+      debug: true
     )
 
     try:
@@ -120,8 +115,9 @@ when isMainModule:
       let flags = CompilerFlags(verbose: verbose, debug: true)
       let bytecodeProgram = compileProgramWithGlobals(prog, sourceHash, evaluatedGlobals, sourceFile, flags)
 
-      # Start debug server
-      runDebugServer(bytecodeProgram, sourceFile)
+      # Debug server not yet updated for register VM
+      echo "Debug server not yet available for register VM"
+      # runDebugServer(bytecodeProgram, sourceFile)
     except Exception as e:
       # Send compilation error as JSON response for debug adapter
       sendCompilationError(e.msg)
@@ -146,8 +142,7 @@ when isMainModule:
       sourceFile: sourceFile,
       runVM: false,
       verbose: verbose,
-      debug: debug,
-      useRegisterVM: useRegisterVM
+      debug: debug
     )
 
     try:
@@ -186,45 +181,47 @@ when isMainModule:
       let flags = CompilerFlags(verbose: verbose, debug: debug)
       let bytecodeProgram = compileProgramWithGlobals(prog, sourceHash, evaluatedGlobals, sourceFile, flags)
 
-      # Generate C code
-      let cCode = generateC(bytecodeProgram, verbose)
+      # C code generation not yet updated for register VM
+      echo "C code generation not yet available for register VM"
+      quit 1
+      # let cCode = generateC(bytecodeProgram, verbose)
 
       # Output C file name (replace .etch with .c)
-      let (dir, name, _) = splitFile(sourceFile)
-      let outputFile = joinPath(dir, name & ".c")
+      # let (dir, name, _) = splitFile(sourceFile)
+      # let outputFile = joinPath(dir, name & ".c")
 
-      writeFile(outputFile, cCode)
-      if verbose:
-        echo &"[C BACKEND] Generated C code written to {outputFile}"
+      # writeFile(outputFile, cCode)
+      # if verbose:
+      #   echo &"[C BACKEND] Generated C code written to {outputFile}"
 
       # Compile and run with clang if --clang flag is provided
-      if useClang:
-        let exeFile = joinPath(dir, name & "_c")
-        # Get macOS SDK path for proper compilation
-        let sdkPathResult = execCmdEx("xcrun --show-sdk-path")
-        let sdkPath = if sdkPathResult[1] == 0: sdkPathResult[0].strip() else: ""
+      # if useClang:
+      #   let exeFile = joinPath(dir, name & "_c")
+      #   # Get macOS SDK path for proper compilation
+      #   let sdkPathResult = execCmdEx("xcrun --show-sdk-path")
+      #   let sdkPath = if sdkPathResult[1] == 0: sdkPathResult[0].strip() else: ""
+      #
+      #   # Build compile command with proper SDK path on macOS
+      #   let compileCmd = if sdkPath.len > 0:
+      #     &"clang -isysroot {sdkPath} -O2 -o {exeFile} {outputFile}"
+      #   else:
+      #     &"clang -O2 -o {exeFile} {outputFile}"
+      #
+      #   if verbose:
+      #     echo &"[C BACKEND] Compiling with: {compileCmd}"
+      #
+      #   let compileResult = execCmd(compileCmd)
+      #   if compileResult == 0:
+      #     if verbose:
+      #       echo &"[C BACKEND] Compiled to executable: {exeFile}"
+      #     # Run the compiled program
+      #     let runResult = execCmd(&"{exeFile}")
+      #     quit runResult
+      #   else:
+      #     echo "Error: C compilation failed"
+      #     quit 1
 
-        # Build compile command with proper SDK path on macOS
-        let compileCmd = if sdkPath.len > 0:
-          &"clang -isysroot {sdkPath} -O2 -o {exeFile} {outputFile}"
-        else:
-          &"clang -O2 -o {exeFile} {outputFile}"
-
-        if verbose:
-          echo &"[C BACKEND] Compiling with: {compileCmd}"
-
-        let compileResult = execCmd(compileCmd)
-        if compileResult == 0:
-          if verbose:
-            echo &"[C BACKEND] Compiled to executable: {exeFile}"
-          # Run the compiled program
-          let runResult = execCmd(&"{exeFile}")
-          quit runResult
-        else:
-          echo "Error: C compilation failed"
-          quit 1
-
-      quit 0
+      # quit 0
 
     except Exception as e:
       echo "Error: ", e.msg
@@ -236,8 +233,7 @@ when isMainModule:
     runVM: runVm,
     verbose: verbose,
     debug: debug,
-    release: not debug,
-    useRegisterVM: useRegisterVM
+    release: not debug
   )
 
   # Use the compiler module to handle compilation and execution
