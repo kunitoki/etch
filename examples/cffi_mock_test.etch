@@ -4,11 +4,9 @@ import ffi clib/mathlib {
   fn c_power(base: int, exp: int) -> int;
 }
 
-// For now just test that the CFFI infrastructure compiles
 fn main() {
   print("C FFI infrastructure is in place");
 
-  // When a C library is available, we would call:
   let sum = c_add(10, 20);
   let product = c_multiply(5, 6);
   print(sum);

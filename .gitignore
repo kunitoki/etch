@@ -1,17 +1,17 @@
 .DS_Store
+.vscode/
 
 nimcache/
 nimblecache/
 htmldocs/
+nimble.develop
+nimble.paths
 
 /etch
 __etch__/
 *.etcx
 *.etca
 *.vsix
+etch.out
 /examples/*_c
 /examples/*.c
-nimble.develop
-nimble.paths
-.vscode/
-

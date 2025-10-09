@@ -54,6 +54,8 @@ proc serializeV(stream: Stream, val: V) =
 
   # Write type-specific data
   case tag:
+  of TAG_INT:
+    stream.write(val.ival)  # Write the full 64-bit integer value
   of TAG_STRING:
     stream.write(uint32(val.sval.len))
     stream.write(val.sval)
@@ -75,7 +77,9 @@ proc serializeV(stream: Stream, val: V) =
     if tag in [TAG_SOME, TAG_OK, TAG_ERR]:
       # Check if there's associated complex data
       let wrappedTag = (val.data shr 32) and 0xFFFF
-      if wrappedTag == TAG_STRING:
+      if wrappedTag == TAG_INT:
+        stream.write(val.ival)
+      elif wrappedTag == TAG_STRING:
         stream.write(uint32(val.sval.len))
         stream.write(val.sval)
       elif wrappedTag == TAG_FLOAT:
@@ -100,6 +104,8 @@ proc deserializeV(stream: Stream): V =
 
   # Read type-specific data
   case tag:
+  of TAG_INT:
+    result.ival = stream.readInt64()  # Read the full 64-bit integer value
   of TAG_STRING:
     let len = stream.readUint32()
     result.sval = stream.readStr(int(len))
@@ -122,7 +128,9 @@ proc deserializeV(stream: Stream): V =
     if tag in [TAG_SOME, TAG_OK, TAG_ERR]:
       # Check if there's associated complex data
       let wrappedTag = (result.data shr 32) and 0xFFFF
-      if wrappedTag == TAG_STRING:
+      if wrappedTag == TAG_INT:
+        result.ival = stream.readInt64()
+      elif wrappedTag == TAG_STRING:
         let len = stream.readUint32()
         result.sval = stream.readStr(int(len))
       elif wrappedTag == TAG_FLOAT:

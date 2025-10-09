@@ -12,11 +12,6 @@ examples:
     @just libs
     nim r src/etch.nim --test examples/
 
-# Test C backend by compiling examples to C and validating
-cexamples:
-    @just libs
-    nim r src/etch.nim --test-c examples/
-
 # Test compiling and running a specific example file
 test file:
     @just libs
@@ -47,6 +42,7 @@ perf:
     #hyperfine --warmup 3 './etch --run --release performance/string_operations.etch' 'python3 performance/string_operations.py'
     #hyperfine --warmup 3 './etch --run --release performance/nested_loops.etch' 'python3 performance/nested_loops.py'
     hyperfine --warmup 3 './etch --run --release performance/function_calls.etch' 'python3 performance/function_calls.py'
+    @just build
 
 # Deal with VSCode extension packaging and installation
 [working-directory: 'vscode']

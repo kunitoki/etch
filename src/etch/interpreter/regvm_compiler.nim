@@ -38,7 +38,10 @@ proc addConst*(c: var RegCompiler, val: regvm.V): uint16 =
       of regvm.TAG_FLOAT:
         if existing.fval == val.fval:
           return uint16(i)
-      of regvm.TAG_INT, regvm.TAG_BOOL, regvm.TAG_NIL, regvm.TAG_CHAR:
+      of regvm.TAG_INT:
+        if existing.ival == val.ival:
+          return uint16(i)
+      of regvm.TAG_BOOL, regvm.TAG_NIL, regvm.TAG_CHAR:
         if existing.data == val.data:
           return uint16(i)
       else:

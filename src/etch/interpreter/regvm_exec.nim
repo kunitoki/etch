@@ -136,12 +136,14 @@ proc getValueType*(v: V): string =
     result = "unknown"
 
 # Optimized arithmetic operations with type specialization
-proc doAdd(a, b: V): V {.inline.} =
-  if isInt(a) and isInt(b):
-    makeInt(getInt(a) + getInt(b))
-  elif isFloat(a) and isFloat(b):
-    makeFloat(getFloat(a) + getFloat(b))
-  elif getTag(a) == TAG_STRING and getTag(b) == TAG_STRING:
+template doAdd(a, b: V): V =
+  let tagA = getTag(a)
+  let tagB = getTag(b)
+  if tagA == TAG_INT and tagB == TAG_INT:
+    makeInt(a.ival + b.ival)  # Direct field access
+  elif tagA == TAG_FLOAT and tagB == TAG_FLOAT:
+    makeFloat(a.fval + b.fval)  # Direct field access
+  elif tagA == TAG_STRING and tagB == TAG_STRING:
     # String concatenation
     var res: V
     res.data = TAG_STRING shl 48
@@ -156,72 +158,86 @@ proc doAdd(a, b: V): V {.inline.} =
   else:
     makeNil()  # Type error
 
-proc doSub(a, b: V): V {.inline.} =
-  if isInt(a) and isInt(b):
-    makeInt(getInt(a) - getInt(b))
-  elif isFloat(a) and isFloat(b):
-    makeFloat(getFloat(a) - getFloat(b))
+template doSub(a, b: V): V =
+  let tagA = getTag(a)
+  let tagB = getTag(b)
+  if tagA == TAG_INT and tagB == TAG_INT:
+    makeInt(a.ival - b.ival)  # Direct field access
+  elif tagA == TAG_FLOAT and tagB == TAG_FLOAT:
+    makeFloat(a.fval - b.fval)  # Direct field access
   else:
     makeNil()
 
-proc doMul(a, b: V): V {.inline.} =
-  if isInt(a) and isInt(b):
-    makeInt(getInt(a) * getInt(b))
-  elif isFloat(a) and isFloat(b):
-    makeFloat(getFloat(a) * getFloat(b))
+template doMul(a, b: V): V =
+  let tagA = getTag(a)
+  let tagB = getTag(b)
+  if tagA == TAG_INT and tagB == TAG_INT:
+    makeInt(a.ival * b.ival)  # Direct field access
+  elif tagA == TAG_FLOAT and tagB == TAG_FLOAT:
+    makeFloat(a.fval * b.fval)  # Direct field access
   else:
     makeNil()
 
-proc doDiv(a, b: V): V {.inline.} =
-  if isInt(a) and isInt(b):
-    makeInt(getInt(a) div getInt(b))
-  elif isFloat(a) and isFloat(b):
-    makeFloat(getFloat(a) / getFloat(b))
+template doDiv(a, b: V): V =
+  let tagA = getTag(a)
+  let tagB = getTag(b)
+  if tagA == TAG_INT and tagB == TAG_INT:
+    makeInt(a.ival div b.ival)  # Direct field access
+  elif tagA == TAG_FLOAT and tagB == TAG_FLOAT:
+    makeFloat(a.fval / b.fval)  # Direct field access
   else:
     makeNil()
 
-proc doMod(a, b: V): V {.inline.} =
-  if isInt(a) and isInt(b):
-    makeInt(getInt(a) mod getInt(b))
+template doMod(a, b: V): V =
+  if getTag(a) == TAG_INT and getTag(b) == TAG_INT:
+    makeInt(a.ival mod b.ival)  # Direct field access
   else:
     makeNil()
 
-proc doLt(a, b: V): bool {.inline.} =
-  if isInt(a) and isInt(b):
-    getInt(a) < getInt(b)
-  elif isFloat(a) and isFloat(b):
-    getFloat(a) < getFloat(b)
-  elif getTag(a) == TAG_CHAR and getTag(b) == TAG_CHAR:
+template doLt(a, b: V): bool =
+  let tagA = getTag(a)
+  let tagB = getTag(b)
+  if tagA == TAG_INT and tagB == TAG_INT:
+    a.ival < b.ival  # Direct field access
+  elif tagA == TAG_FLOAT and tagB == TAG_FLOAT:
+    a.fval < b.fval  # Direct field access
+  elif tagA == TAG_CHAR and tagB == TAG_CHAR:
     getChar(a) < getChar(b)
-  elif getTag(a) == TAG_STRING and getTag(b) == TAG_STRING:
+  elif tagA == TAG_STRING and tagB == TAG_STRING:
     a.sval < b.sval
   else:
     false
 
-proc doLe(a, b: V): bool {.inline.} =
-  if isInt(a) and isInt(b):
-    getInt(a) <= getInt(b)
-  elif isFloat(a) and isFloat(b):
-    getFloat(a) <= getFloat(b)
-  elif getTag(a) == TAG_CHAR and getTag(b) == TAG_CHAR:
+template doLe(a, b: V): bool =
+  let tagA = getTag(a)
+  let tagB = getTag(b)
+  if tagA == TAG_INT and tagB == TAG_INT:
+    a.ival <= b.ival  # Direct field access
+  elif tagA == TAG_FLOAT and tagB == TAG_FLOAT:
+    a.fval <= b.fval  # Direct field access
+  elif tagA == TAG_CHAR and tagB == TAG_CHAR:
     getChar(a) <= getChar(b)
-  elif getTag(a) == TAG_STRING and getTag(b) == TAG_STRING:
+  elif tagA == TAG_STRING and tagB == TAG_STRING:
     a.sval <= b.sval
   else:
     false
 
-proc doEq(a, b: V): bool {.inline.} =
-  if isInt(a) and isInt(b):
-    getInt(a) == getInt(b)
-  elif isFloat(a) and isFloat(b):
-    getFloat(a) == getFloat(b)
-  elif getTag(a) == TAG_BOOL and getTag(b) == TAG_BOOL:
+template doEq(a, b: V): bool =
+  let tagA = getTag(a)
+  let tagB = getTag(b)
+  if tagA != tagB:
+    false
+  elif tagA == TAG_INT:
+    a.ival == b.ival  # Direct field access
+  elif tagA == TAG_FLOAT:
+    a.fval == b.fval  # Direct field access
+  elif tagA == TAG_BOOL:
     a.data == b.data
-  elif getTag(a) == TAG_CHAR and getTag(b) == TAG_CHAR:
+  elif tagA == TAG_CHAR:
     getChar(a) == getChar(b)
-  elif getTag(a) == TAG_STRING and getTag(b) == TAG_STRING:
+  elif tagA == TAG_STRING:
     a.sval == b.sval
-  elif getTag(a) == TAG_NIL and getTag(b) == TAG_NIL:
+  elif tagA == TAG_NIL:
     true
   else:
     false

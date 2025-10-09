@@ -155,14 +155,15 @@ type
 
   # Reuse V type from main VM but with optimizations
   V* = object
-    # Tagged union with NaN-boxing inspired optimization
-    # Use lower 48 bits for data, upper 16 for type tag
+    # Type tag and immediate data (tag in upper 16 bits)
     data*: uint64
-    # Secondary storage for complex types
+    # Numeric storage - either int or float value
+    ival*: int64    # Store full int64 value (also used for bool, char)
+    fval*: float64  # Store full float value
+    # Secondary storage for complex types (only used when needed)
     sval*: string
     aval*: seq[V]
     tval*: Table[string, V]
-    fval*: float64  # Store full float value
 
 # Type tags for NaN-boxing (upper 16 bits of data field)
 const
@@ -181,9 +182,9 @@ const
 
 # Fast value constructors using NaN-boxing
 proc makeInt*(val: int64): V {.inline.} =
-  # Store int in lower 48 bits, TAG_INT (0) in upper 16 bits
-  # Mask to 48 bits to avoid tag collision
-  V(data: (cast[uint64](val) and 0x0000_FFFF_FFFF_FFFF'u64) or (TAG_INT shl 48))
+  # Store full 64-bit integer value
+  result.data = TAG_INT shl 48
+  result.ival = val
 
 proc makeFloat*(val: float64): V {.inline.} =
   # For floats, we need to store the full 64 bits somewhere
@@ -207,7 +208,7 @@ proc makeString*(val: string): V {.inline.} =
 
 proc makeSome*(val: V): V {.inline.} =
   # Create an Option.Some value wrapping the given value
-  result = val  # Copy the wrapped value
+  result = val  # Copy the wrapped value (including all fields)
   # Store the original tag in bits 32-47 and set TAG_SOME as the main tag
   let originalTag = (val.data shr 48) and 0xFFFF
   result.data = (TAG_SOME shl 48) or (originalTag shl 32) or (val.data and 0xFFFFFFFF'u64)
@@ -218,14 +219,14 @@ proc makeNone*(): V {.inline.} =
 
 proc makeOk*(val: V): V {.inline.} =
   # Create a Result.Ok value wrapping the given value
-  result = val  # Copy the wrapped value
+  result = val  # Copy the wrapped value (including all fields)
   # Store the original tag in bits 32-47 and set TAG_OK as the main tag
   let originalTag = (val.data shr 48) and 0xFFFF
   result.data = (TAG_OK shl 48) or (originalTag shl 32) or (val.data and 0xFFFFFFFF'u64)
 
 proc makeErr*(val: V): V {.inline.} =
   # Create a Result.Err value wrapping the error
-  result = val  # Copy the error value (usually string)
+  result = val  # Copy the error value (usually string) - including all fields
   # Store the original tag in bits 32-47 and set TAG_ERR as the main tag
   let originalTag = (val.data shr 48) and 0xFFFF
   result.data = (TAG_ERR shl 48) or (originalTag shl 32) or (val.data and 0xFFFFFFFF'u64)
@@ -254,14 +255,8 @@ proc getChar*(v: V): char {.inline.} =
   char(v.data and 0xFF)
 
 proc getInt*(v: V): int64 {.inline.} =
-  # Extract lower 48 bits and sign-extend if necessary
-  let val = v.data and 0x0000_FFFF_FFFF_FFFF'u64
-  # Check if bit 47 is set (sign bit for 48-bit value)
-  if (val and 0x0000_8000_0000_0000'u64) != 0:
-    # Sign extend to 64 bits
-    cast[int64](val or 0xFFFF_0000_0000_0000'u64)
-  else:
-    cast[int64](val)
+  # Return full 64-bit integer value
+  v.ival
 
 proc getFloat*(v: V): float64 {.inline.} =
   v.fval

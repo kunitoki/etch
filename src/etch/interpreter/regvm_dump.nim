@@ -170,8 +170,7 @@ proc dumpConstants*(prog: RegBytecodeProgram) =
       let tag = (constant.data shr 48) and 0xFFFF
       let valueStr = case tag
         of TAG_INT:
-          let intVal = cast[int64](constant.data and 0x0000_FFFF_FFFF_FFFF'u64)
-          &"{intVal}"
+          &"{constant.ival}"
         of TAG_FLOAT:
           &"{constant.fval}"
         of TAG_BOOL:
@@ -280,8 +279,7 @@ proc dumpInstructionsByFunctions*(prog: RegBytecodeProgram, maxInstructions: int
           extra = case tag
             of TAG_STRING: &"  ; \"{constant.sval}\""
             of TAG_INT:
-              let intVal = cast[int64](constant.data and 0x0000_FFFF_FFFF_FFFF'u64)
-              &"  ; {intVal}"
+              &"  ; {constant.ival}"
             of TAG_FLOAT: &"  ; {constant.fval}"
             of TAG_BOOL:
               if (constant.data and 1) != 0: "  ; true" else: "  ; false"
