@@ -40,6 +40,8 @@ clean:
     find . -name "*.etcx" -delete
     find . -name "*.exe" -delete
     find . -name "nimcache" -type d -exec rm -rf {} + 2>/dev/null || true
+    find examples -name "*.c" -type d -exec rm -rf {} + 2>/dev/null || true
+    find examples -name "*_c" -type d -exec rm -rf {} + 2>/dev/null || true
 
 # Handle performance
 perf:
