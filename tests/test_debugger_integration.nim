@@ -16,7 +16,7 @@ proc runDebugServer(program: string, commands: seq[string], timeout: int = 2): s
   writeFile(cmdFile, commands.join("\n"))
   defer: removeFile(cmdFile)
 
-  let cmd = "timeout " & $timeout & " ./src/etch.out --debug-server " & program & " < " & cmdFile & " 2>/dev/null || true"
+  let cmd = "timeout " & $timeout & " ./etch --debug-server " & program & " < " & cmdFile & " 2>/dev/null || true"
   let (output, _) = execCmdEx(cmd)
   return output
 

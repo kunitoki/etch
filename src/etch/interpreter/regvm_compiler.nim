@@ -5,6 +5,8 @@ import std/[tables, options, strutils]
 import ../frontend/ast
 import ../common/types
 import regvm
+import regvm_lifetime
+
 
 type
   RegCompiler* = object
@@ -16,6 +18,7 @@ type
     verbose*: bool                    # Enable debug output
     debug*: bool                      # Include debug info in bytecode
     funInstances*: Table[string, FunDecl]  # Function declarations for default params
+    lifetimeTracker*: LifetimeTracker  # Track variable lifetimes for debugging and destructors
 
   LoopInfo = object
     startLabel*: int
@@ -190,6 +193,10 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
     c.prog.emitABx(ropLoadK, result, constIdx)
 
   of ekVar:
+    # Track variable use for lifetime analysis
+    let currentPC = c.prog.instructions.len
+    c.lifetimeTracker.useVariable(e.vname, currentPC)
+
     # Check if variable already in register
     if c.allocator.regMap.hasKey(e.vname):
       if c.verbose:
@@ -207,6 +214,8 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
     let leftReg = c.compileExpr(e.lhs)
     let rightReg = c.compileExpr(e.rhs)
     result = c.allocator.allocReg()
+    if c.verbose:
+      echo "[REGCOMPILER] Binary op: leftReg=", leftReg, " rightReg=", rightReg, " resultReg=", result
 
     # Check for immediate optimizations
     if c.optimizeLevel >= 1 and e.rhs.kind == ekInt and
@@ -246,6 +255,8 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
 
   of ekArray:
     result = c.allocator.allocReg()
+    if c.verbose:
+      echo "[REGCOMPILER] Array expression allocated reg ", result
     c.prog.emitABx(ropNewArray, result, uint16(e.elements.len), c.makeDebugInfo(e.pos))
 
     # Set array elements
@@ -948,33 +959,58 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
     # Variable declaration (let or var) - allocate register for the new variable
     if c.verbose:
       echo "[REGCOMPILER] Compiling ", (if s.vflag == vfLet: "let" else: "var"), " statement for variable: ", s.vname, " at line ", s.pos.line
+
+    # Track variable declaration in lifetime tracker
+    let currentPC = c.prog.instructions.len
+
     if s.vinit.isSome:
       if c.verbose:
         echo "[REGCOMPILER] Compiling init expression for ", s.vname, ", expr kind: ", s.vinit.get.kind
       let valReg = c.compileExpr(s.vinit.get)
       c.allocator.regMap[s.vname] = valReg
+
+      # Variable is declared and defined at this point
+      c.lifetimeTracker.declareVariable(s.vname, valReg, currentPC)
+      c.lifetimeTracker.defineVariable(s.vname, currentPC)
+
       if c.verbose:
         echo "[REGCOMPILER] Variable ", s.vname, " allocated to reg ", valReg, " with initialization"
     else:
       # Uninitialized variable - allocate register with nil
       let reg = c.allocator.allocReg(s.vname)
       c.prog.emitABC(ropLoadNil, reg, 0, 0)
+
+      # Variable is declared but not yet defined (holds nil)
+      c.lifetimeTracker.declareVariable(s.vname, reg, currentPC)
+
       if c.verbose:
         echo "[REGCOMPILER] Variable ", s.vname, " allocated to reg ", reg, " (uninitialized)"
 
   of skAssign:
     # Check if variable already has a register
+    let currentPC = c.prog.instructions.len
+
     if c.allocator.regMap.hasKey(s.aname):
       # Update existing register
       let destReg = c.allocator.regMap[s.aname]
       let valReg = c.compileExpr(s.aval)
       if valReg != destReg:
         c.prog.emitABC(ropMove, destReg, valReg, 0)
+        # In debug mode, clear the source register to avoid confusion
+        if c.debug:
+          c.prog.emitABC(ropLoadNil, valReg, 0, 0)
         c.allocator.freeReg(valReg)
+
+      # Mark variable as defined (if it wasn't already)
+      c.lifetimeTracker.defineVariable(s.aname, currentPC)
     else:
       # New variable - allocate register
       let valReg = c.compileExpr(s.aval)
       c.allocator.regMap[s.aname] = valReg
+
+      # Declare and define variable (implicit declaration through assignment)
+      c.lifetimeTracker.declareVariable(s.aname, valReg, currentPC)
+      c.lifetimeTracker.defineVariable(s.aname, currentPC)
 
   of skIf:
     if c.verbose:
@@ -1264,12 +1300,43 @@ proc compileFunDecl*(c: var RegCompiler, name: string, params: seq[Param], retTy
     regMap: initTable[string, uint8]()
   )
 
+  # Reset lifetime tracker for this function
+  let startPC = c.prog.instructions.len
+  c.lifetimeTracker = newLifetimeTracker()
+  c.lifetimeTracker.enterScope(startPC)
+
+  # Track parameters
+  for param in params:
+    let paramReg = c.allocator.allocReg(param.name)
+    c.lifetimeTracker.declareVariable(param.name, paramReg, startPC)
+    c.lifetimeTracker.defineVariable(param.name, startPC)
+
   # Compile function body
   for stmt in body:
     c.compileStmt(stmt)
 
+  # Exit function scope
+  let endPC = c.prog.instructions.len
+  c.lifetimeTracker.exitScope(endPC)
+
+  # Build and optimize lifetime data
+  c.lifetimeTracker.buildPCMap()
+  if c.optimizeLevel >= 1:
+    c.lifetimeTracker.optimizeLifetimes()
+
+  # Save lifetime data (allocate on heap)
+  let lifetimeData = c.lifetimeTracker.exportFunctionData(name)
+  var heapData = new(FunctionLifetimeData)
+  heapData[] = lifetimeData
+  c.prog.lifetimeData[name] = cast[pointer](heapData)
+  GC_ref(heapData)  # Keep a GC reference to prevent collection
+
   # Save variable mappings for this function
   c.prog.variableMap[name] = c.allocator.regMap
+
+  # Debug: dump lifetime info if verbose
+  if c.verbose:
+    c.lifetimeTracker.dumpLifetimes()
 
   # Add implicit return if needed
   if c.prog.instructions.len == 0 or
@@ -1287,7 +1354,8 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
     prog: RegBytecodeProgram(
       functions: initTable[string, regvm.FunctionInfo](),
       cffiInfo: initTable[string, regvm.CFFIInfo](),
-      variableMap: initTable[string, Table[string, uint8]]()
+      variableMap: initTable[string, Table[string, uint8]](),
+      lifetimeData: initTable[string, pointer]()
     ),
     allocator: RegAllocator(
       nextReg: 0,
@@ -1299,7 +1367,8 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
     optimizeLevel: optimizeLevel,
     verbose: verbose,
     debug: debug,
-    funInstances: p.funInstances
+    funInstances: p.funInstances,
+    lifetimeTracker: newLifetimeTracker()
   )
 
   # Populate C FFI info from AST - identify CFFI functions by their isCFFI flag
@@ -1342,9 +1411,16 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
         regMap: initTable[string, uint8]()
       )
 
+      # Reset lifetime tracker for new function
+      compiler.lifetimeTracker = newLifetimeTracker()
+      compiler.lifetimeTracker.enterScope(startPos)  # Enter function scope
+
       # Allocate registers for parameters and map them
       for i, param in funcDecl.params:
         let paramReg = compiler.allocator.allocReg(param.name)
+        # Track parameter as declared and defined at function entry
+        compiler.lifetimeTracker.declareVariable(param.name, paramReg, startPos)
+        compiler.lifetimeTracker.defineVariable(param.name, startPos)
         if verbose:
           echo "[REGCOMPILER] Allocated parameter '", param.name, "' to register ", paramReg
 
@@ -1352,8 +1428,28 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
       for stmt in funcDecl.body:
         compiler.compileStmt(stmt)
 
+      # Exit function scope
+      let endPC = compiler.prog.instructions.len
+      compiler.lifetimeTracker.exitScope(endPC)
+
+      # Build PC map and optimize lifetimes
+      compiler.lifetimeTracker.buildPCMap()
+      if compiler.optimizeLevel >= 1:
+        compiler.lifetimeTracker.optimizeLifetimes()
+
+      # Save lifetime data for this function (allocate on heap)
+      let lifetimeData = compiler.lifetimeTracker.exportFunctionData(fname)
+      var heapData = new(FunctionLifetimeData)
+      heapData[] = lifetimeData
+      compiler.prog.lifetimeData[fname] = cast[pointer](heapData)
+      GC_ref(heapData)  # Keep a GC reference to prevent collection
+
       # Save variable mappings for this function
       compiler.prog.variableMap[fname] = compiler.allocator.regMap
+
+      # Debug: dump lifetime info if verbose
+      if verbose:
+        compiler.lifetimeTracker.dumpLifetimes()
 
       # Add implicit return if needed
       if compiler.prog.instructions.len == startPos or

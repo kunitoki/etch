@@ -1,0 +1,30 @@
+// Test lifetime tracking with nested scopes
+fn main() {
+    // a is declared and defined here
+    let a: int = 10;
+
+    // b is declared and gets initial value later
+    var b: int = 0;
+
+    // c is declared and defined
+    let c: int = 20;
+
+    // Now define b
+    b = a + c;
+
+    // Create array with proper lifetime
+    let arr: array[int] = [1, 2, 3];
+
+    // Nested scope test
+    if a > 5 {
+        // d only exists in this scope
+        let d: int = 100;
+        let e: int = d + a;
+        print(e);  // Use e to avoid warning
+    } // d and e should be destroyed here
+
+    // f is declared at the end
+    let f: int = b * 2;
+    print(f);  // Use f
+    print(arr[0]);  // Use arr
+} // All variables destroyed here

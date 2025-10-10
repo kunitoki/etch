@@ -152,6 +152,7 @@ type
     functions*: Table[string, FunctionInfo]  # Function table
     cffiInfo*: Table[string, CFFIInfo]  # C FFI function metadata
     variableMap*: Table[string, Table[string, uint8]]  # Function -> Variable name -> Register mapping
+    lifetimeData*: Table[string, pointer]  # Function -> Lifetime data (FunctionLifetimeData) for debugging/destructors
 
   # Reuse V type from main VM but with optimizations
   V* = object
@@ -340,6 +341,12 @@ proc allocReg*(ra: var RegAllocator, name: string = ""): uint8 =
 proc freeReg*(ra: var RegAllocator, reg: uint8) =
   # Simple register reuse - mark register as free if it's the most recently allocated
   # This works well for expression evaluation where we allocate/free in stack order
+  # However, in debug mode, don't reuse registers that belong to named variables
+  for name, varReg in ra.regMap:
+    if varReg == reg:
+      # This register belongs to a named variable, don't free it
+      return
+
   if reg == ra.nextReg - 1:
     dec ra.nextReg
 

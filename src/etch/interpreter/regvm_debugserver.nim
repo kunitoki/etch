@@ -1,8 +1,8 @@
 # regvm_debug_server.nim
 # Debug server for register VM communicating with VSCode Debug Adapter Protocol
 
-import std/[json, sequtils, tables, os, hashes]
-import regvm, regvm_exec, regvm_debugger
+import std/[json, sequtils, tables, os, hashes, algorithm]
+import regvm, regvm_exec, regvm_debugger, regvm_lifetime
 
 type
   RegDebugServer* = ref object
@@ -15,6 +15,8 @@ type
     nextVarRef*: int
     # Variable tracking - simplified for now
     localVars*: Table[string, uint8]  # Variable name -> register mapping
+    currentFunctionName*: string  # Current function for lifetime data lookup
+    lifetimeData*: ptr FunctionLifetimeData  # Current function's lifetime data
 
 proc newRegDebugServer*(program: RegBytecodeProgram, sourceFile: string): RegDebugServer =
   ## Create a new debug server instance for register VM
@@ -135,11 +137,22 @@ proc handleDebugRequest*(server: RegDebugServer, request: JsonNode): JsonNode =
 
     # Get variable names from the program's variable map
     # Start with main function's variables
+    server.currentFunctionName = "main"
     if server.vm.program.variableMap.hasKey("main"):
       server.localVars = server.vm.program.variableMap["main"]
     else:
       # Initialize empty if no variable map available
       server.localVars = initTable[string, uint8]()
+
+    # Load lifetime data for main function if available
+    if server.vm.program.lifetimeData.hasKey("main"):
+      let rawPointer = server.vm.program.lifetimeData["main"]
+      if rawPointer != nil:
+        server.lifetimeData = cast[ptr FunctionLifetimeData](rawPointer)
+      else:
+        server.lifetimeData = nil
+    else:
+      server.lifetimeData = nil
 
     if stopOnEntry:
       # Pause at entry point
@@ -424,17 +437,77 @@ proc handleDebugRequest*(server: RegDebugServer, request: JsonNode): JsonNode =
     var variables: seq[JsonNode] = @[]
 
     if reference == 1:
-      # Local Variables - show variable names with their values
+      # Local Variables - show only defined variables using lifetime data
       if server.vm.currentFrame != nil:
-        for varName, regIndex in server.localVars:
+        let currentPC = server.vm.currentFrame.pc
+
+        # Build a list of variables to show
+        var varsToShow: seq[tuple[name: string, reg: uint8]] = @[]
+
+        # If we have lifetime data, use it to filter variables
+        if server.lifetimeData != nil and cast[int](server.lifetimeData) != 0:
+          try:
+            # Safely access the lifetime data
+            let lifetimeDataPtr = server.lifetimeData
+            if lifetimeDataPtr == nil:
+              raise newException(NilAccessDefect, "Lifetime data pointer is nil")
+
+            let lifetimeData = lifetimeDataPtr[]  # Dereference the pointer
+
+            for lifetime in lifetimeData.ranges:
+              # Check if variable is in scope and defined at this PC
+              if lifetime.startPC <= currentPC and
+                 (lifetime.endPC == -1 or lifetime.endPC >= currentPC) and
+                 lifetime.defPC != -1 and lifetime.defPC <= currentPC:
+                varsToShow.add((lifetime.varName, lifetime.register))
+          except Exception as e:
+            # If dereferencing fails, fall back to showing all variables
+            stderr.writeLine("Failed to access lifetime data: " & e.msg)
+            for varName, regIndex in server.localVars:
+              varsToShow.add((varName, regIndex))
+        else:
+          # Fallback to showing all variables if no lifetime data
+          for varName, regIndex in server.localVars:
+            varsToShow.add((varName, regIndex))
+
+        # Sort variables alphabetically
+        varsToShow.sort(proc(a, b: tuple[name: string, reg: uint8]): int = cmp(a.name, b.name))
+
+        # Add variables to response
+        for (varName, regIndex) in varsToShow:
           let reg = server.vm.currentFrame.regs[regIndex]
-          if not reg.isNil():
-            variables.add(%*{
-              "name": varName,
-              "value": formatRegisterValue(reg),
-              "type": getValueType(reg),
-              "variablesReference": 0
-            })
+
+          # Check if this variable's definition PC is the current PC
+          # If so, the instruction hasn't executed yet, so the value is stale
+          var isStale = false
+          if server.lifetimeData != nil and cast[int](server.lifetimeData) != 0:
+            try:
+              # Safely access the lifetime data
+              let lifetimeDataPtr = server.lifetimeData
+              if lifetimeDataPtr == nil:
+                raise newException(NilAccessDefect, "Lifetime data pointer is nil")
+
+              let lifetimeData = lifetimeDataPtr[]  # Dereference the pointer
+
+              for lifetime in lifetimeData.ranges:
+                if lifetime.varName == varName and lifetime.defPC == currentPC:
+                  # We're at the definition point but haven't executed yet
+                  isStale = true
+                  break
+            except Exception as e:
+              discard  # Ignore errors, isStale remains false
+
+          let displayValue = if isStale:
+            "<uninitialized>"
+          else:
+            formatRegisterValue(reg)
+
+          variables.add(%*{
+            "name": varName,
+            "value": displayValue,
+            "type": if isStale: "pending" else: getValueType(reg),
+            "variablesReference": 0
+          })
     elif reference == 2:
       # Global variables
       for name, value in server.vm.globals:

@@ -17,7 +17,7 @@ fn main() -> void {
 
     # Start debug server and send commands via stdin
     let (output, exitCode) = execCmdEx(
-      "echo '{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}' | timeout 1 ./src/etch.out --debug-server " & testProgram & " 2>&1 || true"
+      "echo '{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}' | timeout 1 ./etch --debug-server " & testProgram & " 2>&1 || true"
     )
 
     # Check that we got a response
@@ -48,7 +48,7 @@ fn main() -> void {
     defer: removeFile(inputFile)
 
     let (output, exitCode) = execCmdEx(
-      "timeout 2 ./src/etch.out --debug-server " & testProgram & " < " & inputFile & " 2>&1 | grep -v '^DEBUG' || true"
+      "timeout 2 ./etch --debug-server " & testProgram & " < " & inputFile & " 2>&1 | grep -v '^DEBUG' || true"
     )
 
     # Check key responses
@@ -81,7 +81,7 @@ fn main() -> void {
     defer: removeFile(inputFile)
 
     let (output, exitCode) = execCmdEx(
-      "timeout 1 ./src/etch.out --debug-server " & testProgram & " < " & inputFile & " 2>&1 | grep -v '^DEBUG' || true"
+      "timeout 1 ./etch --debug-server " & testProgram & " < " & inputFile & " 2>&1 | grep -v '^DEBUG' || true"
     )
 
     # Parse output to find stackTrace response
@@ -127,7 +127,7 @@ fn main() -> void {
     defer: removeFile(inputFile)
 
     let (output, exitCode) = execCmdEx(
-      "timeout 2 ./src/etch.out --debug-server " & testProgram & " < " & inputFile & " 2>&1 | grep -v '^DEBUG' || true"
+      "timeout 2 ./etch --debug-server " & testProgram & " < " & inputFile & " 2>&1 | grep -v '^DEBUG' || true"
     )
 
     # Parse variable responses

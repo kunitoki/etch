@@ -1,0 +1,10 @@
+fn main() {
+    let x: int = 10;
+    print(x);  // breakpoint here - x should be 10
+
+    let y: int = 20;
+    print(y);  // breakpoint here - y should be 20
+
+    let z: int = x + y;
+    print(z);  // breakpoint here - z should be 30
+}

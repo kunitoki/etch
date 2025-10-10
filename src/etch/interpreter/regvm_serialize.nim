@@ -170,21 +170,28 @@ proc serializeRegInstruction(stream: Stream, instr: RegInstruction) =
 
 proc deserializeRegInstruction(stream: Stream): RegInstruction =
   ## Deserialize a register VM instruction
-  result.op = RegOpCode(stream.readUint8())
-  result.a = stream.readUint8()
-  result.opType = stream.readUint8()
-  case result.opType:
+  let op = RegOpCode(stream.readUint8())
+  let a = stream.readUint8()
+  let opType = stream.readUint8()
+
+  # Create the instruction with the correct variant from the start
+  case opType:
   of 0:  # ABC format
-    result.b = stream.readUint8()
-    result.c = stream.readUint8()
+    let b = stream.readUint8()
+    let c = stream.readUint8()
+    result = RegInstruction(op: op, a: a, opType: 0, b: b, c: c)
   of 1:  # ABx format
-    result.bx = stream.readUint16()
+    let bx = stream.readUint16()
+    result = RegInstruction(op: op, a: a, opType: 1, bx: bx)
   of 2:  # AsBx format
-    result.sbx = stream.readInt16()
+    let sbx = stream.readInt16()
+    result = RegInstruction(op: op, a: a, opType: 2, sbx: sbx)
   of 3:  # Ax format
-    result.ax = stream.readUint32()
+    let ax = stream.readUint32()
+    result = RegInstruction(op: op, a: a, opType: 3, ax: ax)
   else:
-    discard
+    # Default case - create as ABC format with zeros
+    result = RegInstruction(op: op, a: a, opType: 0, b: 0, c: 0)
 
 proc serializeToBinary*(prog: RegBytecodeProgram, sourceHash: string = "",
                        compilerVersion: string = "", sourceFile: string = "",

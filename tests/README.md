@@ -46,4 +46,4 @@ Each test:
 If tests fail, ensure:
 1. Etch compiler is built: `nim c src/etch.nim`
 2. No cached bytecode interfering: `nimble clean`
-3. Debug server is working: `./src/etch.out --debug-server <file>`
+3. Debug server is working: `./etch --debug-server <file>`

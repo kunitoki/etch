@@ -2,7 +2,7 @@
 # Execution engine for register-based VM with aggressive optimizations
 
 import std/[tables, math, strutils]
-import regvm, regvm_debugger
+import regvm, regvm_debugger, regvm_lifetime
 
 # C rand for consistency
 proc c_rand(): cint {.importc: "rand", header: "<stdlib.h>".}
@@ -263,6 +263,245 @@ proc doNot(a: V): V {.inline.} =
                 not (getTag(a) == TAG_BOOL and (a.data and 1) == 0)
   makeBool(not isTrue)
 
+# Unified output handling for consistent behavior between debug and normal execution
+proc vmPrint(vm: RegisterVM, output: string, outputBuffer: var string, outputCount: var int) =
+  ## Unified print function that handles output consistently
+  if vm.isDebugging:
+    # In debug mode, always output to stderr immediately
+    stderr.writeLine(output)
+    stderr.flushFile()
+  else:
+    # In normal mode, buffer output for performance
+    if outputBuffer.addr != nil:
+      # We have a buffer (optimized path)
+      outputBuffer.add(output)
+      outputBuffer.add('\n')
+      outputCount.inc
+      # Note: Caller is responsible for flushing when appropriate
+    else:
+      # No buffer (debug path in non-debug mode)
+      echo output
+
+# Shared implementation for builtin functions to ensure consistent behavior
+proc handleBuiltinFunction(vm: RegisterVM, funcName: string, funcReg: uint8, numArgs: uint8,
+                          outputBuffer: var string, outputCount: var int): bool =
+  ## Handle builtin function execution. Returns true if function was handled.
+  case funcName
+  of "print":
+    if numArgs == 1:
+      let val = getReg(vm, funcReg + 1)
+      let output = if isInt(val): $getInt(val)
+                  elif isFloat(val): $getFloat(val)
+                  elif isChar(val): $getChar(val)
+                  elif getTag(val) == TAG_STRING: val.sval
+                  elif getTag(val) == TAG_BOOL:
+                    if (val.data and 1) != 0: "true" else: "false"
+                  elif getTag(val) == TAG_ARRAY:
+                    # Print array elements
+                    var res = "["
+                    for i, elem in val.aval:
+                      if i > 0: res.add(", ")
+                      if isInt(elem): res.add($getInt(elem))
+                      elif isFloat(elem): res.add($getFloat(elem))
+                      elif getTag(elem) == TAG_STRING: res.add("\"" & elem.sval & "\"")
+                      elif getTag(elem) == TAG_BOOL:
+                        res.add(if (elem.data and 1) != 0: "true" else: "false")
+                      else: res.add("nil")
+                    res.add("]")
+                    res
+                  else: "nil"
+      vmPrint(vm, output, outputBuffer, outputCount)
+      setReg(vm, funcReg, makeNil())
+    return true
+
+  of "toString":
+    if numArgs == 1:
+      let val = getReg(vm, funcReg + 1)
+      var res: V
+      res.data = TAG_STRING shl 48
+      if isInt(val):
+        res.sval = $getInt(val)
+      elif isFloat(val):
+        res.sval = $getFloat(val)
+      elif isChar(val):
+        res.sval = $getChar(val)
+      elif getTag(val) == TAG_BOOL:
+        res.sval = if (val.data and 1) != 0: "true" else: "false"
+      elif getTag(val) == TAG_STRING:
+        res.sval = val.sval
+      else:
+        res.sval = "nil"
+      setReg(vm, funcReg, res)
+    return true
+
+  of "seed":
+    if numArgs == 1:
+      let seedVal = getReg(vm, funcReg + 1)
+      if isInt(seedVal):
+        c_srand(cuint(getInt(seedVal)))
+      setReg(vm, funcReg, makeNil())
+    return true
+
+  of "rand":
+    if numArgs == 1:
+      # Single argument: rand(max) means rand from 0 to max
+      let maxVal = getReg(vm, funcReg + 1)
+      if isInt(maxVal):
+        let maxInt = getInt(maxVal)
+        if maxInt > 0:
+          let randVal = c_rand() mod cint(maxInt)
+          setReg(vm, funcReg, makeInt(int64(randVal)))
+        else:
+          setReg(vm, funcReg, makeInt(0))
+    elif numArgs == 2:
+      # Arguments: rand(max, min)
+      let maxVal = getReg(vm, funcReg + 1)  # First argument is max
+      let minVal = getReg(vm, funcReg + 2)  # Second argument is min
+      if isInt(minVal) and isInt(maxVal):
+        let minInt = getInt(minVal)
+        let maxInt = getInt(maxVal)
+        let range = maxInt - minInt
+        if range > 0:
+          let randVal = (c_rand() mod cint(range)) + cint(minInt)
+          setReg(vm, funcReg, makeInt(int64(randVal)))
+        else:
+          setReg(vm, funcReg, makeInt(minInt))
+    return true
+
+  # Mock C functions for testing
+  of "c_add":
+    if numArgs == 2:
+      let a = getReg(vm, funcReg + 1)
+      let b = getReg(vm, funcReg + 2)
+      if isInt(a) and isInt(b):
+        setReg(vm, funcReg, makeInt(getInt(a) + getInt(b)))
+      else:
+        setReg(vm, funcReg, makeNil())
+    return true
+
+  of "c_multiply":
+    if numArgs == 2:
+      let a = getReg(vm, funcReg + 1)
+      let b = getReg(vm, funcReg + 2)
+      if isInt(a) and isInt(b):
+        setReg(vm, funcReg, makeInt(getInt(a) * getInt(b)))
+      else:
+        setReg(vm, funcReg, makeNil())
+    return true
+
+  # Reference operations
+  of "new":
+    if numArgs == 1:
+      # For now, just pass through the value (references are not truly implemented)
+      let val = getReg(vm, funcReg + 1)
+      setReg(vm, funcReg, val)
+    else:
+      setReg(vm, funcReg, makeNil())
+    return true
+
+  of "deref":
+    if numArgs == 1:
+      # For now, just pass through the value (references are not truly implemented)
+      let val = getReg(vm, funcReg + 1)
+      setReg(vm, funcReg, val)
+    else:
+      setReg(vm, funcReg, makeNil())
+    return true
+
+  # File I/O operations
+  of "readFile":
+    if numArgs == 1:
+      let pathVal = getReg(vm, funcReg + 1)
+      if isString(pathVal):
+        try:
+          let content = readFile(pathVal.sval)
+          setReg(vm, funcReg, makeString(content))
+        except:
+          setReg(vm, funcReg, makeString(""))
+      else:
+        setReg(vm, funcReg, makeString(""))
+    else:
+      setReg(vm, funcReg, makeString(""))
+    return true
+
+  # Parsing functions
+  of "parseInt":
+    if numArgs == 1:
+      let strVal = getReg(vm, funcReg + 1)
+      if getTag(strVal) == TAG_STRING:
+        try:
+          let intVal = parseInt(strVal.sval)
+          setReg(vm, funcReg, makeInt(intVal))
+        except:
+          setReg(vm, funcReg, makeNil())
+      else:
+        setReg(vm, funcReg, makeNil())
+    return true
+
+  of "parseFloat":
+    if numArgs == 1:
+      let strVal = getReg(vm, funcReg + 1)
+      if getTag(strVal) == TAG_STRING:
+        try:
+          let floatVal = parseFloat(strVal.sval)
+          setReg(vm, funcReg, makeFloat(floatVal))
+        except:
+          setReg(vm, funcReg, makeNil())
+      else:
+        setReg(vm, funcReg, makeNil())
+    return true
+
+  of "parseBool":
+    if numArgs == 1:
+      let strVal = getReg(vm, funcReg + 1)
+      if isString(strVal):
+        if strVal.sval == "true":
+          setReg(vm, funcReg, makeSome(makeBool(true)))
+        elif strVal.sval == "false":
+          setReg(vm, funcReg, makeSome(makeBool(false)))
+        else:
+          setReg(vm, funcReg, makeNone())
+      else:
+        setReg(vm, funcReg, makeNone())
+    else:
+      setReg(vm, funcReg, makeNone())
+    return true
+
+  of "isSome":
+    if numArgs == 1:
+      let val = getReg(vm, funcReg + 1)
+      setReg(vm, funcReg, makeBool(isSome(val)))
+    else:
+      setReg(vm, funcReg, makeBool(false))
+    return true
+
+  of "isNone":
+    if numArgs == 1:
+      let val = getReg(vm, funcReg + 1)
+      setReg(vm, funcReg, makeBool(isNone(val)))
+    else:
+      setReg(vm, funcReg, makeBool(true))
+    return true
+
+  of "isOk":
+    if numArgs == 1:
+      let val = getReg(vm, funcReg + 1)
+      setReg(vm, funcReg, makeBool(isOk(val)))
+    else:
+      setReg(vm, funcReg, makeBool(false))
+    return true
+
+  of "isErr":
+    if numArgs == 1:
+      let val = getReg(vm, funcReg + 1)
+      setReg(vm, funcReg, makeBool(isErr(val)))
+    else:
+      setReg(vm, funcReg, makeBool(true))
+    return true
+
+  else:
+    return false  # Function not handled
+
 # Execute a single instruction - used by debugger
 proc executeInstruction*(vm: RegisterVM, verbose: bool = false): bool =
   ## Execute one instruction and return true if execution should continue
@@ -299,6 +538,23 @@ proc executeInstruction*(vm: RegisterVM, verbose: bool = false): bool =
                       " file=" & debug.sourceFile &
                       " paused=" & $debugger.paused)
       stderr.flushFile()
+
+  # Check for destructor injection points
+  # This is where we would clean up variables going out of scope
+  # For now, we just log when variables would be destroyed
+  if vm.isDebugging and verbose:
+    # Check if current function has lifetime data
+    for fname, finfo in vm.program.functions:
+      if pc >= finfo.startPos and pc <= finfo.endPos:
+        # We're in this function
+        if vm.program.lifetimeData.hasKey(fname):
+          let lifetimeData = cast[ptr FunctionLifetimeData](vm.program.lifetimeData[fname])
+          if lifetimeData.destructorPoints.hasKey(pc):
+            let varsToDestroy = lifetimeData.destructorPoints[pc]
+            for varName in varsToDestroy:
+              stderr.writeLine("[DESTRUCTOR] Would destroy variable '" & varName & "' at PC " & $pc)
+              stderr.flushFile()
+        break
 
   # Actually execute the instruction
   # Default: increment PC after executing instruction
@@ -388,8 +644,20 @@ proc executeInstruction*(vm: RegisterVM, verbose: bool = false): bool =
         # Debugger hook - push stack frame
         if vm.debugger != nil:
           let debugger = cast[RegEtchDebugger](vm.debugger)
-          let currentFile = if instr.debug.sourceFile.len > 0: instr.debug.sourceFile else: "main"
-          debugger.pushStackFrame(funcName, currentFile, instr.debug.line, false)
+          # Get debug info from the first instruction of the function being called
+          let funcFirstInstr = if funcInfo.startPos < vm.program.instructions.len:
+            vm.program.instructions[funcInfo.startPos]
+          else:
+            instr
+          let targetFile = if funcFirstInstr.debug.sourceFile.len > 0:
+            funcFirstInstr.debug.sourceFile
+          else:
+            "main"
+          let targetLine = if funcFirstInstr.debug.line > 0:
+            funcFirstInstr.debug.line
+          else:
+            1  # Default to line 1 if no debug info
+          debugger.pushStackFrame(funcName, targetFile, targetLine, false)
 
         # Create new frame
         var newFrame = RegisterFrame()
@@ -408,32 +676,18 @@ proc executeInstruction*(vm: RegisterVM, verbose: bool = false): bool =
         # PC is now at function start
         pc = funcInfo.startPos
       else:
-        # Handle builtin functions inline
+        # Handle builtin functions using shared implementation
         # Debugger hook for builtin
         if vm.debugger != nil:
           let debugger = cast[RegEtchDebugger](vm.debugger)
           let currentFile = if instr.debug.sourceFile.len > 0: instr.debug.sourceFile else: "main"
           debugger.pushStackFrame(funcName, currentFile, instr.debug.line, true)
 
-        case funcName
-        of "print":
-          if numArgs == 1:
-            let val = getReg(vm, funcReg + 1)
-            let output = if isInt(val): $getInt(val)
-                        elif isFloat(val): $getFloat(val)
-                        elif getTag(val) == TAG_STRING: val.sval
-                        elif getTag(val) == TAG_BOOL:
-                          if (val.data and 1) != 0: "true" else: "false"
-                        else: "nil"
-            # In debug mode, output to stderr to avoid interfering with JSON protocol
-            if vm.isDebugging:
-              stderr.writeLine(output)
-              stderr.flushFile()
-            else:
-              echo output
-            setReg(vm, funcReg, makeNil())
-        else:
-          # Other builtins would go here
+        # Use shared builtin handler - no buffering in debug path
+        var dummyBuffer = ""
+        var dummyCount = 0
+        if not handleBuiltinFunction(vm, funcName, funcReg, numArgs, dummyBuffer, dummyCount):
+          # Unknown builtin function
           setReg(vm, funcReg, makeNil())
 
         # Pop builtin frame immediately
@@ -537,7 +791,12 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
 
     # --- Move and Load Instructions ---
     of ropMove:
-      setReg(vm, instr.a, getReg(vm, instr.b))
+      let val = getReg(vm, instr.b)
+      setReg(vm, instr.a, val)
+      if verbose:
+        echo "[REGVM] ropMove: reg", instr.b, " -> reg", instr.a,
+             " value tag=", val.getTag().toHex,
+             if val.isInt(): " int=" & $val.getInt() else: ""
 
     of ropLoadK:
       # Handle both ABx (constant pool) and AsBx (immediate) formats
@@ -859,9 +1118,25 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
 
     # --- Arrays ---
     of ropNewArray:
-      var arr = V(data: TAG_ARRAY shl 48)
-      arr.aval = newSeqOfCap[V](instr.bx)  # ABx format: use bx not b
+      var arr: V
+      arr.data = TAG_ARRAY shl 48
+      # Create array with actual size, initialized to nil
+      arr.aval = newSeq[V](instr.bx)  # ABx format: use bx not b
+      for i in 0'u16..<instr.bx:
+        arr.aval[i] = makeNil()
       setReg(vm, instr.a, arr)
+      if verbose:
+        let checkReg = getReg(vm, instr.a)
+        echo "[REGVM] ropNewArray: created array of size ", instr.bx, " in reg ", instr.a,
+             " tag=", checkReg.getTag().toHex, " verify isArray=", checkReg.isArray()
+        # Also check what's actually in register 3 right now
+        if instr.a == 3:
+          let r3 = vm.currentFrame.regs[3]
+          echo "[REGVM] Register 3 check: tag=", r3.getTag().toHex,
+               " isInt=", r3.isInt(),
+               " isArray=", r3.isArray(),
+               if r3.isInt(): " intVal=" & $r3.getInt() else: "",
+               if r3.isArray(): " arrayLen=" & $r3.aval.len else: ""
 
     of ropGetIndex:
       let arr = getReg(vm, instr.b)
@@ -1215,8 +1490,20 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
         # Debugger hook - push stack frame
         if vm.debugger != nil:
           let debugger = cast[RegEtchDebugger](vm.debugger)
-          let currentFile = if instr.debug.sourceFile.len > 0: instr.debug.sourceFile else: "main"
-          debugger.pushStackFrame(funcName, currentFile, instr.debug.line, false)
+          # Get debug info from the first instruction of the function being called
+          let funcFirstInstr = if funcInfo.startPos < vm.program.instructions.len:
+            vm.program.instructions[funcInfo.startPos]
+          else:
+            instr
+          let targetFile = if funcFirstInstr.debug.sourceFile.len > 0:
+            funcFirstInstr.debug.sourceFile
+          else:
+            "main"
+          let targetLine = if funcFirstInstr.debug.line > 0:
+            funcFirstInstr.debug.line
+          else:
+            1  # Default to line 1 if no debug info
+          debugger.pushStackFrame(funcName, targetFile, targetLine, false)
 
         # Create new frame for the function
         var newFrame = RegisterFrame()
@@ -1300,15 +1587,23 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
           elif getTag(val) == TAG_STRING:
             val.sval
           elif getTag(val) == TAG_ARRAY:
-            # Print array elements (for debugging)
-            $val.aval
+            # Print array elements
+            var res = "["
+            for i, elem in val.aval:
+              if i > 0: res.add(", ")
+              if isInt(elem): res.add($getInt(elem))
+              elif isFloat(elem): res.add($getFloat(elem))
+              elif getTag(elem) == TAG_STRING: res.add("\"" & elem.sval & "\"")
+              elif getTag(elem) == TAG_BOOL:
+                res.add(if (elem.data and 1) != 0: "true" else: "false")
+              else: res.add("nil")
+            res.add("]")
+            res
           else:
             "nil"
 
-          # Add to output buffer for batched I/O
-          outputBuffer.add(output)
-          outputBuffer.add('\n')
-          outputCount.inc
+          # Use unified print handler
+          vmPrint(vm, output, outputBuffer, outputCount)
 
           # Flush if buffer is getting large or we have many lines
           if outputBuffer.len >= BUFFER_SIZE or outputCount >= 100:

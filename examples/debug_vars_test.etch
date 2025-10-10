@@ -1,0 +1,14 @@
+// Test file for debugging variable display
+fn main() {
+    let a = 10;
+    let b = 20;
+    let arr = [1, 2, 3, 4, 5];
+    let c = 30;
+    let d = a + b;
+    print(a);
+    print(b);
+    // Arrays would display in debugger as [1, 2, 3, 4, 5]
+    print(arr[0]);  // Just print first element for testing
+    print(c);
+    print(d);
+}
