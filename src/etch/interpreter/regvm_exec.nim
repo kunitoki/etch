@@ -1,8 +1,9 @@
 # regvm_exec.nim
 # Execution engine for register-based VM with aggressive optimizations
 
-import std/[tables, math, strutils]
+import std/[tables, math, strutils, dynlib]
 import regvm, regvm_debugger, regvm_lifetime
+import ../common/[cffi, values]
 
 # C rand for consistency
 proc c_rand(): cint {.importc: "rand", header: "<stdlib.h>".}
@@ -16,7 +17,8 @@ proc newRegisterVM*(prog: RegBytecodeProgram): RegisterVM =
     constants: prog.constants,
     globals: initTable[string, V](),
     debugger: nil,  # No debugger by default - zero cost
-    isDebugging: false  # Not in debug mode
+    isDebugging: false,  # Not in debug mode
+    cffiRegistry: cast[pointer](globalCFFIRegistry)  # Use global C FFI registry
   )
   result.currentFrame = addr result.frames[0]
 
@@ -27,7 +29,8 @@ proc newRegisterVMWithDebugger*(prog: RegBytecodeProgram, debugger: RegEtchDebug
     constants: prog.constants,
     globals: initTable[string, V](),
     debugger: cast[pointer](debugger),
-    isDebugging: true  # Set debug mode flag
+    isDebugging: true,  # Set debug mode flag
+    cffiRegistry: cast[pointer](globalCFFIRegistry)  # Use global C FFI registry
   )
   result.currentFrame = addr result.frames[0]
   # Attach the debugger to this VM
@@ -263,6 +266,72 @@ proc doNot(a: V): V {.inline.} =
                 not (getTag(a) == TAG_BOOL and (a.data and 1) == 0)
   makeBool(not isTrue)
 
+# Converter between V type (VM value) and Value type (C FFI value)
+proc toValue(v: V): Value =
+  ## Convert VM value to C FFI Value type
+  if isInt(v):
+    result = Value(kind: vkInt, intVal: getInt(v))
+  elif isFloat(v):
+    result = Value(kind: vkFloat, floatVal: getFloat(v))
+  elif isChar(v):
+    # Convert char to int for C FFI
+    result = Value(kind: vkInt, intVal: int64(getChar(v)))
+  elif getTag(v) == TAG_STRING:
+    result = Value(kind: vkString, stringVal: v.sval)
+  elif getTag(v) == TAG_BOOL:
+    result = Value(kind: vkBool, boolVal: (v.data and 1) != 0)
+  elif getTag(v) == TAG_ARRAY:
+    # Arrays not directly supported in C FFI, convert to void
+    result = Value(kind: vkVoid)
+  else:
+    result = Value(kind: vkVoid)
+
+proc fromValue(val: Value): V =
+  ## Convert C FFI Value type to VM value
+  case val.kind
+  of vkInt:
+    result = makeInt(val.intVal)
+  of vkFloat:
+    result = makeFloat(val.floatVal)
+  of vkBool:
+    result = makeBool(val.boolVal)
+  of vkString:
+    result = makeString(val.stringVal)
+  of vkVoid:
+    result = makeNil()
+  else:
+    result = makeNil()
+
+# Handle C FFI function calls
+proc callCFFIFunction(vm: RegisterVM, funcName: string, funcReg: uint8, numArgs: uint8): bool =
+  ## Call a C FFI function through the registry
+  ## Returns true if function was called successfully
+
+  # Get the C FFI registry
+  let registry = cast[CFFIRegistry](vm.cffiRegistry)
+  if registry == nil:
+    return false
+
+  # Check if this is a registered C FFI function
+  if funcName notin registry.functions:
+    return false
+
+  # Prepare arguments
+  var args: seq[Value] = @[]
+  for i in 0'u8..<numArgs:
+    let vmVal = getReg(vm, funcReg + 1'u8 + i)
+    args.add(toValue(vmVal))
+
+  # Call the C function
+  try:
+    let result = registry.callFunction(funcName, args)
+    setReg(vm, funcReg, fromValue(result))
+    return true
+  except:
+    # On error, set result to nil
+    setReg(vm, funcReg, makeNil())
+    return true  # We handled it, even if it errored
+
 # Unified output handling for consistent behavior between debug and normal execution
 proc vmPrint(vm: RegisterVM, output: string, outputBuffer: var string, outputCount: var int) =
   ## Unified print function that handles output consistently
@@ -366,27 +435,6 @@ proc handleBuiltinFunction(vm: RegisterVM, funcName: string, funcReg: uint8, num
           setReg(vm, funcReg, makeInt(int64(randVal)))
         else:
           setReg(vm, funcReg, makeInt(minInt))
-    return true
-
-  # Mock C functions for testing
-  of "c_add":
-    if numArgs == 2:
-      let a = getReg(vm, funcReg + 1)
-      let b = getReg(vm, funcReg + 2)
-      if isInt(a) and isInt(b):
-        setReg(vm, funcReg, makeInt(getInt(a) + getInt(b)))
-      else:
-        setReg(vm, funcReg, makeNil())
-    return true
-
-  of "c_multiply":
-    if numArgs == 2:
-      let a = getReg(vm, funcReg + 1)
-      let b = getReg(vm, funcReg + 2)
-      if isInt(a) and isInt(b):
-        setReg(vm, funcReg, makeInt(getInt(a) * getInt(b)))
-      else:
-        setReg(vm, funcReg, makeNil())
     return true
 
   # Reference operations
@@ -676,19 +724,32 @@ proc executeInstruction*(vm: RegisterVM, verbose: bool = false): bool =
         # PC is now at function start
         pc = funcInfo.startPos
       else:
-        # Handle builtin functions using shared implementation
-        # Debugger hook for builtin
-        if vm.debugger != nil:
-          let debugger = cast[RegEtchDebugger](vm.debugger)
-          let currentFile = if instr.debug.sourceFile.len > 0: instr.debug.sourceFile else: "main"
-          debugger.pushStackFrame(funcName, currentFile, instr.debug.line, true)
+        # Try C FFI first
+        if callCFFIFunction(vm, funcName, funcReg, numArgs):
+          # C FFI function handled
+          discard
+        else:
+          # Handle builtin functions using shared implementation
+          # Debugger hook for builtin
+          if vm.debugger != nil:
+            let debugger = cast[RegEtchDebugger](vm.debugger)
+            let currentFile = if instr.debug.sourceFile.len > 0: instr.debug.sourceFile else: "main"
+            debugger.pushStackFrame(funcName, currentFile, instr.debug.line, true)
 
-        # Use shared builtin handler - no buffering in debug path
-        var dummyBuffer = ""
-        var dummyCount = 0
-        if not handleBuiltinFunction(vm, funcName, funcReg, numArgs, dummyBuffer, dummyCount):
-          # Unknown builtin function
-          setReg(vm, funcReg, makeNil())
+          # Use shared builtin handler - no buffering in debug path
+          var dummyBuffer = ""
+          var dummyCount = 0
+          if not handleBuiltinFunction(vm, funcName, funcReg, numArgs, dummyBuffer, dummyCount):
+            # Unknown function - check if it's an unloaded C FFI function
+            if vm.program.cffiInfo.hasKey(funcName):
+              let cffiInfo = vm.program.cffiInfo[funcName]
+              if verbose:
+                echo "[DEBUG] C FFI function not loaded: ", funcName, " (library: ", cffiInfo.library, ")"
+            else:
+              # Unknown function
+              if verbose:
+                echo "[DEBUG] Unknown function: ", funcName
+            setReg(vm, funcReg, makeNil())
 
         # Pop builtin frame immediately
         if vm.debugger != nil:
@@ -1401,83 +1462,18 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
 
       let funcName = funcNameVal.sval
 
-      # Check for C FFI functions first
+      # Check for C FFI functions first - try to call through the registry
+      if callCFFIFunction(vm, funcName, funcReg, numArgs):
+        if verbose:
+          echo "[REGVM] Called C FFI function: ", funcName
+        continue
+
+      # If not in registry but in cffiInfo, it means the library wasn't loaded
       if vm.program.cffiInfo.hasKey(funcName):
         let cffiInfo = vm.program.cffiInfo[funcName]
         if verbose:
-          echo "[REGVM] Calling C FFI function: ", funcName, " (", cffiInfo.baseName, ")"
-
-        # Handle specific C FFI functions
-        # This is a simplified implementation - a full implementation would use dlopen/dlsym
-        case cffiInfo.baseName:
-        of "sin":
-          if numArgs == 1:
-            let val = getReg(vm, funcReg + 1)
-            if isFloat(val):
-              setReg(vm, funcReg, makeFloat(sin(getFloat(val))))
-            else:
-              setReg(vm, funcReg, makeNil())
-          else:
-            setReg(vm, funcReg, makeNil())
-
-        of "cos":
-          if numArgs == 1:
-            let val = getReg(vm, funcReg + 1)
-            if isFloat(val):
-              setReg(vm, funcReg, makeFloat(cos(getFloat(val))))
-            else:
-              setReg(vm, funcReg, makeNil())
-          else:
-            setReg(vm, funcReg, makeNil())
-
-        of "sqrt":
-          if numArgs == 1:
-            let val = getReg(vm, funcReg + 1)
-            if isFloat(val):
-              setReg(vm, funcReg, makeFloat(sqrt(getFloat(val))))
-            else:
-              setReg(vm, funcReg, makeNil())
-          else:
-            setReg(vm, funcReg, makeNil())
-
-        of "pow":
-          if numArgs == 2:
-            let base = getReg(vm, funcReg + 1)
-            let exp = getReg(vm, funcReg + 2)
-            if isFloat(base) and isFloat(exp):
-              setReg(vm, funcReg, makeFloat(pow(getFloat(base), getFloat(exp))))
-            else:
-              setReg(vm, funcReg, makeNil())
-          else:
-            setReg(vm, funcReg, makeNil())
-
-        of "c_add":
-          if numArgs == 2:
-            let a = getReg(vm, funcReg + 1)
-            let b = getReg(vm, funcReg + 2)
-            if isInt(a) and isInt(b):
-              setReg(vm, funcReg, makeInt(getInt(a) + getInt(b)))
-            else:
-              setReg(vm, funcReg, makeNil())
-          else:
-            setReg(vm, funcReg, makeNil())
-
-        of "c_multiply":
-          if numArgs == 2:
-            let a = getReg(vm, funcReg + 1)
-            let b = getReg(vm, funcReg + 2)
-            if isInt(a) and isInt(b):
-              setReg(vm, funcReg, makeInt(getInt(a) * getInt(b)))
-            else:
-              setReg(vm, funcReg, makeNil())
-          else:
-            setReg(vm, funcReg, makeNil())
-
-        else:
-          if verbose:
-            echo "[REGVM] Unimplemented C FFI function: ", cffiInfo.baseName
-          setReg(vm, funcReg, makeNil())
-
+          echo "[REGVM] C FFI function not loaded: ", funcName, " (library: ", cffiInfo.library, ")"
+        setReg(vm, funcReg, makeNil())
         continue
 
       # Check for user-defined functions

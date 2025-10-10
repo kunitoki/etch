@@ -130,6 +130,7 @@ type
     program*: RegBytecodeProgram    # The program being executed
     debugger*: pointer               # Optional debugger (nil for production)
     isDebugging*: bool               # True when running in debug server mode
+    cffiRegistry*: pointer           # C FFI registry for dynamic library functions
 
   FunctionInfo* = object
     name*: string
