@@ -401,7 +401,7 @@ proc handleDebugRequest*(server: RegDebugServer, request: JsonNode): JsonNode =
         else:
           # Previous frames - use their stored line
           stackFrames.add(%*{
-            "id": i,
+            "id": frameId,
             "name": frame.functionName,
             "source": {
               "path": frame.fileName,
