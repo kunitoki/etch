@@ -10,6 +10,7 @@
 - **When hunting bugs or making changes, add extensive verbose logging protected by the verbose flag, this will help you detect issues**
 - **Never swallow nim exceptions, print the exception for debugging purposes**
 - **Remember `result` is a valid keyword in nim, so don't create variables with that name if it's not the implicit one**
+- **Try to not add too many comments in methods, try to keep it just for method signature, not several inside bodies at every instruction**
 - **Never try to write files into /tmp**
 
 ## Testing and validation of correctness

@@ -168,6 +168,13 @@ proc serializeRegInstruction(stream: Stream, instr: RegInstruction) =
   else:
     discard
 
+  # Serialize debug info
+  stream.write(uint32(instr.debug.line))
+  let sourceFileLen = uint32(instr.debug.sourceFile.len)
+  stream.write(sourceFileLen)
+  if sourceFileLen > 0:
+    stream.write(instr.debug.sourceFile)
+
 proc deserializeRegInstruction(stream: Stream): RegInstruction =
   ## Deserialize a register VM instruction
   let op = RegOpCode(stream.readUint8())
@@ -192,6 +199,13 @@ proc deserializeRegInstruction(stream: Stream): RegInstruction =
   else:
     # Default case - create as ABC format with zeros
     result = RegInstruction(op: op, a: a, opType: 0, b: 0, c: 0)
+
+  # Deserialize debug info
+  let line = stream.readUint32()
+  let sourceFileLen = stream.readUint32()
+  let sourceFile = if sourceFileLen > 0: stream.readStr(int(sourceFileLen)) else: ""
+  result.debug.line = int(line)
+  result.debug.sourceFile = sourceFile
 
 proc serializeToBinary*(prog: RegBytecodeProgram, sourceHash: string = "",
                        compilerVersion: string = "", sourceFile: string = "",

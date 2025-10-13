@@ -50,9 +50,13 @@ proc executeUntilBreak(server: RegDebugServer, maxInstructions: int = 10000): bo
   var instructionCount = 0
   while not server.debugger.paused and instructionCount < maxInstructions:
     # Debug output
+    let pc = server.vm.currentFrame.pc
+    let instr = server.vm.program.instructions[pc]
+    let debug = instr.debug
     stderr.writeLine("DEBUG executeUntilBreak: instruction " & $instructionCount &
                      " paused=" & $server.debugger.paused &
-                     " pc=" & $server.vm.currentFrame.pc &
+                     " pc=" & $pc &
+                     " instrLine=" & $debug.line &
                      " lastLine=" & $server.debugger.lastLine)
     stderr.flushFile()
 
