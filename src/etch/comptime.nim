@@ -46,10 +46,8 @@ proc hasImpureCalls(s: Stmt): bool =
 proc hasImpureExpr(e: Expr): bool =
   case e.kind
   of ekCall:
-    # Check for known impure functions
     if e.fname in ["print", "seed", "rand", "readFile"]:
       return true
-    # Check arguments
     for arg in e.args:
       if hasImpureExpr(arg): return true
   of ekBin:
@@ -77,7 +75,6 @@ proc hasImpureExpr(e: Expr): bool =
 
 
 proc isPureFunction(fn: FunDecl): bool =
-  # Check all statements in function body for impure calls
   for stmt in fn.body:
     if hasImpureCalls(stmt):
       return false
@@ -91,17 +88,12 @@ proc foldExpr(prog: Program, e: var Expr) =
   of ekUn:
     foldExpr(prog, e.ue)
   of ekCall:
-    # First fold all arguments
     for i in 0..<e.args.len: foldExpr(prog, e.args[i])
 
-    # Try to evaluate function call with constant arguments
-    # Only optimize pure functions (no side effects)
     if prog.funInstances.hasKey(e.fname):
       let fn = prog.funInstances[e.fname]
 
-      # Skip optimization if function has side effects
       if isPureFunction(fn):
-        # Check if all arguments are constant literals (int, float, bool, string)
         var allConstLiterals = true
         var argInfos: seq[Info] = @[]
 
@@ -110,12 +102,10 @@ proc foldExpr(prog: Program, e: var Expr) =
           of ekInt:
             argInfos.add(infoConst(arg.ival))
           of ekFloat:
-            # Convert float to int approximation for evaluation
             argInfos.add(infoConst(int64(arg.fval)))
           of ekBool:
             argInfos.add(infoConst(if arg.bval: 1'i64 else: 0'i64))
           of ekString:
-            # For strings, we can't easily convert to int64, so skip optimization
             allConstLiterals = false
             break
           else:
@@ -123,10 +113,8 @@ proc foldExpr(prog: Program, e: var Expr) =
             break
 
         if allConstLiterals and argInfos.len == fn.params.len:
-          # Try to evaluate the function
           let evalResult = tryEvaluatePureFunction(e, argInfos, fn, prog)
           if evalResult.isSome:
-            # Replace the function call with the constant value
             e = Expr(kind: ekInt, ival: evalResult.get, pos: e.pos)
   of ekNewRef:
     foldExpr(prog, e.init)
@@ -153,9 +141,7 @@ proc foldStmt(prog: Program, s: var Stmt) =
       var x = s.vinit.get
       foldExpr(prog, x)
       s.vinit = some(x)
-      # If this variable had a comptime type inference placeholder, resolve it now
       if s.vtype.kind == tkGeneric and s.vtype.name == "__comptime_infer__":
-        # After folding, the expression should be a literal with a determinable type
         case x.kind
         of ekInt:
           s.vtype = ast.tInt()
@@ -166,7 +152,6 @@ proc foldStmt(prog: Program, s: var Stmt) =
         of ekBool:
           s.vtype = ast.tBool()
         else:
-          # If it's still not a literal after folding, this is an error
           discard  # Will be caught by type checker
   of skAssign:
     var x = s.aval; foldExpr(prog, x)
@@ -195,45 +180,35 @@ proc foldStmt(prog: Program, s: var Stmt) =
       foldExpr(prog, endVal)
       s.fend = some(endVal)
     for i in 0..<s.fbody.len: foldStmt(prog, s.fbody[i])
-  of skBreak:
-    discard  # break statements don't need folding
   of skExpr:
     var x = s.sexpr; foldExpr(prog, x)
     s.sexpr = x
+  of skBreak:
+    discard
   of skReturn:
     if s.re.isSome:
       var x = s.re.get; foldExpr(prog, x)
       s.re = some(x)
   of skComptime:
-    # Execute comptime block at compile time and handle inject calls
-    # First fold all statements normally to resolve variables
     for i in 0..<s.cbody.len:
       foldStmt(prog, s.cbody[i])
 
-    # Then process statements to find inject calls and create variable declarations
     var injectedVars: seq[Stmt] = @[]
-
-    # Create a simple evaluation scope for comptime variables
     var comptimeScope: Table[string, Expr] = initTable[string, Expr]()
 
     for stmt in s.cbody:
       if stmt.kind == skVar and stmt.vinit.isSome:
-        # This is a variable declaration in comptime - add to our scope
         comptimeScope[stmt.vname] = stmt.vinit.get()
       elif stmt.kind == skExpr and stmt.sexpr.kind == ekCall and stmt.sexpr.fname == "inject":
-        # This is an inject call - convert it to a variable declaration
         if stmt.sexpr.args.len == 3:
-          # Extract the arguments: name, type_str, value_expr
           let nameExpr = stmt.sexpr.args[0]
           let typeExpr = stmt.sexpr.args[1]
           var valueExpr = stmt.sexpr.args[2]
 
-          # The name should be a string literal
           if nameExpr.kind == ekString and typeExpr.kind == ekString:
             let varName = nameExpr.sval
             let typeStr = typeExpr.sval
 
-            # Parse the type string and create the appropriate type
             var varType: EtchType
             case typeStr:
               of "string": varType = tString()
@@ -242,14 +217,11 @@ proc foldStmt(prog: Program, s: var Stmt) =
               of "float": varType = tFloat()
               else: varType = tString() # default to string
 
-            # If the value is a variable reference, substitute it
             if valueExpr.kind == ekVar and comptimeScope.hasKey(valueExpr.vname):
               valueExpr = comptimeScope[valueExpr.vname]
 
-            # Fold the value expression
             foldExpr(prog, valueExpr)
 
-            # Create a variable declaration
             let varDecl = Stmt(
               kind: skVar,
               vname: varName,
@@ -259,24 +231,17 @@ proc foldStmt(prog: Program, s: var Stmt) =
             )
             injectedVars.add(varDecl)
 
-    # Replace the comptime body with the injected variables
     s.cbody = injectedVars
   of skTypeDecl:
-    # Type declarations don't need folding
     discard
   of skImport:
-    # Import statements don't need folding
     discard
 
 
 proc foldComptime*(prog: Program, root: var Program) =
-  # Process comptime blocks and handle inject statements
-
-  # Process global variables first
   for i in 0..<root.globals.len:
     var g = root.globals[i]; foldStmt(prog, g); root.globals[i] = g
 
-  # Process function bodies
   for _, f in pairs(root.funInstances):
     for i in 0..<f.body.len:
       var s = f.body[i]; foldStmt(prog, s); f.body[i] = s
