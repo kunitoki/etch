@@ -205,8 +205,7 @@ proc parseAndTypecheck*(options: CompilerOptions): (Program, string, Table[strin
   globalModuleRegistry.processImports(prog, options.sourceFile)
   logCompiler(flags, "After imports: " & $prog.funs.len & " functions and " & $prog.globals.len & " globals")
 
-  # For this MVP, instantiation occurs when functions are called during typecheck inference.
-  # We need a shallow pass to trigger calls in bodies:
+  # For this MVP, instantiation occurs when functions are called during typecheck inference
   logCompiler(flags, "Starting type checking phase")
   typecheck(prog)
   logCompiler(flags, "Type checking complete")
@@ -224,7 +223,6 @@ proc parseAndTypecheck*(options: CompilerOptions): (Program, string, Table[strin
   foldComptime(prog, prog)
 
   # Now do full type checking with injected variables available
-  # Build a trivial scope and walk each instance
   var subst: Table[string, EtchType]
 
   # First handle template functions (non-generic functions that need return type inference)
@@ -274,26 +272,20 @@ proc parseAndTypecheck*(options: CompilerOptions): (Program, string, Table[strin
   return (prog, srcHash, evaluatedGlobals)
 
 proc runCachedBytecode*(bytecodeFile: string): CompilerResult =
-  ## Run cached register VM bytecode if available
   echo "Using cached bytecode: ", bytecodeFile
   try:
     let prog = loadRegBytecode(bytecodeFile)
 
-    # Re-register CFFI functions from cached info
     for funcName, cffiInfo in prog.cffiInfo:
-      # Try to load the library if not already loaded
       if cffiInfo.library notin globalCFFIRegistry.libraries:
-        # Use shared library resolver for consistent resolution
         let (normalizedName, actualPath) = resolveLibraryPath(cffiInfo.library)
 
         var loaded = false
-        # Try with the resolved path first
         if actualPath != "":
           try:
             discard globalCFFIRegistry.loadLibrary(normalizedName, actualPath)
             loaded = true
           except:
-            # Try searching in standard paths
             let foundPath = findLibraryInSearchPaths(actualPath)
             if foundPath != "":
               try:
@@ -305,7 +297,6 @@ proc runCachedBytecode*(bytecodeFile: string): CompilerResult =
         if not loaded:
           raise newException(IOError, "Failed to load library: " & cffiInfo.library)
 
-      # Convert string type kinds back to EtchType
       var paramSpecs: seq[cffi.ParamSpec] = @[]
       for i, paramType in cffiInfo.paramTypes:
         let typ = case paramType
@@ -330,7 +321,6 @@ proc runCachedBytecode*(bytecodeFile: string): CompilerResult =
         returnType: retType
       )
 
-      # Re-register the function
       globalCFFIRegistry.loadFunction(cffiInfo.library, funcName, cffiInfo.symbol, signature)
 
     let exitCode = runRegProgram(prog, verbose = false)
@@ -339,7 +329,6 @@ proc runCachedBytecode*(bytecodeFile: string): CompilerResult =
     return CompilerResult(success: false, error: "Failed to run cached bytecode: " & e.msg)
 
 proc saveBytecodeToCache*(regProg: RegBytecodeProgram, bytecodeFile: string) =
-  ## Save register VM bytecode to cache file
   try:
     # Ensure __etch__ directory exists
     let bytecodeDir = bytecodeFile.splitFile.dir
@@ -375,7 +364,7 @@ proc compileAndRun*(options: CompilerOptions): CompilerResult =
       regProg.cffiInfo[funcName] = regvm.CFFIInfo(
         library: cffiFunc.library,
         symbol: cffiFunc.symbol,
-        baseName: cffiFunc.symbol,  # Use the actual C function name, not the mangled name
+        baseName: cffiFunc.symbol,
         paramTypes: paramTypes,
         returnType: $cffiFunc.signature.returnType.kind
       )
@@ -388,7 +377,6 @@ proc compileAndRun*(options: CompilerOptions): CompilerResult =
     # Check if we should run the VM
     var exitCode = 0
     if options.runVM:
-      # Always use register-based VM
       logCompiler(flags, "Starting Register VM execution")
       exitCode = runRegProgram(regProg, options.verbose)
       logCompiler(flags, "Register VM execution finished with exit code: " & $exitCode)

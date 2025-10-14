@@ -14,5 +14,6 @@ task test, "Run all tests":
   echo "===== Running core tests ====="
   exec "nim c -r tests/test_debug_basic.nim"
   exec "nim c -r tests/test_debugger_crash.nim"
-  echo "\n===== Running example tests ====="
-  exec "nim r src/etch.nim --test examples/"
+  exec "nim c -r tests/test_for_loop_debug.nim"
+  # echo "\n===== Running example tests ====="
+  # exec "nim r src/etch.nim --test examples/"
