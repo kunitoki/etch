@@ -1,17 +1,22 @@
 fn main() {
     seed(42);
     var arr = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    var sum = 0;
+    var sum_val = 0;
 
-    // Array access benchmark
+    // Array access and modification benchmark
     for i in 0..<50000 {
         var idx = rand(0, 9);
-        sum_val = sum_val + arr[idx];
-        arr[idx] = (sum_val + arr[idx]) % 100000;
+        var arr_val = arr[idx];
+        sum_val = sum_val + arr_val;
+        var bounded_sum = sum_val % 100000;
+        var bounded_arr = arr_val % 100000;
+        var new_val = (bounded_sum + bounded_arr) % 100000;
+        arr[idx] = new_val;
 
-        // Add some computation periodically
+        // Test array length operations
         if i % 1000 == 0 {
-            sum_val = (sum_val + 10) % 100000;
+            var bounded = sum_val % 100000;
+            sum_val = (bounded + 10) % 100000;
         }
     }
 

@@ -103,11 +103,11 @@ proc typecheckAssign(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var 
 
 
 proc typecheckFieldAssign(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TySubst) =
-  # Typecheck the target expression (the field access)
+  # Typecheck the target expression (field access or array index)
   let targetType = inferExprTypes(prog, fd, sc, s.faTarget, subst)
 
-  # The target must be a field access expression
-  if s.faTarget.kind != ekFieldAccess:
+  # The target must be a field access or array index expression
+  if s.faTarget.kind != ekFieldAccess and s.faTarget.kind != ekIndex:
     raise newTypecheckError(s.pos, &"invalid assignment target")
 
   # Typecheck the value expression

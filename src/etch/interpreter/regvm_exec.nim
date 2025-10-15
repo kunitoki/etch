@@ -47,7 +47,8 @@ proc newRegisterVMWithDebugger*(prog: RegBytecodeProgram, debugger: RegEtchDebug
 template getReg(vm: RegisterVM, idx: uint8): V =
   vm.currentFrame.regs[idx]
 
-template setReg(vm: RegisterVM, idx: uint8, val: V) =
+template setReg(vm: RegisterVM, idx: uint8, val: sink V) =
+  # Use sink to take ownership of val, avoiding copies
   vm.currentFrame.regs[idx] = val
 
 template getConst(vm: RegisterVM, idx: uint16): V =
@@ -147,11 +148,19 @@ template doAdd(a, b: V): V =
   elif a.kind == vkFloat and b.kind == vkFloat:
     makeFloat(a.fval + b.fval)
   elif a.kind == vkString and b.kind == vkString:
-    makeString(a.sval & b.sval)
+    # Optimize string concatenation by pre-allocating and using move semantics
+    var resultStr = newStringOfCap(a.sval.len + b.sval.len)
+    resultStr.add(a.sval)
+    resultStr.add(b.sval)
+    makeString(ensureMove(resultStr))
   elif a.kind == vkArray and b.kind == vkArray:
-    makeArray(a.aval & b.aval)
+    # Optimize array concatenation by pre-allocating and using move semantics
+    var resultArr = newSeqOfCap[V](a.aval.len + b.aval.len)
+    resultArr.add(a.aval)
+    resultArr.add(b.aval)
+    makeArray(ensureMove(resultArr))
   else:
-    makeNil()  # Type error
+    makeNil()
 
 template doSub(a, b: V): V =
   if a.kind == vkInt and b.kind == vkInt:
@@ -736,10 +745,15 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
     # --- Arrays ---
     of ropNewArray:
       # Create array with actual size, initialized to nil
-      var nilSeq = newSeq[V](instr.bx)  # ABx format: use bx not b
-      for i in 0'u16..<instr.bx:
-        nilSeq[i] = makeNil()
-      setReg(vm, instr.a, makeArray(nilSeq))
+      # Optimization: Use setLen instead of newSeq to avoid double initialization
+      var nilSeq: seq[V] = @[]
+      nilSeq.setLen(instr.bx)
+      # setLen zero-initializes, but we need to set proper vkNil
+      let nilValue = makeNil()
+      for i in 0 ..< nilSeq.len:
+        nilSeq[i] = nilValue
+      # Use ensureMove to transfer ownership to the register
+      setReg(vm, instr.a, makeArray(ensureMove(nilSeq)))
       log(verbose, "ropNewArray: created array of size " & $instr.bx & " in reg " & $instr.a)
 
     of ropGetIndex:
@@ -783,7 +797,9 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
         if actualStart >= actualEnd:
           setReg(vm, instr.a, makeString(""))
         else:
-          setReg(vm, instr.a, makeString(arr.sval[actualStart..<actualEnd]))
+          # Use ensureMove for the sliced string
+          var slicedStr = arr.sval[actualStart..<actualEnd]
+          setReg(vm, instr.a, makeString(ensureMove(slicedStr)))
       elif arr.kind == vkArray:
         let endIdx = if endVal.isInt():
           let val = endVal.ival
@@ -793,9 +809,12 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
         let actualEnd = max(actualStart, min(int(endIdx), arr.aval.len))
 
         if actualStart >= actualEnd:
-          setReg(vm, instr.a, makeArray(@[]))
+          var emptyArr: seq[V] = @[]
+          setReg(vm, instr.a, makeArray(ensureMove(emptyArr)))
         else:
-          setReg(vm, instr.a, makeArray(arr.aval[actualStart..<actualEnd]))
+          # Use ensureMove for the sliced array
+          var slicedArr = arr.aval[actualStart..<actualEnd]
+          setReg(vm, instr.a, makeArray(ensureMove(slicedArr)))
       else:
         setReg(vm, instr.a, makeNil())
 
@@ -949,15 +968,12 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
         when defined(debugRegVM):
           echo "  -> Initial idx=", idxVal, " limit=", limitVal, " step=", stepVal
 
-        if stepVal > 0:
-          if idxVal >= limitVal:
-            # Skip loop entirely (e.g., for i in 5..<5)
-            pc += int(instr.sbx)
+        if likely(stepVal > 0):
+          if unlikely(idxVal >= limitVal):
+            pc += int(instr.sbx)  # Skip loop
         else:
-          if idxVal <= limitVal:
-            # Skip loop entirely (backward loop)
-            pc += int(instr.sbx)
-        # Otherwise continue to loop body
+          if unlikely(idxVal <= limitVal):
+            pc += int(instr.sbx)  # Skip loop
 
     # --- Function Calls ---
     of ropCall:
@@ -1098,13 +1114,17 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
           elif val.kind == vkString:
             val.sval
           elif val.kind == vkArray:
-            # Print array elements
-            var res = "["
+            # Print array elements - pre-allocate for better performance
+            var res = newStringOfCap(val.aval.len * 8)  # Rough estimate
+            res.add("[")
             for i, elem in val.aval:
               if i > 0: res.add(", ")
               if elem.isInt(): res.add($elem.ival)
               elif elem.isFloat(): res.add($elem.fval)
-              elif elem.kind == vkString: res.add("\"" & elem.sval & "\"")
+              elif elem.kind == vkString:
+                res.add("\"")
+                res.add(elem.sval)
+                res.add("\"")
               elif elem.kind == vkBool:
                 res.add(if elem.bval: "true" else: "false")
               else: res.add("nil")

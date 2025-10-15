@@ -31,10 +31,7 @@ proc prove*(prog: Program, filename: string = "<unknown>", flags: CompilerFlags 
       logProver(flags, "Proving global variable: " & g.vname)
     proveStmt(g, env, globalCtx)
 
-  # Note: We'll check for unused global variables after main analysis
-  # so globals used in main are properly marked as used
-
-  # Analyze main function directly (it's the entry point)
+  # Third pass: analyze main function directly
   if prog.funInstances.hasKey(MAIN_FUNCTION_NAME):
     logProver(flags, "Analyzing main function")
     let mainFn = prog.funInstances[MAIN_FUNCTION_NAME]

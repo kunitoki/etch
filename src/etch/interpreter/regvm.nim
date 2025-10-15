@@ -207,7 +207,7 @@ proc makeNil*(): V {.inline.} =
 proc makeChar*(val: char): V {.inline.} =
   V(kind: vkChar, cval: val)
 
-proc makeString*(val: string): V {.inline.} =
+proc makeString*(val: sink string): V {.inline.} =
   V(kind: vkString, sval: val)
 
 proc makeSome*(val: V): V {.inline.} =
@@ -228,7 +228,7 @@ proc makeErr*(val: V): V {.inline.} =
   boxed[] = val
   V(kind: vkErr, wrapped: boxed)
 
-proc makeArray*(vals: seq[V]): V {.inline.} =
+proc makeArray*(vals: sink seq[V]): V {.inline.} =
   V(kind: vkArray, aval: vals)
 
 proc makeTable*(): V {.inline.} =

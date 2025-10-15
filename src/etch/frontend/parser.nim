@@ -938,14 +938,35 @@ proc parseImport(p: Parser): Stmt =
 proc parseSimpleStmt(p: Parser): Stmt =
   let start = p.cur
 
-  # Try to detect assignment: either simple identifier or field access followed by =
+  # Try to detect assignment: either simple identifier, field access, or array index followed by =
   # We need to look ahead to see if we have an assignment pattern
   var isAssignment = false
+  var isArrayIndexAssign = false
   var lookAheadIdx = 0
 
   # Check for simple identifier assignment (x = ...)
   if start.kind == tkIdent and p.peek().kind == tkSymbol and p.peek().lex == "=":
     isAssignment = true
+  # Check for array index assignment (arr[idx] = ...)
+  elif start.kind == tkIdent and p.peek().kind == tkSymbol and p.peek().lex == "[":
+    # Look for pattern: identifier [ ... ] =
+    lookAheadIdx = 1
+    var bracketDepth = 0
+    # Scan forward to find the matching ] and check for =
+    while lookAheadIdx < 100:  # Safety limit
+      let tok = p.peek(lookAheadIdx)
+      if tok.kind == tkSymbol:
+        if tok.lex == "[":
+          bracketDepth += 1
+        elif tok.lex == "]":
+          bracketDepth -= 1
+          if bracketDepth == 0:
+            # Found matching ], check for =
+            if p.peek(lookAheadIdx + 1).kind == tkSymbol and p.peek(lookAheadIdx + 1).lex == "=":
+              isAssignment = true
+              isArrayIndexAssign = true
+            break
+      lookAheadIdx += 1
   # Check for field assignment (obj.field = ...)
   elif start.kind == tkIdent:
     # Look for pattern: identifier . identifier =
@@ -968,17 +989,23 @@ proc parseSimpleStmt(p: Parser): Stmt =
       discard p.expect(tkSymbol, ";")
       return Stmt(kind: skAssign, aname: n.lex, aval: e, pos: p.posOf(n))
     else:
-      # Field assignment - parse left side as expression (to get field access)
+      # Field or array index assignment - parse left side as expression
       let leftExpr = p.parseExpr()
       discard p.expect(tkSymbol, "=")
       let rightExpr = p.parseExpr()
       discard p.expect(tkSymbol, ";")
 
-      # Create a field assignment statement
-      # Support nested field access: p.sub.field = value
+      # Create appropriate assignment statement based on left expression type
       if leftExpr.kind == ekFieldAccess:
+        # Support nested field access: p.sub.field = value
         return Stmt(kind: skFieldAssign,
                    faTarget: leftExpr,  # Store the full field access expression
+                   faValue: rightExpr,
+                   pos: p.posOf(start))
+      elif leftExpr.kind == ekIndex:
+        # Array index assignment: arr[idx] = value
+        return Stmt(kind: skFieldAssign,
+                   faTarget: leftExpr,  # Store the index expression
                    faValue: rightExpr,
                    pos: p.posOf(start))
       else:
