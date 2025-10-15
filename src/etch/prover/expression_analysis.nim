@@ -406,6 +406,10 @@ proc analyzeUserDefinedCall*(e: Expr, env: Env, ctx: ProverContext): Info =
   # Use newCtx to preserve the call stack
   var fnCtx = ProverContext(fnContext: fnContext, flags: newCtx.flags, prog: newCtx.prog, callStack: newCtx.callStack)
   for i, stmt in fn.body:
+    # Check if previous statement made rest of function unreachable
+    if callEnv.unreachable:
+      logProver(newCtx.flags, &"Skipping unreachable statement {i + 1}/{fn.body.len}: {stmt.kind}")
+      break
     logProver(newCtx.flags, &"Analyzing statement {i + 1}/{fn.body.len}: {stmt.kind}")
     proveStmt(stmt, callEnv, fnCtx)
 
@@ -536,6 +540,21 @@ proc analyzeIndexExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
     elif arrayInfo.arraySizeKnown:
       if indexInfo.minv >= arrayInfo.arraySize or indexInfo.maxv >= arrayInfo.arraySize:
         raise newProverError(e.indexExpr.pos, &"index range [{indexInfo.minv}, {indexInfo.maxv}] extends beyond array bounds [0, {arrayInfo.arraySize-1}]")
+
+    # Bounds checking when array size is in a range (stored in minv/maxv)
+    # For arrayNew with runtime size, the size range is stored in minv/maxv
+    elif not arrayInfo.arraySizeKnown and arrayInfo.isArray:
+      # When arrayInfo.minv and maxv represent the array size range, check against index range
+      # The index must be provably within bounds even for the smallest possible array size
+      if arrayInfo.minv > 0:  # We have array size range information
+        let minArraySize = arrayInfo.minv
+        let maxArraySize = arrayInfo.maxv
+        # The maximum index must be less than the minimum array size to be safe
+        if indexInfo.known:
+          if indexInfo.cval >= minArraySize:
+            raise newProverError(e.indexExpr.pos, &"index {indexInfo.cval} may be out of bounds (array size range: [{minArraySize}, {maxArraySize}])")
+        elif indexInfo.maxv >= minArraySize:
+          raise newProverError(e.indexExpr.pos, &"index range [{indexInfo.minv}, {indexInfo.maxv}] may exceed array bounds (array size range: [{minArraySize}, {maxArraySize}])")
 
   # If size/length is unknown but we have range info on index, check for negatives
   if not ((arrayInfo.isArray and arrayInfo.arraySizeKnown) or (arrayInfo.isString and arrayInfo.arraySizeKnown)):
@@ -849,24 +868,56 @@ proc analyzeExpr*(e: Expr; env: Env, ctx: ProverContext): Info =
     Info(known: false, nonNil: true, initialized: true)
 
   of ekIf:
-    # Analyze if-expression: all branches should be analyzed
-    discard analyzeExpr(e.ifCond, env, ctx)
+    # Analyze if-expression: evaluate condition and return appropriate branch
+    let condInfo = analyzeExpr(e.ifCond, env, ctx)
+
+    # Helper to extract expression from a single-statement branch
+    proc getBranchValue(stmts: seq[Stmt]): Info =
+      if stmts.len == 1 and stmts[0].kind == skExpr:
+        # Single expression statement - analyze the expression
+        return analyzeExpr(stmts[0].sexpr, env, ctx)
+      else:
+        # Complex branch - analyze all statements but can't determine value
+        for stmt in stmts:
+          proveStmt(stmt, env, ctx)
+        return Info(known: false, initialized: true)
+
+    # If condition is known at compile time, return the appropriate branch
+    if condInfo.known:
+      if condInfo.cval != 0:
+        # Condition is true - return then branch value
+        return getBranchValue(e.ifThen)
+      else:
+        # Condition is false - check elif/else branches
+        for elifCase in e.ifElifChain:
+          let elifCondInfo = analyzeExpr(elifCase.cond, env, ctx)
+          if elifCondInfo.known and elifCondInfo.cval != 0:
+            return getBranchValue(elifCase.body)
+
+        # All elif conditions false or no elif - use else branch
+        return getBranchValue(e.ifElse)
+
+    # Condition is unknown - need to merge results from all branches
+    var branchInfos: seq[Info] = @[]
 
     # Analyze then branch
-    for stmt in e.ifThen:
-      proveStmt(stmt, env, ctx)
+    branchInfos.add(getBranchValue(e.ifThen))
 
     # Analyze elif branches
     for elifCase in e.ifElifChain:
       discard analyzeExpr(elifCase.cond, env, ctx)
-      for stmt in elifCase.body:
-        proveStmt(stmt, env, ctx)
+      branchInfos.add(getBranchValue(elifCase.body))
 
     # Analyze else branch
-    for stmt in e.ifElse:
-      proveStmt(stmt, env, ctx)
+    branchInfos.add(getBranchValue(e.ifElse))
 
-    # Conservative - we'd need flow analysis to be more precise
+    # Merge all branch results
+    if branchInfos.len > 0:
+      var mergedInfo = branchInfos[0]
+      for i in 1..<branchInfos.len:
+        mergedInfo = union(mergedInfo, branchInfos[i])
+      return mergedInfo
+
     return Info(known: false, initialized: true)
 
 
@@ -933,6 +984,13 @@ proc proveFieldAssign(s: Stmt; env: Env, ctx: ProverContext) =
   logProver(ctx.flags, "Field assigned value with range [" & $valueInfo.minv & ".." & $valueInfo.maxv & "]")
 
 
+proc hasReturn(stmts: seq[Stmt]): bool =
+  ## Check if a statement block has a return statement
+  for stmt in stmts:
+    if stmt.kind == skReturn:
+      return true
+  return false
+
 proc proveIf(s: Stmt; env: Env, ctx: ProverContext) =
   let condResult = evaluateCondition(s.cond, env, ctx)
   logProver(ctx.flags, "If condition evaluation result: " & $condResult)
@@ -947,6 +1005,14 @@ proc proveIf(s: Stmt; env: Env, ctx: ProverContext) =
     var thenEnv = Env(vals: env.vals, nils: env.nils, exprs: env.exprs)
     logProver(ctx.flags, "Analyzing " & $s.thenBody.len & " statements in then branch")
     for st in s.thenBody: proveStmt(st, thenEnv, ctx)
+
+    # If then branch has a return, the rest of the function is unreachable
+    let thenReturns = hasReturn(s.thenBody)
+    if thenReturns:
+      logProver(ctx.flags, "Then branch returns and condition is always true - any code after if is unreachable")
+      env.unreachable = true
+      return
+
     # Copy then results back to main env
     for k, v in thenEnv.vals: env.vals[k] = v
     for k, v in thenEnv.exprs: env.exprs[k] = v
@@ -1078,6 +1144,28 @@ proc proveIf(s: Stmt; env: Env, ctx: ProverContext) =
   # Control flow sensitive analysis for else (condition is false)
   if s.cond.kind == ekBin:
     case s.cond.bop
+    of boNe: # #a != #b: in else branch (condition false), #a == #b
+      # Handle array/string length equality: if (#a != #b) is false, then #a == #b
+      if s.cond.lhs.kind == ekArrayLen and s.cond.rhs.kind == ekArrayLen:
+        # Both sides are array/string lengths
+        let lhsInfo = analyzeExpr(s.cond.lhs, env, ctx)
+        let rhsInfo = analyzeExpr(s.cond.rhs, env, ctx)
+
+        # If we know one size, constrain the other to match
+        if lhsInfo.arraySizeKnown and (lhsInfo.isArray or lhsInfo.isString):
+          # Constrain the rhs array to have the same size
+          if s.cond.rhs.arrayExpr.kind == ekVar and elseEnv.vals.hasKey(s.cond.rhs.arrayExpr.vname):
+            elseEnv.vals[s.cond.rhs.arrayExpr.vname].arraySize = lhsInfo.arraySize
+            elseEnv.vals[s.cond.rhs.arrayExpr.vname].arraySizeKnown = true
+            elseEnv.vals[s.cond.rhs.arrayExpr.vname].minv = lhsInfo.arraySize
+            elseEnv.vals[s.cond.rhs.arrayExpr.vname].maxv = lhsInfo.arraySize
+        elif rhsInfo.arraySizeKnown and (rhsInfo.isArray or rhsInfo.isString):
+          # Constrain the lhs array to have the same size
+          if s.cond.lhs.arrayExpr.kind == ekVar and elseEnv.vals.hasKey(s.cond.lhs.arrayExpr.vname):
+            elseEnv.vals[s.cond.lhs.arrayExpr.vname].arraySize = rhsInfo.arraySize
+            elseEnv.vals[s.cond.lhs.arrayExpr.vname].arraySizeKnown = true
+            elseEnv.vals[s.cond.lhs.arrayExpr.vname].minv = rhsInfo.arraySize
+            elseEnv.vals[s.cond.lhs.arrayExpr.vname].maxv = rhsInfo.arraySize
     of boEq: # x == 0 means x is nonZero in else branch
       if s.cond.rhs.kind == ekInt and s.cond.rhs.ival == 0 and s.cond.lhs.kind == ekVar:
         if elseEnv.vals.hasKey(s.cond.lhs.vname):
@@ -1109,6 +1197,26 @@ proc proveIf(s: Stmt; env: Env, ctx: ProverContext) =
     else: discard
 
   for st in s.elseBody: proveStmt(st, elseEnv, ctx)
+
+  # Check if then branch has early return
+  let thenReturns = hasReturn(s.thenBody)
+  let elseReturns = hasReturn(s.elseBody)
+
+  logProver(ctx.flags, &"Then branch returns: {thenReturns}, Else branch returns: {elseReturns}")
+
+  # If then branch returns, use else environment for continuation
+  if thenReturns and not elseReturns:
+    logProver(ctx.flags, "Then branch has early return - using else environment for continuation")
+    # Log environment changes
+    for k, v in elseEnv.vals:
+      if env.vals.hasKey(k) and (v.arraySize != env.vals[k].arraySize or v.arraySizeKnown != env.vals[k].arraySizeKnown):
+        logProver(ctx.flags, &"Updating variable '{k}': arraySize {env.vals[k].arraySize} -> {v.arraySize}, arraySizeKnown {env.vals[k].arraySizeKnown} -> {v.arraySizeKnown}")
+      env.vals[k] = v
+    for k, v in elseEnv.nils:
+      env.nils[k] = v
+    for k, v in elseEnv.exprs:
+      env.exprs[k] = v
+    return
 
   # Join - merge variable states from all branches
   # For complete initialization analysis, we need to check all possible paths

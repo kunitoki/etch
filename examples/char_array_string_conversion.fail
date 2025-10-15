@@ -1,0 +1,5 @@
+examples/char_array_string_conversion.etch:4:29: error: index range [0, 12] may exceed array bounds (array size range: [1, 10])
+  3 |     print("a=" + toString(a[i]));
+  4 |     print("b=" + toString(b[i]));
+                                  ^
+  5 |     if a[i] != b[i] {

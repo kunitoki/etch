@@ -32,6 +32,7 @@ type Env* = ref object
   nils*: Table[string, bool]
   exprs*: Table[string, Expr]  # Track original expressions for variables
   declPos*: Table[string, Pos]  # Track declaration positions for error reporting
+  unreachable*: bool  # Track if code is unreachable after this point
 
 type ConditionResult* = enum
   crUnknown, crAlwaysTrue, crAlwaysFalse

@@ -1,0 +1,19 @@
+fn min(a: int, b: int) -> int {
+  return if a < b { a } else { b };
+}
+
+fn ==(a: string, b: array[char]) -> bool {
+  for i in 0 ..< min(#a, #b) {
+    if a[i] != b[i] {
+      return false;
+    }
+  }
+  return true;
+}
+
+fn main() -> void {
+  let c: string = "aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  let d: array[char] = arrayNew(7, 'a');
+  print(d);
+  print(c == d);
+}

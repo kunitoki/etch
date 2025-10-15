@@ -103,6 +103,59 @@ proc formatRegisterValue*(v: V): string =
     let inner = v.wrapped[]
     result = "Err(" & formatRegisterValue(inner) & ")"
 
+proc formatValueForPrint*(v: V): string =
+  ## Format a value for print output (recursive for nested structures)
+  case v.kind
+  of vkInt:
+    result = $v.ival
+  of vkFloat:
+    result = $v.fval
+  of vkChar:
+    result = $v.cval
+  of vkBool:
+    result = if v.bval: "true" else: "false"
+  of vkString:
+    result = v.sval
+  of vkNil:
+    result = "nil"
+  of vkArray:
+    # Recursively format array elements
+    var res = newStringOfCap(v.aval.len * 8)
+    res.add("[")
+    for i, elem in v.aval:
+      if i > 0: res.add(", ")
+      if elem.isInt():
+        res.add($elem.ival)
+      elif elem.isFloat():
+        res.add($elem.fval)
+      elif elem.isChar():
+        res.add("'")
+        res.add($elem.cval)
+        res.add("'")
+      elif elem.kind == vkString:
+        res.add("\"")
+        res.add(elem.sval)
+        res.add("\"")
+      elif elem.kind == vkBool:
+        res.add(if elem.bval: "true" else: "false")
+      elif elem.kind == vkArray:
+        # Recursively format nested arrays
+        res.add(formatValueForPrint(elem))
+      else:
+        res.add("nil")
+    res.add("]")
+    result = res
+  of vkSome:
+    result = "Some(" & formatValueForPrint(v.wrapped[]) & ")"
+  of vkNone:
+    result = "None"
+  of vkOk:
+    result = "Ok(" & formatValueForPrint(v.wrapped[]) & ")"
+  of vkErr:
+    result = "Err(" & formatValueForPrint(v.wrapped[]) & ")"
+  else:
+    result = "nil"
+
 proc captureRegisters*(vm: RegisterVM): seq[tuple[index: uint8, value: string]] =
   ## Capture current register state for debugging
   result = @[]
@@ -328,7 +381,6 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
   let maxInstr = instructions.len
   vm.currentFrame.pc = pc  # Initialize PC in frame
 
-
   # Output buffer for print statements - significantly improves performance
   var outputBuffer: string = ""
   var outputCount = 0
@@ -387,8 +439,7 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
     of ropMove:
       let val = getReg(vm, instr.b)
       setReg(vm, instr.a, val)
-      log(verbose, "ropMove: reg" & $instr.b & " -> reg" & $instr.a &
-          " value kind=" & $val.kind &
+      log(verbose, "ropMove: reg" & $instr.b & " -> reg" & $instr.a &  " value kind=" & $val.kind &
           (if val.isInt(): " int=" & $val.ival else: ""))
 
     of ropLoadK:
@@ -566,8 +617,7 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
     of ropAnd:
       let b = getReg(vm, instr.b)
       let c = getReg(vm, instr.c)
-      log(verbose, "ropAnd: reg" & $instr.b & " kind=" & $b.kind &
-          " AND reg" & $instr.c & " kind=" & $c.kind)
+      log(verbose, "ropAnd: reg" & $instr.b & " kind=" & $b.kind & " AND reg" & $instr.c & " kind=" & $c.kind)
       # Both values should be booleans - perform logical AND
       if b.kind == vkBool and c.kind == vkBool:
         let bVal = b.bval
@@ -1102,36 +1152,8 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       of "print":
         if numArgs == 1:
           let val = getReg(vm, funcReg + 1)
-          # Build the string to print
-          let output = if val.isInt():
-            $val.ival
-          elif val.isFloat():
-            $val.fval
-          elif val.isChar():
-            $val.cval
-          elif val.kind == vkBool:
-            if val.bval: "true" else: "false"
-          elif val.kind == vkString:
-            val.sval
-          elif val.kind == vkArray:
-            # Print array elements - pre-allocate for better performance
-            var res = newStringOfCap(val.aval.len * 8)  # Rough estimate
-            res.add("[")
-            for i, elem in val.aval:
-              if i > 0: res.add(", ")
-              if elem.isInt(): res.add($elem.ival)
-              elif elem.isFloat(): res.add($elem.fval)
-              elif elem.kind == vkString:
-                res.add("\"")
-                res.add(elem.sval)
-                res.add("\"")
-              elif elem.kind == vkBool:
-                res.add(if elem.bval: "true" else: "false")
-              else: res.add("nil")
-            res.add("]")
-            res
-          else:
-            "nil"
+          # Use the recursive formatter
+          let output = formatValueForPrint(val)
 
           # Use unified print handler
           vmPrint(vm, output, outputBuffer, outputCount)
@@ -1145,18 +1167,8 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       of "toString":
         if numArgs == 1:
           let val = getReg(vm, funcReg + 1)
-          let resStr = if val.isInt():
-            $val.ival
-          elif val.isFloat():
-            $val.fval
-          elif val.isChar():
-            $val.cval
-          elif val.kind == vkBool:
-            if val.bval: "true" else: "false"
-          elif val.kind == vkString:
-            val.sval
-          else:
-            "nil"
+          # Use the recursive formatter
+          let resStr = formatValueForPrint(val)
           setReg(vm, funcReg, makeString(resStr))
 
       # Reference operations
@@ -1185,13 +1197,10 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
           let defaultVal = getReg(vm, funcReg + 2)
           if sizeVal.isInt():
             let size = sizeVal.ival
-            if size >= 0 and size <= 100000000:  # Sanity check for array size
-              var newArray = newSeq[V](size)
-              for i in 0 ..< size:
-                newArray[i] = defaultVal
-              setReg(vm, funcReg, makeArray(ensureMove(newArray)))
-            else:
-              setReg(vm, funcReg, makeArray(@[]))  # Return empty array for invalid size
+            var newArray = newSeq[V](size)
+            for i in 0 ..< size:
+              newArray[i] = defaultVal
+            setReg(vm, funcReg, makeArray(ensureMove(newArray)))
           else:
             setReg(vm, funcReg, makeArray(@[]))  # Return empty array if size not an int
         else:

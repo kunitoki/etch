@@ -1,0 +1,18 @@
+fn ==(a: string, b: array[char]) -> bool {
+  if #a != #b {
+    return false;
+  }
+  for i in 0 ..< #a {
+    if a[i] != b[i] {
+      return false;
+    }
+  }
+  return true;
+}
+
+fn main() -> void {
+  let c: string = "aaaaaaaa";
+  let d: array[char] = arrayNew(7, 'a');
+  print(d);
+  print(c == d);
+}
