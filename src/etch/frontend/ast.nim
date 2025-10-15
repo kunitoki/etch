@@ -125,7 +125,7 @@ type
       initExpr*: Option[Expr] # optional initialization expression
 
   StmtKind* = enum
-    skVar, skAssign, skFieldAssign, skIf, skWhile, skFor, skBreak, skExpr, skReturn, skComptime, skTypeDecl, skImport
+    skVar, skAssign, skFieldAssign, skIf, skWhile, skFor, skBreak, skExpr, skReturn, skComptime, skTypeDecl, skImport, skDiscard
 
   VarFlag* = enum
     vfLet, vfVar
@@ -175,6 +175,8 @@ type
       importKind*: string     # "module" or "ffi"
       importPath*: string     # file path for modules, namespace for FFI
       importItems*: seq[ImportItem]  # items to import
+    of skDiscard:
+      dexprs*: seq[Expr]      # expressions to discard
     of skBreak:
       discard
 

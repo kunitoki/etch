@@ -1,0 +1,5 @@
+examples/discard_void_error_test.etch:9:3: error: cannot discard void function 'doSomething() -> void'; void results are automatically discarded
+  8 |   // This should produce an error - void functions are automatically discarded
+  9 |   discard doSomething();
+        ^
+  10 |

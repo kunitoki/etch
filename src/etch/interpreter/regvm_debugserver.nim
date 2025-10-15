@@ -704,7 +704,7 @@ proc runRegDebugServer*(program: RegBytecodeProgram, sourceFile: string) =
   let server = newRegDebugServer(program, sourceFile)
   server.running = false  # VM not running until launched
 
-  stderr.writeLine("Debug server started for register VM")
+  stderr.writeLine("DEBUG: Debug server started for register VM")
   stderr.flushFile()
 
   var serverAlive = true  # Keep server alive for communication
@@ -736,7 +736,7 @@ proc runRegDebugServer*(program: RegBytecodeProgram, sourceFile: string) =
       break
     except:
       let error = getCurrentExceptionMsg()
-      stderr.writeLine("Debug server error: " & error)
+      stderr.writeLine("DEBUG: Debug server error: " & error)
       stderr.flushFile()
 
       # Send error response
@@ -748,5 +748,5 @@ proc runRegDebugServer*(program: RegBytecodeProgram, sourceFile: string) =
       echo $errorResponse
       stdout.flushFile()
 
-  stderr.writeLine("Debug server stopped")
+  stderr.writeLine("DEBUG: Debug server stopped")
   stderr.flushFile()

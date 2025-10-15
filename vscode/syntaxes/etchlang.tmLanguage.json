@@ -14,7 +14,7 @@
     "keywords": {
       "patterns": [
         {
-          "match": "\\b(fn|let|var|while|for|in|break|if|else|return|match|comptime|type|distinct|object|new|import|export|ffi)\\b",
+          "match": "\\b(fn|let|var|while|for|in|break|if|else|match|return|discard|comptime|type|distinct|object|new|import|export|ffi)\\b",
           "name": "keyword.control.etchlang"
         }
       ]

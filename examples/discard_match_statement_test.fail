@@ -1,0 +1,5 @@
+examples/discard_match_statement_test.etch:12:3: error: match expression returns 'string' but result is not used; use 'discard' to explicitly ignore the return value
+  11 |   // Since the match result (string) is not used, it should require discard
+  12 |   match x {
+         ^
+  13 |     some(num) => {

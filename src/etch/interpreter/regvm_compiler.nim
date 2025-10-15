@@ -1265,6 +1265,14 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
     if c.verbose:
       echo "[REGCOMPILER] Skipping import statement (handled during parsing)"
 
+  of skDiscard:
+    # Discard statement - compile expressions and free their registers
+    if c.verbose:
+      echo "[REGCOMPILER] Compiling discard statement with ", s.dexprs.len, " expressions"
+    for expr in s.dexprs:
+      let reg = c.compileExpr(expr)
+      c.allocator.freeReg(reg)
+
   of skFieldAssign:
     # Field assignment for objects
     if c.verbose:

@@ -7,10 +7,11 @@ default:
 libs:
     make
 
-# Test compiling and running all examples
+# Test compiling and running all examples + debugger tests
 tests:
     @just libs
     nim r src/etch.nim --test examples/
+    nimble test
 
 # Test compiling and running a specific example file
 test file:

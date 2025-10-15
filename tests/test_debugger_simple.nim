@@ -32,6 +32,7 @@ fn main() -> void {
     var a: int = 10;
     var b: int = 20;
     var c: int = a + b;
+    print(c);
 }
 """)
     defer: removeFile(testProgram)
@@ -48,7 +49,7 @@ fn main() -> void {
     defer: removeFile(inputFile)
 
     let (output, exitCode) = execCmdEx(
-      "timeout 2 ./etch --debug-server " & testProgram & " < " & inputFile & " 2>&1 | grep -v '^DEBUG' || true"
+      "timeout 2 ./etch --debug-server " & testProgram & " < " & inputFile & " 2>&1 | grep -v '^DEBUG' | grep -v '^\\[' || true"
     )
 
     # Check key responses
@@ -68,6 +69,7 @@ fn main() -> void {
     var x: int = 1;
     var y: int = 2;
     var z: int = 3;
+    print(x + y + z);
 }
 """)
     defer: removeFile(testProgram)
@@ -81,7 +83,7 @@ fn main() -> void {
     defer: removeFile(inputFile)
 
     let (output, exitCode) = execCmdEx(
-      "timeout 1 ./etch --debug-server " & testProgram & " < " & inputFile & " 2>&1 | grep -v '^DEBUG' || true"
+      "timeout 1 ./etch --debug-server " & testProgram & " < " & inputFile & " 2>&1 | grep -v '^DEBUG' | grep -v '^\\[' || true"
     )
 
     # Parse output to find stackTrace response
@@ -104,6 +106,7 @@ fn main() -> void {
     var x: int = 5;
     var y: int = 10;
     var z: int = x + y;
+    print(z);
 }
 """)
     defer: removeFile(testProgram)
@@ -127,7 +130,7 @@ fn main() -> void {
     defer: removeFile(inputFile)
 
     let (output, exitCode) = execCmdEx(
-      "timeout 2 ./etch --debug-server " & testProgram & " < " & inputFile & " 2>&1 | grep -v '^DEBUG' || true"
+      "timeout 2 ./etch --debug-server " & testProgram & " < " & inputFile & " 2>&1 | grep -v '^DEBUG' | grep -v '^\\[' || true"
     )
 
     # Parse variable responses

@@ -1,0 +1,5 @@
+examples/discard_error_test.etch:9:3: error: function 'getString() -> string' returns 'string' but result is not used; use 'discard' to explicitly ignore the return value
+  8 |   // This should produce a compiler error - function returns string but result is not used
+  9 |   getString();
+        ^
+  10 |

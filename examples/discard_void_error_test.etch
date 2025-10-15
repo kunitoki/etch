@@ -1,0 +1,12 @@
+// Test that discarding void functions produces an error
+
+fn doSomething() {
+  print("Doing something");
+}
+
+fn main() {
+  // This should produce an error - void functions are automatically discarded
+  discard doSomething();
+
+  print("Should not reach here");
+}

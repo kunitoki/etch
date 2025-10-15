@@ -1,0 +1,15 @@
+// Test that assigning function results works without discard
+
+fn getNumber() -> int {
+  return 42;
+}
+
+fn main() {
+  // This should work fine - result is assigned
+  let x: int = getNumber();
+
+  print("x = ");
+  print(x);
+
+  print("Test passed!");
+}

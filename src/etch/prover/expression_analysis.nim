@@ -1281,6 +1281,7 @@ proc proveStmt*(s: Stmt; env: Env, ctx: ProverContext) =
     of skComptime: "comptime block"
     of skTypeDecl: "type declaration"
     of skImport: "import statement"
+    of skDiscard: "discard statement"
 
   logProver(ctx.flags, "Analyzing " & stmtKindStr & (if ctx.fnContext != "": " in " & ctx.fnContext else: ""))
 
@@ -1301,6 +1302,10 @@ proc proveStmt*(s: Stmt; env: Env, ctx: ProverContext) =
   of skImport:
     # Import statements don't need proving
     discard
+  of skDiscard:
+    # Discard statements - analyze the expressions but ignore results
+    for expr in s.dexprs:
+      discard analyzeExpr(expr, env, ctx)
 
 
 proc checkUnusedVariables*(env: Env, ctx: ProverContext, scopeName: string = "", excludeGlobals: bool = false) =

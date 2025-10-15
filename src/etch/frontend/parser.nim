@@ -573,6 +573,17 @@ proc parseReturn(p: Parser): Stmt =
   discard p.expect(tkSymbol, ";")
   Stmt(kind: skReturn, re: e, pos: p.posOf(k))
 
+proc parseDiscard(p: Parser): Stmt =
+  let k = p.expect(tkKeyword, "discard")
+  var exprs: seq[Expr] = @[]
+  if not (p.cur.kind == tkSymbol and p.cur.lex == ";"):
+    exprs.add(p.parseExpr())
+    while p.cur.kind == tkSymbol and p.cur.lex == ",":
+      discard p.eat()  # consume ","
+      exprs.add(p.parseExpr())
+  discard p.expect(tkSymbol, ";")
+  Stmt(kind: skDiscard, dexprs: exprs, pos: p.posOf(k))
+
 proc parseComptime(p: Parser): Stmt =
   let k = p.expect(tkKeyword, "comptime")
   let body = p.parseBlock()
@@ -979,6 +990,7 @@ proc parseStmt*(p: Parser): Stmt =
     of "for": return p.parseFor()
     of "break": return p.parseBreak()
     of "return": return p.parseReturn()
+    of "discard": return p.parseDiscard()
     of "comptime": return p.parseComptime()
     of "type": return p.parseTypeDecl()
     of "import": return p.parseImport()

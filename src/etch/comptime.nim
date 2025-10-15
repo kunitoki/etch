@@ -161,6 +161,12 @@ proc foldStmt(prog: Program, s: var Stmt) =
     s.faTarget = target
     var value = s.faValue; foldExpr(prog, value)
     s.faValue = value
+  of skDiscard:
+    # Fold all discard expressions
+    for i in 0..<s.dexprs.len:
+      var expr = s.dexprs[i]
+      foldExpr(prog, expr)
+      s.dexprs[i] = expr
   of skIf:
     foldExpr(prog, s.cond)
     for i in 0..<s.thenBody.len: foldStmt(prog, s.thenBody[i])

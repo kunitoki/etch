@@ -7,7 +7,7 @@ import ../frontend/ast
 import types, expressions
 
 
-proc typecheckStmt*(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TySubst)
+proc typecheckStmt*(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TySubst; isBlockResult: bool = false)
 proc inferMatchExpr*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType
 
 
@@ -217,12 +217,14 @@ proc typecheckBreak(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var T
   discard
 
 
-proc typecheckStmtList*(prog: Program; fd: FunDecl; sc: Scope; stmts: seq[Stmt]; subst: var TySubst): EtchType =
+proc typecheckStmtList*(prog: Program; fd: FunDecl; sc: Scope; stmts: seq[Stmt]; subst: var TySubst; blockResultUsed: bool = false): EtchType =
   ## Type check a list of statements and return the type of the last expression (or void)
   var resultType = tVoid()
   for j, stmt in stmts:
-    typecheckStmt(prog, fd, sc, stmt, subst)
-    if j == stmts.len - 1 and stmt.kind == skExpr:
+    let isLastStmt = (j == stmts.len - 1)
+    let isBlockResult = isLastStmt and blockResultUsed and stmt.kind == skExpr
+    typecheckStmt(prog, fd, sc, stmt, subst, isBlockResult)
+    if isLastStmt and stmt.kind == skExpr:
       # Last statement is expression - this determines block type
       resultType = stmt.sexpr.typ
   return resultType
@@ -294,7 +296,8 @@ proc inferMatchExpr*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var 
       discard
 
     # Type check all statements in case body
-    let caseType = typecheckStmtList(prog, fd, caseScope, matchCase.body, subst)
+    # The block result is used (it becomes the value of this match arm)
+    let caseType = typecheckStmtList(prog, fd, caseScope, matchCase.body, subst, blockResultUsed = true)
 
     # Use the type returned by typecheckStmtList, which correctly handles
     # the type of the last expression in the block
@@ -317,7 +320,7 @@ proc inferMatchExpr*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var 
   return resultType
 
 
-proc typecheckStmt*(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TySubst) =
+proc typecheckStmt*(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var TySubst; isBlockResult: bool = false) =
   case s.kind
   of skVar: typecheckVar(prog, fd, sc, s, subst)
   of skAssign: typecheckAssign(prog, fd, sc, s, subst)
@@ -329,8 +332,25 @@ proc typecheckStmt*(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var T
   of skExpr:
     if s.sexpr.kind == ekMatch:
       s.sexpr.typ = inferMatchExpr(prog, fd, sc, s.sexpr, subst)
+      # Check if match expression result is non-void and not used
+      if s.sexpr.typ.kind != tkVoid and not isBlockResult:
+        raise newTypecheckError(s.pos, &"match expression returns '{s.sexpr.typ}' but result is not used; use 'discard' to explicitly ignore the return value")
     else:
-      discard inferExprTypes(prog, fd, sc, s.sexpr, subst)
+      let exprType = inferExprTypes(prog, fd, sc, s.sexpr, subst)
+      # Check if this is a function call with non-void return type
+      # If so, it must be explicitly discarded
+      # BUT: if this expression is the result of a block that's being used, then it IS being used
+      if s.sexpr.kind == ekCall and exprType.kind != tkVoid and not isBlockResult:
+        let unmangledName = demangleFunctionSignature(s.sexpr.fname)
+        raise newTypecheckError(s.pos, &"function '{unmangledName}' returns '{exprType}' but result is not used; use 'discard' to explicitly ignore the return value")
+  of skDiscard:
+    # Type check all discarded expressions but ignore their results
+    for expr in s.dexprs:
+      let exprType = inferExprTypes(prog, fd, sc, expr, subst)
+      # Emit a warning/error if discarding a void expression (it's redundant)
+      if exprType.kind == tkVoid and expr.kind == ekCall:
+        let unmangledName = demangleFunctionSignature(expr.fname)
+        raise newTypecheckError(s.pos, &"cannot discard void function '{unmangledName}'; void results are automatically discarded")
   of skReturn: typecheckReturn(prog, fd, sc, s, subst)
   of skComptime: typecheckComptime(prog, fd, sc, s, subst)
   of skTypeDecl:

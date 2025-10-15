@@ -1,0 +1,12 @@
+// Test that non-void function calls must be discarded or assigned
+
+fn getString() -> string {
+  return "hello";
+}
+
+fn main() {
+  // This should produce a compiler error - function returns string but result is not used
+  getString();
+
+  print("Should not reach here");
+}
