@@ -17,28 +17,22 @@ proc formatRegisterValue(val: V): string =
   elif val.isString():
     return "\"" & val.sval & "\""
   elif val.isBool():
-    return $((val.data and 1) != 0)
+    return $val.bval
   elif val.isChar():
-    return "'" & $val.getChar() & "'"
+    return "'" & $val.cval & "'"
   elif val.isSome():
     # Extract the wrapped value
-    var inner = val
-    let innerTag = (val.data shr 32) and 0xFFFF
-    inner.data = (innerTag shl 48) or (val.data and 0xFFFFFFFF'u64)
+    let inner = val.wrapped[]
     return "Some(" & formatRegisterValue(inner) & ")"
   elif val.isNone():
     return "None"
   elif val.isOk():
     # Extract the wrapped value
-    var inner = val
-    let innerTag = (val.data shr 32) and 0xFFFF
-    inner.data = (innerTag shl 48) or (val.data and 0xFFFFFFFF'u64)
+    let inner = val.wrapped[]
     return "Ok(" & formatRegisterValue(inner) & ")"
   elif val.isErr():
     # Extract the error value
-    var inner = val
-    let innerTag = (val.data shr 32) and 0xFFFF
-    inner.data = (innerTag shl 48) or (val.data and 0xFFFFFFFF'u64)
+    let inner = val.wrapped[]
     return "Err(" & formatRegisterValue(inner) & ")"
   elif val.isArray():
     if val.aval.len == 0:

@@ -51,107 +51,80 @@ proc deserializeRegInstruction(stream: Stream): RegInstruction
 
 # Serialize a V value with full type preservation
 proc serializeV(stream: Stream, val: V) =
-  stream.write(val.data)
-  let tag = getTag(val)
+  # Write the kind (VKind enum value)
+  stream.write(uint8(val.kind))
 
   # Write type-specific data
-  case tag:
-  of TAG_INT:
-    stream.write(val.ival)  # Write the full 64-bit integer value
-  of TAG_STRING:
+  case val.kind:
+  of vkInt:
+    stream.write(val.ival)
+  of vkFloat:
+    stream.write(val.fval)
+  of vkBool:
+    stream.write(val.bval)
+  of vkChar:
+    stream.write(val.cval)
+  of vkString:
     stream.write(uint32(val.sval.len))
     stream.write(val.sval)
-  of TAG_FLOAT:
-    stream.write(val.fval)
-  of TAG_ARRAY:
+  of vkArray:
     stream.write(uint32(val.aval.len))
     for item in val.aval:
       serializeV(stream, item)
-  of TAG_TABLE:
+  of vkTable:
     stream.write(uint32(val.tval.len))
     for key, value in val.tval:
       stream.write(uint32(key.len))
       stream.write(key)
       serializeV(stream, value)
-  of TAG_SOME, TAG_NONE, TAG_OK, TAG_ERR:
-    # Option/Result types - the wrapped value is already in data field
-    # For Some/Ok/Err, also preserve any associated string/array/table data
-    if tag in [TAG_SOME, TAG_OK, TAG_ERR]:
-      # Check if there's associated complex data
-      let wrappedTag = (val.data shr 32) and 0xFFFF
-      if wrappedTag == TAG_INT:
-        stream.write(val.ival)
-      elif wrappedTag == TAG_STRING:
-        stream.write(uint32(val.sval.len))
-        stream.write(val.sval)
-      elif wrappedTag == TAG_FLOAT:
-        stream.write(val.fval)
-      elif wrappedTag == TAG_ARRAY:
-        stream.write(uint32(val.aval.len))
-        for item in val.aval:
-          serializeV(stream, item)
-      elif wrappedTag == TAG_TABLE:
-        stream.write(uint32(val.tval.len))
-        for key, value in val.tval:
-          stream.write(uint32(key.len))
-          stream.write(key)
-          serializeV(stream, value)
-  else:
-    discard  # Other types are stored entirely in data field
+  of vkSome, vkOk, vkErr:
+    # Option/Result types with wrapped values
+    serializeV(stream, val.wrapped[])
+  of vkNil, vkNone:
+    discard  # No additional data to serialize
 
 
 # Deserialize a V value with full type restoration
 proc deserializeV(stream: Stream): V =
-  result.data = stream.readUint64()
-  let tag = getTag(result)
+  # Read the kind
+  let kind = VKind(stream.readUint8())
 
   # Read type-specific data
-  case tag:
-  of TAG_INT:
-    result.ival = stream.readInt64()  # Read the full 64-bit integer value
-  of TAG_STRING:
+  case kind:
+  of vkInt:
+    result = makeInt(stream.readInt64())
+  of vkFloat:
+    result = makeFloat(stream.readFloat64())
+  of vkBool:
+    result = makeBool(stream.readBool())
+  of vkChar:
+    result = makeChar(stream.readChar())
+  of vkString:
     let len = stream.readUint32()
-    result.sval = stream.readStr(int(len))
-  of TAG_FLOAT:
-    result.fval = stream.readFloat64()
-  of TAG_ARRAY:
+    result = makeString(stream.readStr(int(len)))
+  of vkArray:
     let len = stream.readUint32()
-    result.aval = newSeq[V](len)
+    var arr = newSeq[V](len)
     for i in 0..<len:
-      result.aval[i] = deserializeV(stream)
-  of TAG_TABLE:
+      arr[i] = deserializeV(stream)
+    result = makeArray(arr)
+  of vkTable:
     let len = stream.readUint32()
-    result.tval = initTable[string, V]()
+    result = makeTable()
     for _ in 0..<len:
       let keyLen = stream.readUint32()
       let key = stream.readStr(int(keyLen))
       result.tval[key] = deserializeV(stream)
-  of TAG_SOME, TAG_NONE, TAG_OK, TAG_ERR:
-    # Option/Result types
-    if tag in [TAG_SOME, TAG_OK, TAG_ERR]:
-      # Check if there's associated complex data
-      let wrappedTag = (result.data shr 32) and 0xFFFF
-      if wrappedTag == TAG_INT:
-        result.ival = stream.readInt64()
-      elif wrappedTag == TAG_STRING:
-        let len = stream.readUint32()
-        result.sval = stream.readStr(int(len))
-      elif wrappedTag == TAG_FLOAT:
-        result.fval = stream.readFloat64()
-      elif wrappedTag == TAG_ARRAY:
-        let len = stream.readUint32()
-        result.aval = newSeq[V](len)
-        for i in 0..<len:
-          result.aval[i] = deserializeV(stream)
-      elif wrappedTag == TAG_TABLE:
-        let len = stream.readUint32()
-        result.tval = initTable[string, V]()
-        for _ in 0..<len:
-          let keyLen = stream.readUint32()
-          let key = stream.readStr(int(keyLen))
-          result.tval[key] = deserializeV(stream)
-  else:
-    discard  # Other types are stored entirely in data field
+  of vkSome:
+    result = makeSome(deserializeV(stream))
+  of vkOk:
+    result = makeOk(deserializeV(stream))
+  of vkErr:
+    result = makeErr(deserializeV(stream))
+  of vkNil:
+    result = makeNil()
+  of vkNone:
+    result = makeNone()
 
 
 # Serialize a register VM instruction

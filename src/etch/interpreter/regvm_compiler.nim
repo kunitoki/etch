@@ -31,23 +31,25 @@ type
 proc addConst*(c: var RegCompiler, val: regvm.V): uint16 =
   # Check if constant already exists (constant folding)
   for i, existing in c.prog.constants:
-    let existingTag = regvm.getTag(existing)
-    let valTag = regvm.getTag(val)
-
-    if existingTag == valTag:
-      case valTag:
-      of regvm.TAG_STRING:
+    if existing.kind == val.kind:
+      case val.kind:
+      of vkString:
         if existing.sval == val.sval:
           return uint16(i)
-      of regvm.TAG_FLOAT:
+      of vkFloat:
         if existing.fval == val.fval:
           return uint16(i)
-      of regvm.TAG_INT:
+      of vkInt:
         if existing.ival == val.ival:
           return uint16(i)
-      of regvm.TAG_BOOL, regvm.TAG_NIL, regvm.TAG_CHAR:
-        if existing.data == val.data:
+      of vkBool:
+        if existing.bval == val.bval:
           return uint16(i)
+      of vkChar:
+        if existing.cval == val.cval:
+          return uint16(i)
+      of vkNil:
+        return uint16(i)  # All nils are equal
       else:
         discard
 
@@ -60,9 +62,7 @@ proc addStringConst*(c: var RegCompiler, s: string): uint16 =
       echo "[REGCOMPILER] String '", s, "' already in const pool at index ", c.constMap[s]
     return c.constMap[s]
 
-  var v: regvm.V
-  v.data = TAG_STRING shl 48
-  v.sval = s
+  let v = regvm.makeString(s)
   result = c.addConst(v)
   c.constMap[s] = result
   if c.verbose:
@@ -473,7 +473,7 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
         # ropTestTag: skips next if tags MATCH
         # So if tag is Some, skip the jump and execute case body
         # If tag is not Some, execute jump to next case
-        c.prog.emitABC(ropTestTag, matchReg, TAG_SOME.uint8, 0, c.makeDebugInfo(e.pos))  # Test if tag is Some
+        c.prog.emitABC(ropTestTag, matchReg, uint8(vkSome), 0, c.makeDebugInfo(e.pos))  # Test if tag is Some
         if c.verbose:
           echo "[REGCOMPILER]   Emitted ropTestTag for Some at PC=", c.prog.instructions.len - 1
         shouldJumpToNext = c.prog.instructions.len
@@ -490,7 +490,7 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
 
       of pkNone:
         # Check if it's None
-        c.prog.emitABC(ropTestTag, matchReg, TAG_NONE.uint8, 0, c.makeDebugInfo(e.pos))  # Test if tag is None
+        c.prog.emitABC(ropTestTag, matchReg, uint8(vkNone), 0, c.makeDebugInfo(e.pos))  # Test if tag is None
         if c.verbose:
           echo "[REGCOMPILER]   Emitted ropTestTag for None at PC=", c.prog.instructions.len - 1
         shouldJumpToNext = c.prog.instructions.len
@@ -500,7 +500,7 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
 
       of pkOk:
         # Check if it's an Ok value
-        c.prog.emitABC(ropTestTag, matchReg, TAG_OK.uint8, 0, c.makeDebugInfo(e.pos))  # Test if tag is Ok
+        c.prog.emitABC(ropTestTag, matchReg, uint8(vkOk), 0, c.makeDebugInfo(e.pos))  # Test if tag is Ok
         shouldJumpToNext = c.prog.instructions.len
         c.prog.emitAsBx(ropJmp, 0, 0, c.makeDebugInfo(e.pos))
 
@@ -512,7 +512,7 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
 
       of pkErr:
         # Check if it's an Err value
-        c.prog.emitABC(ropTestTag, matchReg, TAG_ERR.uint8, 0, c.makeDebugInfo(e.pos))  # Test if tag is Err
+        c.prog.emitABC(ropTestTag, matchReg, uint8(vkErr), 0, c.makeDebugInfo(e.pos))  # Test if tag is Err
         shouldJumpToNext = c.prog.instructions.len
         c.prog.emitAsBx(ropJmp, 0, 0, c.makeDebugInfo(e.pos))
 
@@ -532,23 +532,23 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
         if c.verbose:
           echo "[REGCOMPILER]   Type pattern: ", $matchCase.pattern.typePattern.kind, " bind: ", matchCase.pattern.typeBind
 
-        # Determine the tag for the type
-        let expectedTag = case matchCase.pattern.typePattern.kind:
-          of tkInt: TAG_INT
-          of tkFloat: TAG_FLOAT
-          of tkBool: TAG_BOOL
-          of tkChar: TAG_CHAR
-          of tkString: TAG_STRING
-          of tkArray: TAG_ARRAY
-          of tkObject: TAG_TABLE
-          of tkUserDefined: TAG_TABLE  # User-defined types are objects (tables)
+        # Determine the VKind for the type
+        let expectedKind = case matchCase.pattern.typePattern.kind:
+          of tkInt: vkInt
+          of tkFloat: vkFloat
+          of tkBool: vkBool
+          of tkChar: vkChar
+          of tkString: vkString
+          of tkArray: vkArray
+          of tkObject: vkTable
+          of tkUserDefined: vkTable  # User-defined types are objects (tables)
           else:
             if c.verbose:
               echo "[REGCOMPILER]   Warning: Unsupported type for pattern matching: ", $matchCase.pattern.typePattern.kind
-            TAG_NIL
+            vkNil
 
-        # Test if the tag matches
-        c.prog.emitABC(ropTestTag, matchReg, expectedTag.uint8, 0, c.makeDebugInfo(e.pos))
+        # Test if the kind matches
+        c.prog.emitABC(ropTestTag, matchReg, uint8(expectedKind), 0, c.makeDebugInfo(e.pos))
         shouldJumpToNext = c.prog.instructions.len
         c.prog.emitAsBx(ropJmp, 0, 0, c.makeDebugInfo(e.pos))  # Jump to next case if tag doesn't match
 

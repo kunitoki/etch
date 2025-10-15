@@ -4,15 +4,6 @@
 import std/[strutils, strformat, tables, sequtils, algorithm]
 import regvm
 
-# Import TAG constants from regvm
-const
-  TAG_INT = regvm.TAG_INT
-  TAG_FLOAT = regvm.TAG_FLOAT
-  TAG_BOOL = regvm.TAG_BOOL
-  TAG_STRING = regvm.TAG_STRING
-  TAG_NIL = regvm.TAG_NIL
-  TAG_CHAR = regvm.TAG_CHAR
-
 proc alignRight*(s: string, width: int, fillChar: char = ' '): string =
   let padding = max(0, width - s.len)
   result = repeat(fillChar, padding) & s
@@ -170,24 +161,31 @@ proc dumpConstants*(prog: RegBytecodeProgram) =
     echo "  (no constants)"
   else:
     for i, constant in prog.constants:
-      # Extract type from NaN-boxed value
-      let tag = (constant.data shr 48) and 0xFFFF
-      let valueStr = case tag
-        of TAG_INT:
+      let valueStr = case constant.kind
+        of vkInt:
           &"{constant.ival}"
-        of TAG_FLOAT:
+        of vkFloat:
           &"{constant.fval}"
-        of TAG_BOOL:
-          if (constant.data and 1) != 0: "true" else: "false"
-        of TAG_STRING:
+        of vkBool:
+          if constant.bval: "true" else: "false"
+        of vkString:
           &"\"{constant.sval}\""
-        of TAG_NIL:
+        of vkNil:
           "nil"
-        of TAG_CHAR:
-          let charVal = char(constant.data and 0xFF)
-          &"'{charVal}'"
-        else:
-          "(unknown)"
+        of vkChar:
+          &"'{constant.cval}'"
+        of vkSome:
+          "Some(...)"
+        of vkNone:
+          "None"
+        of vkOk:
+          "Ok(...)"
+        of vkErr:
+          "Err(...)"
+        of vkArray:
+          &"[array:{constant.aval.len}]"
+        of vkTable:
+          &"{{table:{constant.tval.len}}}"
       echo &"  K[{i:3}] = {valueStr}"
 
 proc dumpGlobals*(prog: RegBytecodeProgram) =
@@ -279,14 +277,13 @@ proc dumpInstructionsByFunctions*(prog: RegBytecodeProgram, maxInstructions: int
         var extra = ""
         if instr.op == ropLoadK and instr.bx < prog.constants.len.uint16:
           let constant = prog.constants[instr.bx]
-          let tag = (constant.data shr 48) and 0xFFFF
-          extra = case tag
-            of TAG_STRING: &"  ; \"{constant.sval}\""
-            of TAG_INT:
-              &"  ; {constant.ival}"
-            of TAG_FLOAT: &"  ; {constant.fval}"
-            of TAG_BOOL:
-              if (constant.data and 1) != 0: "  ; true" else: "  ; false"
+          extra = case constant.kind
+            of vkString: &"  ; \"{constant.sval}\""
+            of vkInt: &"  ; {constant.ival}"
+            of vkFloat: &"  ; {constant.fval}"
+            of vkBool: (if constant.bval: "  ; true" else: "  ; false")
+            of vkChar: &"  ; '{constant.cval}'"
+            of vkNil: "  ; nil"
             else: ""
 
         echo &"{indexStr}: {opStr} {decoded}{extra}"

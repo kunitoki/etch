@@ -56,20 +56,20 @@ template getConst(vm: RegisterVM, idx: uint16): V =
 # Debugger helper functions that need access to V type
 proc formatRegisterValue*(v: V): string =
   ## Format a register value for display in debugger
-  case v.getTag()
-  of TAG_INT:
-    result = $v.getInt()
-  of TAG_FLOAT:
-    result = $v.getFloat()
-  of TAG_BOOL:
-    result = $v.getBool()
-  of TAG_NIL:
+  case v.kind
+  of vkInt:
+    result = $v.ival
+  of vkFloat:
+    result = $v.fval
+  of vkBool:
+    result = $v.bval
+  of vkNil:
     result = "nil"
-  of TAG_CHAR:
-    result = "'" & $v.getChar() & "'"
-  of TAG_STRING:
+  of vkChar:
+    result = "'" & $v.cval & "'"
+  of vkString:
     result = "\"" & v.sval & "\""
-  of TAG_ARRAY:
+  of vkArray:
     # Format array contents for debugger display
     if v.aval.len == 0:
       result = "[]"
@@ -88,21 +88,19 @@ proc formatRegisterValue*(v: V): string =
       for i in v.aval.len-2..<v.aval.len:
         elements.add(formatRegisterValue(v.aval[i]))
       result = "[" & elements.join(", ") & "] (" & $v.aval.len & " items)"
-  of TAG_TABLE:
+  of vkTable:
     result = "{table:" & $v.tval.len & " entries}"
-  of TAG_SOME:
-    let inner = v.unwrapOption()
+  of vkSome:
+    let inner = v.wrapped[]
     result = "Some(" & formatRegisterValue(inner) & ")"
-  of TAG_NONE:
+  of vkNone:
     result = "None"
-  of TAG_OK:
-    let inner = v.unwrapResult()
+  of vkOk:
+    let inner = v.wrapped[]
     result = "Ok(" & formatRegisterValue(inner) & ")"
-  of TAG_ERR:
-    let inner = v.unwrapResult()
+  of vkErr:
+    let inner = v.wrapped[]
     result = "Err(" & formatRegisterValue(inner) & ")"
-  else:
-    result = "<unknown>"
 
 proc captureRegisters*(vm: RegisterVM): seq[tuple[index: uint8, value: string]] =
   ## Capture current register state for debugging
@@ -116,137 +114,113 @@ proc captureRegisters*(vm: RegisterVM): seq[tuple[index: uint8, value: string]] 
 
 proc getValueType*(v: V): string =
   ## Get the type name of a register value for display in debugger
-  case v.getTag()
-  of TAG_INT:
+  case v.kind
+  of vkInt:
     result = "int"
-  of TAG_FLOAT:
+  of vkFloat:
     result = "float"
-  of TAG_BOOL:
+  of vkBool:
     result = "bool"
-  of TAG_NIL:
+  of vkNil:
     result = "nil"
-  of TAG_CHAR:
+  of vkChar:
     result = "char"
-  of TAG_STRING:
+  of vkString:
     result = "string"
-  of TAG_ARRAY:
+  of vkArray:
     result = "array[" & $v.aval.len & "]"
-  of TAG_TABLE:
+  of vkTable:
     result = "table"
-  of TAG_SOME:
+  of vkSome:
     result = "option"
-  of TAG_NONE:
+  of vkNone:
     result = "option"
-  of TAG_OK:
+  of vkOk:
     result = "result"
-  of TAG_ERR:
+  of vkErr:
     result = "result"
-  else:
-    result = "unknown"
 
 # Optimized arithmetic operations with type specialization
 template doAdd(a, b: V): V =
-  let tagA = getTag(a)
-  let tagB = getTag(b)
-  if tagA == TAG_INT and tagB == TAG_INT:
-    makeInt(a.ival + b.ival)  # Direct field access
-  elif tagA == TAG_FLOAT and tagB == TAG_FLOAT:
-    makeFloat(a.fval + b.fval)  # Direct field access
-  elif tagA == TAG_STRING and tagB == TAG_STRING:
-    # String concatenation
-    var res: V
-    res.data = TAG_STRING shl 48
-    res.sval = a.sval & b.sval
-    res
-  elif getTag(a) == TAG_ARRAY and getTag(b) == TAG_ARRAY:
-    # Array concatenation
-    var res: V
-    res.data = TAG_ARRAY shl 48
-    res.aval = a.aval & b.aval
-    res
+  if a.kind == vkInt and b.kind == vkInt:
+    makeInt(a.ival + b.ival)
+  elif a.kind == vkFloat and b.kind == vkFloat:
+    makeFloat(a.fval + b.fval)
+  elif a.kind == vkString and b.kind == vkString:
+    makeString(a.sval & b.sval)
+  elif a.kind == vkArray and b.kind == vkArray:
+    makeArray(a.aval & b.aval)
   else:
     makeNil()  # Type error
 
 template doSub(a, b: V): V =
-  let tagA = getTag(a)
-  let tagB = getTag(b)
-  if tagA == TAG_INT and tagB == TAG_INT:
-    makeInt(a.ival - b.ival)  # Direct field access
-  elif tagA == TAG_FLOAT and tagB == TAG_FLOAT:
-    makeFloat(a.fval - b.fval)  # Direct field access
+  if a.kind == vkInt and b.kind == vkInt:
+    makeInt(a.ival - b.ival)
+  elif a.kind == vkFloat and b.kind == vkFloat:
+    makeFloat(a.fval - b.fval)
   else:
     makeNil()
 
 template doMul(a, b: V): V =
-  let tagA = getTag(a)
-  let tagB = getTag(b)
-  if tagA == TAG_INT and tagB == TAG_INT:
-    makeInt(a.ival * b.ival)  # Direct field access
-  elif tagA == TAG_FLOAT and tagB == TAG_FLOAT:
-    makeFloat(a.fval * b.fval)  # Direct field access
+  if a.kind == vkInt and b.kind == vkInt:
+    makeInt(a.ival * b.ival)
+  elif a.kind == vkFloat and b.kind == vkFloat:
+    makeFloat(a.fval * b.fval)
   else:
     makeNil()
 
 template doDiv(a, b: V): V =
-  let tagA = getTag(a)
-  let tagB = getTag(b)
-  if tagA == TAG_INT and tagB == TAG_INT:
-    makeInt(a.ival div b.ival)  # Direct field access
-  elif tagA == TAG_FLOAT and tagB == TAG_FLOAT:
-    makeFloat(a.fval / b.fval)  # Direct field access
+  if a.kind == vkInt and b.kind == vkInt:
+    makeInt(a.ival div b.ival)
+  elif a.kind == vkFloat and b.kind == vkFloat:
+    makeFloat(a.fval / b.fval)
   else:
     makeNil()
 
 template doMod(a, b: V): V =
-  if getTag(a) == TAG_INT and getTag(b) == TAG_INT:
-    makeInt(a.ival mod b.ival)  # Direct field access
+  if a.kind == vkInt and b.kind == vkInt:
+    makeInt(a.ival mod b.ival)
   else:
     makeNil()
 
 template doLt(a, b: V): bool =
-  let tagA = getTag(a)
-  let tagB = getTag(b)
-  if tagA == TAG_INT and tagB == TAG_INT:
-    a.ival < b.ival  # Direct field access
-  elif tagA == TAG_FLOAT and tagB == TAG_FLOAT:
-    a.fval < b.fval  # Direct field access
-  elif tagA == TAG_CHAR and tagB == TAG_CHAR:
-    getChar(a) < getChar(b)
-  elif tagA == TAG_STRING and tagB == TAG_STRING:
+  if a.kind == vkInt and b.kind == vkInt:
+    a.ival < b.ival
+  elif a.kind == vkFloat and b.kind == vkFloat:
+    a.fval < b.fval
+  elif a.kind == vkChar and b.kind == vkChar:
+    a.cval < b.cval
+  elif a.kind == vkString and b.kind == vkString:
     a.sval < b.sval
   else:
     false
 
 template doLe(a, b: V): bool =
-  let tagA = getTag(a)
-  let tagB = getTag(b)
-  if tagA == TAG_INT and tagB == TAG_INT:
-    a.ival <= b.ival  # Direct field access
-  elif tagA == TAG_FLOAT and tagB == TAG_FLOAT:
-    a.fval <= b.fval  # Direct field access
-  elif tagA == TAG_CHAR and tagB == TAG_CHAR:
-    getChar(a) <= getChar(b)
-  elif tagA == TAG_STRING and tagB == TAG_STRING:
+  if a.kind == vkInt and b.kind == vkInt:
+    a.ival <= b.ival
+  elif a.kind == vkFloat and b.kind == vkFloat:
+    a.fval <= b.fval
+  elif a.kind == vkChar and b.kind == vkChar:
+    a.cval <= b.cval
+  elif a.kind == vkString and b.kind == vkString:
     a.sval <= b.sval
   else:
     false
 
 template doEq(a, b: V): bool =
-  let tagA = getTag(a)
-  let tagB = getTag(b)
-  if tagA != tagB:
+  if a.kind != b.kind:
     false
-  elif tagA == TAG_INT:
-    a.ival == b.ival  # Direct field access
-  elif tagA == TAG_FLOAT:
-    a.fval == b.fval  # Direct field access
-  elif tagA == TAG_BOOL:
-    a.data == b.data
-  elif tagA == TAG_CHAR:
-    getChar(a) == getChar(b)
-  elif tagA == TAG_STRING:
+  elif a.kind == vkInt:
+    a.ival == b.ival
+  elif a.kind == vkFloat:
+    a.fval == b.fval
+  elif a.kind == vkBool:
+    a.bval == b.bval
+  elif a.kind == vkChar:
+    a.cval == b.cval
+  elif a.kind == vkString:
     a.sval == b.sval
-  elif tagA == TAG_NIL:
+  elif a.kind == vkNil:
     true
   else:
     false
@@ -254,18 +228,19 @@ template doEq(a, b: V): bool =
 # Converter between V type (VM value) and Value type (C FFI value)
 proc toValue(v: V): Value =
   ## Convert VM value to C FFI Value type
-  if isInt(v):
-    result = Value(kind: vkInt, intVal: getInt(v))
-  elif isFloat(v):
-    result = Value(kind: vkFloat, floatVal: getFloat(v))
-  elif isChar(v):
+  case v.kind
+  of vkInt:
+    result = Value(kind: vkInt, intVal: v.ival)
+  of vkFloat:
+    result = Value(kind: vkFloat, floatVal: v.fval)
+  of vkChar:
     # Convert char to int for C FFI
-    result = Value(kind: vkInt, intVal: int64(getChar(v)))
-  elif getTag(v) == TAG_STRING:
+    result = Value(kind: vkInt, intVal: int64(v.cval))
+  of vkString:
     result = Value(kind: vkString, stringVal: v.sval)
-  elif getTag(v) == TAG_BOOL:
-    result = Value(kind: vkBool, boolVal: (v.data and 1) != 0)
-  elif getTag(v) == TAG_ARRAY:
+  of vkBool:
+    result = Value(kind: vkBool, boolVal: v.bval)
+  of vkArray:
     # Arrays not directly supported in C FFI, convert to void
     result = Value(kind: vkVoid)
   else:
@@ -404,8 +379,8 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       let val = getReg(vm, instr.b)
       setReg(vm, instr.a, val)
       log(verbose, "ropMove: reg" & $instr.b & " -> reg" & $instr.a &
-          " value tag=" & val.getTag().toHex &
-          (if val.isInt(): " int=" & $val.getInt() else: ""))
+          " value kind=" & $val.kind &
+          (if val.isInt(): " int=" & $val.ival else: ""))
 
     of ropLoadK:
       # Handle both ABx (constant pool) and AsBx (immediate) formats
@@ -508,7 +483,7 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       let c = getReg(vm, instr.c)
       let isEqual = doEq(b, c)
       let skipIfNot = instr.a != 0
-      log(verbose, "ropEq: reg" & $instr.b & "=" & b.data.toHex & " reg" & $instr.c & "=" & c.data.toHex &
+      log(verbose, "ropEq: reg" & $instr.b & " kind=" & $b.kind & " reg" & $instr.c & " kind=" & $c.kind &
           " equal=" & $isEqual & " skipIfNot=" & $skipIfNot & " willSkip=" & $(isEqual != skipIfNot))
       if isEqual != skipIfNot:
         inc pc  # Skip next instruction
@@ -577,22 +552,22 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
     # --- Logical Operations ---
     of ropNot:
       let val = getReg(vm, instr.b)
-      setReg(vm, instr.a, makeBool(getTag(val) == TAG_NIL or (getTag(val) == TAG_BOOL and (val.data and 1) == 0)))
+      setReg(vm, instr.a, makeBool(val.kind == vkNil or (val.kind == vkBool and not val.bval)))
 
     of ropAnd:
       let b = getReg(vm, instr.b)
       let c = getReg(vm, instr.c)
-      log(verbose, "ropAnd: reg" & $instr.b & " tag=" & $getTag(b) & " data=" & $b.data &
-          " AND reg" & $instr.c & " tag=" & $getTag(c) & " data=" & $c.data)
+      log(verbose, "ropAnd: reg" & $instr.b & " kind=" & $b.kind &
+          " AND reg" & $instr.c & " kind=" & $c.kind)
       # Both values should be booleans - perform logical AND
-      if getTag(b) == TAG_BOOL and getTag(c) == TAG_BOOL:
-        let bVal = (b.data and 1) != 0
-        let cVal = (c.data and 1) != 0
+      if b.kind == vkBool and c.kind == vkBool:
+        let bVal = b.bval
+        let cVal = c.bval
         setReg(vm, instr.a, makeBool(bVal and cVal))
         log(verbose, "ropAnd: " & $bVal & " AND " & $cVal & " = " & $(bVal and cVal))
       else:
         # Fallback to old behavior for non-boolean values
-        if getTag(b) == TAG_NIL or (getTag(b) == TAG_BOOL and (b.data and 1) == 0):
+        if b.kind == vkNil or (b.kind == vkBool and not b.bval):
           setReg(vm, instr.a, b)
         else:
           setReg(vm, instr.a, c)
@@ -600,7 +575,7 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
     of ropOr:
       let b = getReg(vm, instr.b)
       let c = getReg(vm, instr.c)
-      if getTag(b) != TAG_NIL and not (getTag(b) == TAG_BOOL and (b.data and 1) == 0):
+      if b.kind != vkNil and not (b.kind == vkBool and not b.bval):
         setReg(vm, instr.a, b)
       else:
         setReg(vm, instr.a, c)
@@ -728,23 +703,23 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       # Test if register has specific tag
       # Skip next instruction if tags MATCH (for match expressions)
       let val = getReg(vm, instr.a)
-      let expectedTag = instr.b.uint64
-      let actualTag = getTag(val)
-      log(verbose, "ropTestTag: reg=" & $instr.a & " expected=" & $expectedTag & " actual=" & $actualTag & " match=" & $(actualTag == expectedTag))
-      if actualTag == expectedTag:
+      let expectedKind = VKind(instr.b)
+      let actualKind = val.kind
+      log(verbose, "ropTestTag: reg=" & $instr.a & " expected=" & $expectedKind & " actual=" & $actualKind & " match=" & $(actualKind == expectedKind))
+      if actualKind == expectedKind:
         log(verbose, "ropTestTag: tags match, skipping next instruction (PC " & $pc & " -> " & $(pc + 1) & ")")
         inc pc  # Skip next instruction if tags match
 
     of ropUnwrapOption:
       # Unwrap Option value
       let val = getReg(vm, instr.b)
-      if isSome(val):
-        let unwrapped = unwrapOption(val)
+      if val.isSome():
+        let unwrapped = val.unwrapOption()
         setReg(vm, instr.a, unwrapped)
         log(verbose, "ropUnwrapOption: unwrapped Some value to reg " & $instr.a & " value: " &
-            (if isInt(unwrapped): $getInt(unwrapped)
-             elif isFloat(unwrapped): $getFloat(unwrapped)
-             elif isString(unwrapped): unwrapped.sval
+            (if unwrapped.isInt(): $unwrapped.ival
+             elif unwrapped.isFloat(): $unwrapped.fval
+             elif unwrapped.isString(): unwrapped.sval
              else: "unknown"))
       else:
         setReg(vm, instr.a, makeNil())
@@ -753,34 +728,32 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
     of ropUnwrapResult:
       # Unwrap Result value
       let val = getReg(vm, instr.b)
-      if isOk(val) or isErr(val):
-        setReg(vm, instr.a, unwrapResult(val))
+      if val.isOk() or val.isErr():
+        setReg(vm, instr.a, val.unwrapResult())
       else:
         setReg(vm, instr.a, makeNil())
 
     # --- Arrays ---
     of ropNewArray:
-      var arr: V
-      arr.data = TAG_ARRAY shl 48
       # Create array with actual size, initialized to nil
-      arr.aval = newSeq[V](instr.bx)  # ABx format: use bx not b
+      var nilSeq = newSeq[V](instr.bx)  # ABx format: use bx not b
       for i in 0'u16..<instr.bx:
-        arr.aval[i] = makeNil()
-      setReg(vm, instr.a, arr)
+        nilSeq[i] = makeNil()
+      setReg(vm, instr.a, makeArray(nilSeq))
       log(verbose, "ropNewArray: created array of size " & $instr.bx & " in reg " & $instr.a)
 
     of ropGetIndex:
       let arr = getReg(vm, instr.b)
       let idx = getReg(vm, instr.c)
-      if getTag(arr) == TAG_ARRAY and isInt(idx):
-        let i = getInt(idx)
+      if arr.kind == vkArray and idx.isInt():
+        let i = idx.ival
         if i >= 0 and i < arr.aval.len:
           setReg(vm, instr.a, arr.aval[i])
         else:
           setReg(vm, instr.a, makeNil())
-      elif getTag(arr) == TAG_STRING and isInt(idx):
+      elif arr.kind == vkString and idx.isInt():
         # String indexing - return single character as char
-        let i = getInt(idx)
+        let i = idx.ival
         if i >= 0 and i < arr.sval.len:
           setReg(vm, instr.a, makeChar(arr.sval[i]))
         else:
@@ -797,44 +770,32 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       let endVal = getReg(vm, instr.c + 1)  # End index is in the next register
 
       # Convert indices to integers, handling defaults
-      let startIdx = if isInt(startVal): getInt(startVal) else: 0
+      let startIdx = if startVal.isInt(): startVal.ival else: 0
 
-      if getTag(arr) == TAG_STRING:
-        let endIdx = if isInt(endVal):
-          let val = getInt(endVal)
+      if arr.kind == vkString:
+        let endIdx = if endVal.isInt():
+          let val = endVal.ival
           if val < 0: arr.sval.len else: int(val)  # -1 means "until end"
         else: arr.sval.len
         let actualStart = max(0, min(int(startIdx), arr.sval.len))
         let actualEnd = max(actualStart, min(int(endIdx), arr.sval.len))
 
         if actualStart >= actualEnd:
-          var res: V
-          res.data = TAG_STRING shl 48
-          res.sval = ""
-          setReg(vm, instr.a, res)
+          setReg(vm, instr.a, makeString(""))
         else:
-          var res: V
-          res.data = TAG_STRING shl 48
-          res.sval = arr.sval[actualStart..<actualEnd]
-          setReg(vm, instr.a, res)
-      elif getTag(arr) == TAG_ARRAY:
-        let endIdx = if isInt(endVal):
-          let val = getInt(endVal)
+          setReg(vm, instr.a, makeString(arr.sval[actualStart..<actualEnd]))
+      elif arr.kind == vkArray:
+        let endIdx = if endVal.isInt():
+          let val = endVal.ival
           if val < 0: arr.aval.len else: int(val)  # -1 means "until end"
         else: arr.aval.len
         let actualStart = max(0, min(int(startIdx), arr.aval.len))
         let actualEnd = max(actualStart, min(int(endIdx), arr.aval.len))
 
         if actualStart >= actualEnd:
-          var res: V
-          res.data = TAG_ARRAY shl 48
-          res.aval = @[]
-          setReg(vm, instr.a, res)
+          setReg(vm, instr.a, makeArray(@[]))
         else:
-          var res: V
-          res.data = TAG_ARRAY shl 48
-          res.aval = arr.aval[actualStart..<actualEnd]
-          setReg(vm, instr.a, res)
+          setReg(vm, instr.a, makeArray(arr.aval[actualStart..<actualEnd]))
       else:
         setReg(vm, instr.a, makeNil())
 
@@ -842,8 +803,8 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       var arr = getReg(vm, instr.a)
       let idx = getReg(vm, instr.b)
       let val = getReg(vm, instr.c)
-      if getTag(arr) == TAG_ARRAY and isInt(idx):
-        let i = getInt(idx)
+      if arr.kind == vkArray and idx.isInt():
+        let i = idx.ival
         if i >= 0:
           if i >= arr.aval.len:
             arr.aval.setLen(i + 1)
@@ -853,9 +814,9 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
     of ropGetIndexI:
       let arr = getReg(vm, uint8(instr.bx and 0xFF))
       let idx = int(instr.bx shr 8)
-      if getTag(arr) == TAG_ARRAY and idx < arr.aval.len:
+      if arr.kind == vkArray and idx < arr.aval.len:
         setReg(vm, instr.a, arr.aval[idx])
-      elif getTag(arr) == TAG_STRING and idx < arr.sval.len:
+      elif arr.kind == vkString and idx < arr.sval.len:
         setReg(vm, instr.a, makeChar(arr.sval[idx]))
       else:
         setReg(vm, instr.a, makeNil())
@@ -864,7 +825,7 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       var arr = getReg(vm, instr.a)
       let idx = int(instr.bx and 0xFF)
       let val = getReg(vm, uint8(instr.bx shr 8))
-      if getTag(arr) == TAG_ARRAY:
+      if arr.kind == vkArray:
         if idx >= arr.aval.len:
           arr.aval.setLen(idx + 1)
         arr.aval[idx] = val
@@ -872,11 +833,11 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
 
     of ropLen:
       let val = getReg(vm, instr.b)
-      if getTag(val) == TAG_ARRAY:
+      if val.kind == vkArray:
         let lenVal = makeInt(int64(val.aval.len))
         log(verbose, "ropLen: array length = " & $val.aval.len & " -> reg" & $instr.a)
         setReg(vm, instr.a, lenVal)
-      elif getTag(val) == TAG_STRING:
+      elif val.kind == vkString:
         let lenVal = makeInt(int64(val.sval.len))
         log(verbose, "ropLen: string length = " & $val.sval.len & " -> reg" & $instr.a)
         setReg(vm, instr.a, lenVal)
@@ -922,8 +883,8 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
 
     of ropTest:
       let val = getReg(vm, instr.a)
-      let isTrue = getTag(val) != TAG_NIL and
-                    not (getTag(val) == TAG_BOOL and (val.data and 1) == 0)
+      let isTrue = val.kind != vkNil and
+                    not (val.kind == vkBool and not val.bval)
       log(verbose, "ropTest: reg" & $instr.a & " val=" & $val & " isTrue=" & $isTrue &
           " expected=" & $(instr.c != 0) & " skip=" & $(isTrue != (instr.c != 0)))
       if isTrue != (instr.c != 0):
@@ -931,8 +892,8 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
 
     of ropTestSet:
       let val = getReg(vm, instr.b)
-      let isTrue = getTag(val) != TAG_NIL and
-                    not (getTag(val) == TAG_BOOL and (val.data and 1) == 0)
+      let isTrue = val.kind != vkNil and
+                    not (val.kind == vkBool and not val.bval)
       if isTrue == (instr.c != 0):
         setReg(vm, instr.a, val)
       else:
@@ -947,23 +908,23 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
 
       # Debug output
       when defined(debugRegVM):
-        echo "ForLoop: idx=", (if isInt(idx): $getInt(idx) else: "nil/non-int"),
-             " limit=", (if isInt(limit): $getInt(limit) else: "nil/non-int"),
-             " step=", (if isInt(step): $getInt(step) else: "nil/non-int"),
+        echo "ForLoop: idx=", (if idx.isInt(): $idx.ival else: "nil/non-int"),
+             " limit=", (if limit.isInt(): $limit.ival else: "nil/non-int"),
+             " step=", (if step.isInt(): $step.ival else: "nil/non-int"),
              " sbx=", instr.sbx
-        echo "  -> reg[", instr.a, "] type tag = ", getTag(idx)
-        echo "  -> reg[", instr.a+1, "] type tag = ", getTag(limit)
-        echo "  -> reg[", instr.a+2, "] type tag = ", getTag(step)
+        echo "  -> reg[", instr.a, "] type kind = ", idx.kind
+        echo "  -> reg[", instr.a+1, "] type kind = ", limit.kind
+        echo "  -> reg[", instr.a+2, "] type kind = ", step.kind
 
-      if isInt(idx) and isInt(limit) and isInt(step):
-        let newIdx = getInt(idx) + getInt(step)
+      if idx.isInt() and limit.isInt() and step.isInt():
+        let newIdx = idx.ival + step.ival
         setReg(vm, instr.a, makeInt(newIdx))
 
-        if getInt(step) > 0:
-          if newIdx < getInt(limit):  # Changed from <= to < for exclusive end
+        if step.ival > 0:
+          if newIdx < limit.ival:  # Changed from <= to < for exclusive end
             pc += int(instr.sbx)  # Continue loop
         else:
-          if newIdx > getInt(limit):  # Changed from >= to > for backward loops
+          if newIdx > limit.ival:  # Changed from >= to > for backward loops
             pc += int(instr.sbx)  # Continue loop
 
     of ropForPrep:
@@ -974,16 +935,16 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
 
       # Debug output
       when defined(debugRegVM):
-        echo "ForPrep: idx=", (if isInt(idx): $getInt(idx) else: "?"),
-             " limit=", (if isInt(limit): $getInt(limit) else: "?"),
-             " step=", (if isInt(step): $getInt(step) else: "?"),
+        echo "ForPrep: idx=", (if idx.isInt(): $idx.ival else: "?"),
+             " limit=", (if limit.isInt(): $limit.ival else: "?"),
+             " step=", (if step.isInt(): $step.ival else: "?"),
              " sbx=", instr.sbx
 
-      if isInt(idx) and isInt(limit) and isInt(step):
+      if idx.isInt() and limit.isInt() and step.isInt():
         # Check if loop should run at all based on initial values
-        let stepVal = getInt(step)
-        let idxVal = getInt(idx)
-        let limitVal = getInt(limit)
+        let stepVal = step.ival
+        let idxVal = idx.ival
+        let limitVal = limit.ival
 
         when defined(debugRegVM):
           echo "  -> Initial idx=", idxVal, " limit=", limitVal, " step=", stepVal
@@ -1006,7 +967,7 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
 
       # Get function name from the register
       let funcNameVal = getReg(vm, funcReg)
-      if getTag(funcNameVal) != TAG_STRING:
+      if funcNameVal.kind != vkString:
         # Not a valid function name
         log(verbose, "ropCall: ERROR - funcReg doesn't contain a string!")
         setReg(vm, funcReg, makeNil())
@@ -1069,7 +1030,7 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
           let argVal = getReg(vm, funcReg + 1'u8 + i)
           newFrame.regs[i] = argVal
           log(verbose, "Copying arg " & $i & " from reg " & $(funcReg + 1'u8 + i) &
-              " to new frame reg " & $i & " tag=" & $getTag(argVal))
+              " to new frame reg " & $i & " kind=" & $argVal.kind)
 
         # Push frame
         vm.frames.add(newFrame)
@@ -1126,26 +1087,26 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
         if numArgs == 1:
           let val = getReg(vm, funcReg + 1)
           # Build the string to print
-          let output = if isInt(val):
-            $getInt(val)
-          elif isFloat(val):
-            $getFloat(val)
-          elif isChar(val):
-            $getChar(val)
-          elif getTag(val) == TAG_BOOL:
-            if (val.data and 1) != 0: "true" else: "false"
-          elif getTag(val) == TAG_STRING:
+          let output = if val.isInt():
+            $val.ival
+          elif val.isFloat():
+            $val.fval
+          elif val.isChar():
+            $val.cval
+          elif val.kind == vkBool:
+            if val.bval: "true" else: "false"
+          elif val.kind == vkString:
             val.sval
-          elif getTag(val) == TAG_ARRAY:
+          elif val.kind == vkArray:
             # Print array elements
             var res = "["
             for i, elem in val.aval:
               if i > 0: res.add(", ")
-              if isInt(elem): res.add($getInt(elem))
-              elif isFloat(elem): res.add($getFloat(elem))
-              elif getTag(elem) == TAG_STRING: res.add("\"" & elem.sval & "\"")
-              elif getTag(elem) == TAG_BOOL:
-                res.add(if (elem.data and 1) != 0: "true" else: "false")
+              if elem.isInt(): res.add($elem.ival)
+              elif elem.isFloat(): res.add($elem.fval)
+              elif elem.kind == vkString: res.add("\"" & elem.sval & "\"")
+              elif elem.kind == vkBool:
+                res.add(if elem.bval: "true" else: "false")
               else: res.add("nil")
             res.add("]")
             res
@@ -1164,21 +1125,19 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       of "toString":
         if numArgs == 1:
           let val = getReg(vm, funcReg + 1)
-          var res: V
-          res.data = TAG_STRING shl 48
-          if isInt(val):
-            res.sval = $getInt(val)
-          elif isFloat(val):
-            res.sval = $getFloat(val)
-          elif isChar(val):
-            res.sval = $getChar(val)
-          elif getTag(val) == TAG_BOOL:
-            res.sval = if (val.data and 1) != 0: "true" else: "false"
-          elif getTag(val) == TAG_STRING:
-            res.sval = val.sval
+          let resStr = if val.isInt():
+            $val.ival
+          elif val.isFloat():
+            $val.fval
+          elif val.isChar():
+            $val.cval
+          elif val.kind == vkBool:
+            if val.bval: "true" else: "false"
+          elif val.kind == vkString:
+            val.sval
           else:
-            res.sval = "nil"
-          setReg(vm, funcReg, res)
+            "nil"
+          setReg(vm, funcReg, makeString(resStr))
 
       # Reference operations
       of "new":
@@ -1299,10 +1258,7 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
         # Check if it's an unimplemented builtin that just returns the function name
         # (This is a placeholder for unimplemented builtins)
         log(verbose, "Unknown function: " & funcName & " - returning function name as string")
-        var res: V
-        res.data = TAG_STRING shl 48
-        res.sval = funcName
-        setReg(vm, funcReg, res)
+        setReg(vm, funcReg, makeString(funcName))
 
       # Debugger hook - pop builtin function frame
       if vm.debugger != nil:
