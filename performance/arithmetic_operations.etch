@@ -4,8 +4,8 @@ fn main() {
 
     // Arithmetic operations benchmark
     for i in 0..<100000 {
-        var a = rand(100, 1);
-        var b = rand(100, 1);
+        var a = rand(1, 100);
+        var b = rand(1, 100);
 
         // Mix of operations to test different arithmetic paths
         var sum = a + b;

@@ -6,17 +6,17 @@ fn main() -> void {
   let y: int = rand(10);  // 0-10
   print(x);
   print(y);
-  
+
   // Test operator precedence: and binds tighter than or
   if x > 10 or y < 3 and x < 15 {
     print(100);  // equivalent to: x > 10 or (y < 3 and x < 15)
   }
-  
-  // Test explicit parentheses changing precedence  
+
+  // Test explicit parentheses changing precedence
   if (x > 10 or y < 3) and x < 15 {
     print(200);  // different from above
   }
-  
+
   // Test nested elif with complex conditions
   if x < 5 and y > 7 {
     print(300);
@@ -27,9 +27,9 @@ fn main() -> void {
   } else {
     print(600);
   }
-  
+
   // Test safety analysis with boolean conditions
-  let divisor: int = rand(10, 1);  // 1-10, never zero
+  let divisor: int = rand(1, 10);  // 1-10, never zero
   if divisor > 5 and (divisor < 8 or divisor > 9) {
     print(1000 / divisor);  // Safe: divisor proven non-zero
   }

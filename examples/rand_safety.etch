@@ -13,6 +13,6 @@ fn main() -> void {
   }
 
   // Test with guaranteed non-zero range
-  let safe_divisor: int = rand(10, 1);  // 1-10, never zero
+  let safe_divisor: int = rand(1, 10);  // 1-10, never zero
   print(50 / safe_divisor);  // Always safe due to range
 }

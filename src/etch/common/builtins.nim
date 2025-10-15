@@ -103,10 +103,13 @@ proc performBuiltinTypeCheck*(funcName: string, argTypes: seq[EtchType], pos: Po
   of "rand":
     if argTypes.len < 1 or argTypes.len > 2:
       raise newTypecheckError(pos, "rand expects 1 or 2 arguments")
-    if argTypes[0].kind != tkInt:
+    if argTypes.len == 1 and argTypes[0].kind != tkInt:
       raise newTypecheckError(pos, "rand max argument must be int")
-    if argTypes.len == 2 and argTypes[1].kind != tkInt:
-      raise newTypecheckError(pos, "rand min argument must be int")
+    elif argTypes.len == 2:
+      if argTypes[0].kind != tkInt:
+        raise newTypecheckError(pos, "rand min argument must be int")
+      if argTypes[1].kind != tkInt:
+        raise newTypecheckError(pos, "rand max argument must be int")
     return tInt()
 
   of "readFile":

@@ -41,8 +41,8 @@ fn main() {
         }
 
         // GCD computation
-        var a = rand(1000, 1);
-        var b = rand(1000, 1);
+        var a = rand(1, 1000);
+        var b = rand(1, 1000);
         gcd_sum = gcd_sum + gcd(a, b);
 
         // Some modular arithmetic

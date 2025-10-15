@@ -6,7 +6,7 @@ fn main() -> void {
     print(x);
 
     // Test case 2: rand(n, s) type inference should work now
-    var y = rand(100, 50);
+    var y = rand(50, 100);
     print(y);
 
     // Test case 3: explicit typing should work

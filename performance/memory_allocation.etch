@@ -12,7 +12,7 @@ fn main() {
 
     // Memory allocation and array creation benchmark
     for i in 0..<1000 {
-        var size = rand(50, 10);
+        var size = rand(10, 50);
         var arr = create_array(size);
 
         total_length = total_length + arr.len();

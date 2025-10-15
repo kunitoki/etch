@@ -5,7 +5,7 @@ fn main() {
 
     // Array access benchmark
     for i in 0..<50000 {
-        var idx = rand(9, 0);
+        var idx = rand(0, 9);
         sum_val = sum_val + arr[idx];
         arr[idx] = (sum_val + arr[idx]) % 100000;
 

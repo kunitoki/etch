@@ -10,7 +10,7 @@ fn conditionalReturn(x: int) {
 
 fn main() -> void {
     seed(42);
-    let x: int = rand(20, 0);  // [0, 20]
+    let x: int = rand(0, 20);  // [0, 20]
     let result: int = conditionalReturn(x);
     print(result);
 }

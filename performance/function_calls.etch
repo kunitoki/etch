@@ -23,8 +23,8 @@ fn main() {
 
     // Function call overhead benchmark
     for i in 0 ..< 10000 {
-        var a = rand(100, 1);
-        var b = rand(100, 1);
+        var a = rand(1, 100);
+        var b = rand(1, 100);
 
         // Test simple function calls
         res = res + simple_math(a, b);

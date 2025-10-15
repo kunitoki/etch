@@ -1070,9 +1070,9 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
             else:
               setReg(vm, funcReg, makeInt(0))
         elif numArgs == 2:
-          # Arguments: rand(max, min) in Etch becomes rand(arg1=max, arg2=min)
-          let maxVal = getReg(vm, funcReg + 1)  # First argument is max
-          let minVal = getReg(vm, funcReg + 2)  # Second argument is min
+          # Arguments: rand(max, min) in Etch becomes rand(arg1=min, arg2=max)
+          let minVal = getReg(vm, funcReg + 1)  # First argument is min
+          let maxVal = getReg(vm, funcReg + 2)  # Second argument is max
           if isInt(minVal) and isInt(maxVal):
             let minInt = getInt(minVal)
             let maxInt = getInt(maxVal)

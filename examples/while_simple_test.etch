@@ -1,7 +1,7 @@
 fn main() -> void {
-    seed(42);  
+    seed(42);
 
-    var x: int = rand(100, 9);  // Range: [20, 100]
+    var x: int = rand(9, 100);  // Range: [20, 100]
     print(x);
 
     while x < 10 {

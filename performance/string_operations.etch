@@ -5,7 +5,7 @@ fn main() {
 
     // String operations benchmark
     for i in 0..<5000 {
-        var num = rand(1000, 0);
+        var num = rand(0, 1000);
         var str_num = toString(num);
 
         // String concatenation

@@ -8,7 +8,7 @@ fn main() -> void {
     let top: int = rand(5) + rand(5);
     var x = rand(top);
     if x >= #arr {
-        x = #arr - rand(#arr - 1, rand(2, 1));  // Ensure x is within bounds
+        x = #arr - rand(#arr - 1, rand(1, 2));  // Ensure x is within bounds
     }
     let valid: int = arr[x];  // Should be 20
     print("valid");

@@ -164,8 +164,8 @@ proc analyzeRandCall*(e: Expr, env: Env, ctx: ProverContext): Info =
       let upperBound = max(0, maxInfo.maxv)
       return Info(known: false, minv: 0, maxv: upperBound, nonZero: false, initialized: true)
   elif e.args.len == 2:
-    let maxInfo = analyzeExpr(e.args[0], env, ctx)
-    let minInfo = analyzeExpr(e.args[1], env, ctx)
+    let minInfo = analyzeExpr(e.args[0], env, ctx)
+    let maxInfo = analyzeExpr(e.args[1], env, ctx)
     if maxInfo.known and minInfo.known:
       # Both arguments are constants
       let actualMin = min(minInfo.cval, maxInfo.cval)

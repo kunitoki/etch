@@ -1,6 +1,6 @@
 fn main() {
     seed(42);
-    var x = rand(1000000, 1) % 10000;
+    var x = rand(1, 1000000) % 10000;
     for i in 0..<100000 {
         print(x + i);
     }

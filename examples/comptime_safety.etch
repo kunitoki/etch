@@ -12,7 +12,7 @@ fn main() -> void {
     let safe_division: int = safeDivide(100, compile_time_divisor);
     print(safe_division);
 
-    let array_stride: int = rand(8, 2);
+    let array_stride: int = rand(2, 8);
     let index: int = calculateArrayIndex(1000, 5, array_stride);
     print(index);
 
