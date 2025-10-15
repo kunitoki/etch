@@ -21,7 +21,7 @@ test file:
 # Run a specific example file
 go file:
     @just libs
-    nim r src/etch.nim --run {{file}} --verbose
+    nim r src/etch.nim --verbose --run {{file}}
 
 # Build the project
 build:
