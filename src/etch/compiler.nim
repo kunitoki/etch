@@ -121,7 +121,9 @@ proc evaluateGlobalVariables(prog: Program): Table[string, GlobalValue] =
 proc compileProgramWithGlobals*(prog: Program, sourceHash: string, evaluatedGlobals: Table[string, GlobalValue], sourceFile: string = "", flags: CompilerFlags = CompilerFlags(verbose: false, debug: false)): RegBytecodeProgram =
   ## Compile an AST program to register VM bytecode
   # Compile directly to register VM without needing old bytecode
-  result = regvm_compiler.compileProgram(prog, optimizeLevel = 0, verbose = flags.verbose, debug = flags.debug)
+  # Use optimization level 1 in debug mode, 2 in release mode
+  let optimizeLevel = if flags.debug: 1 else: 2
+  result = regvm_compiler.compileProgram(prog, optimizeLevel = optimizeLevel, verbose = flags.verbose, debug = flags.debug)
 
   # Fill in CFFI details from the global registry
   for funcName, cffiInfo in result.cffiInfo:
