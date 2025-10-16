@@ -78,7 +78,7 @@ type
     ropJmp,           # pc += sBx (unconditional jump)
     ropTest,          # if not (R[A] == C) then skip
     ropTestSet,       # if (R[B] == C) then R[A]=R[B] else skip
-    ropCall,          # R[A..A+C-2] = R[A](R[A+1..A+B-1])
+    ropCall,          # R[A..A+C-2] = functionTable[funcIdx](R[A+1..A+B-1]) - function index call
     ropTailCall,      # tail call optimization
     ropReturn,        # return R[A..A+B-2]
 
@@ -115,6 +115,10 @@ type
       sbx*: int16
     of 3:  # Ax format (26-bit constant for large jumps)
       ax*: uint32
+    of 4:  # Function call format (for ropCall)
+      funcIdx*: uint16  # Function index into functionTable
+      numArgs*: uint8   # Number of arguments
+      numResults*: uint8  # Number of results
     else:
       discard
     debug*: RegDebugInfo  # Debug information for this instruction
@@ -154,7 +158,8 @@ type
     instructions*: seq[RegInstruction]
     constants*: seq[V]
     entryPoint*: int
-    functions*: Table[string, FunctionInfo]  # Function table
+    functions*: Table[string, FunctionInfo]  # Function table (name -> info)
+    functionTable*: seq[string]  # Function index table (index -> name for direct calls)
     cffiInfo*: Table[string, CFFIInfo]  # C FFI function metadata
     lifetimeData*: Table[string, pointer]  # Function -> Lifetime data (FunctionLifetimeData) for debugging/destructors
 

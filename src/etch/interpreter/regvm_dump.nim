@@ -69,7 +69,7 @@ proc formatInstruction*(instr: RegInstruction): string =
     of ropTestSet:
       result = &"if R[{instr.b}] == {instr.c} then R[{instr.a}]=R[{instr.b}] else skip"
     of ropCall:
-      result = &"R[{instr.a}..{instr.a + instr.c - 2}] = call R[{instr.a}]({instr.b} args)"
+      result = &"R[{instr.a}] = call functionTable[{instr.funcIdx}]({instr.numArgs} args, {instr.numResults} results)"
     of ropReturn:
       result = &"return R[{instr.a}..{instr.a + instr.b - 2}]"
     of ropLoadBool:
@@ -332,9 +332,6 @@ proc dumpControlFlow*(prog: RegBytecodeProgram) =
         if not jumpTargets.hasKey(target):
           jumpTargets[target] = @[]
         jumpTargets[target].add(i)
-    of ropCall:
-      # Track function calls
-      discard
     else:
       discard
 

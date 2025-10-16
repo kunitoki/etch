@@ -68,6 +68,19 @@ proc addStringConst*(c: var RegCompiler, s: string): uint16 =
   if c.verbose:
     echo "[REGCOMPILER] Added string '", s, "' to const pool at index ", result
 
+proc addFunctionIndex*(c: var RegCompiler, funcName: string): uint16 =
+  ## Add function name to function table and return its index
+  ## The function table maps indices to function names for fast direct calls
+  for i, name in c.prog.functionTable:
+    if name == funcName:
+      return uint16(i)
+
+  let idx = uint16(c.prog.functionTable.len)
+  c.prog.functionTable.add(funcName)
+  if c.verbose:
+    echo "[REGCOMPILER] Added function '", funcName, "' to function table at index ", idx
+  return idx
+
 # Forward declarations
 proc compileExpr*(c: var RegCompiler, e: Expr): uint8
 proc compileStmt*(c: var RegCompiler, s: Stmt)
@@ -343,17 +356,24 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
     # Allocate result register
     result = c.allocator.allocReg()
 
-    # Load "new" function name
-    let nameIdx = c.addStringConst("new")
-    c.prog.emitABx(ropLoadK, result, nameIdx)
+    # Get function index for "new"
+    let funcIdx = c.addFunctionIndex("new")
 
     # Set up argument in next register
     if initReg != result + 1:
       c.prog.emitABC(ropMove, result + 1, initReg, 0)
       c.allocator.freeReg(initReg)
 
-    # Call new function
-    c.prog.emitABC(ropCall, result, 1, 1)  # 1 arg, 1 result
+    # Call new function using ropCall
+    var instr = RegInstruction(
+      op: ropCall,
+      a: result,
+      opType: 4,
+      funcIdx: funcIdx,
+      numArgs: 1,
+      numResults: 1
+    )
+    c.prog.instructions.add(instr)
 
   of ekDeref:
     # Handle deref(ref) for dereferencing
@@ -365,17 +385,24 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
     # Allocate result register
     result = c.allocator.allocReg()
 
-    # Load "deref" function name
-    let nameIdx = c.addStringConst("deref")
-    c.prog.emitABx(ropLoadK, result, nameIdx)
+    # Get function index for "deref"
+    let funcIdx = c.addFunctionIndex("deref")
 
     # Set up argument in next register
     if refReg != result + 1:
       c.prog.emitABC(ropMove, result + 1, refReg, 0)
       c.allocator.freeReg(refReg)
 
-    # Call deref function
-    c.prog.emitABC(ropCall, result, 1, 1)  # 1 arg, 1 result
+    # Call deref function using ropCall
+    var instr = RegInstruction(
+      op: ropCall,
+      a: result,
+      opType: 4,
+      funcIdx: funcIdx,
+      numArgs: 1,
+      numResults: 1
+    )
+    c.prog.instructions.add(instr)
 
   of ekNew:
     # Handle new for heap allocation (similar to ekNewRef)
@@ -388,17 +415,24 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
       # Allocate result register
       result = c.allocator.allocReg()
 
-      # Load "new" function name
-      let nameIdx = c.addStringConst("new")
-      c.prog.emitABx(ropLoadK, result, nameIdx)
+      # Get function index for "new"
+      let funcIdx = c.addFunctionIndex("new")
 
       # Set up argument in next register
       if initReg != result + 1:
         c.prog.emitABC(ropMove, result + 1, initReg, 0)
         c.allocator.freeReg(initReg)
 
-      # Call new function
-      c.prog.emitABC(ropCall, result, 1, 1)  # 1 arg, 1 result
+      # Call new function using ropCall
+      var instr = RegInstruction(
+        op: ropCall,
+        a: result,
+        opType: 4,
+        funcIdx: funcIdx,
+        numArgs: 1,
+        numResults: 1
+      )
+      c.prog.instructions.add(instr)
     else:
       # No init expression - just return nil for now
       result = c.allocator.allocReg()
@@ -812,11 +846,10 @@ proc compileCall(c: var RegCompiler, e: Expr): uint8 =
     echo "[REGCOMPILER]   original args.len = ", e.args.len
     echo "[REGCOMPILER]   complete args.len = ", completeArgs.len
 
-  # First, load the function name into the result register
-  let funcNameIdx = c.addStringConst(e.fname)
-  c.prog.emitABx(ropLoadK, result, funcNameIdx, c.makeDebugInfo(e.pos))
+  # Get or create function index for direct calls
+  let funcIdx = c.addFunctionIndex(e.fname)
   if c.verbose:
-    echo "[REGCOMPILER] Emitted ropLoadK for function name '", e.fname, "' to reg ", result, " from const[", funcNameIdx, "] at PC=", c.prog.instructions.len - 1
+    echo "[REGCOMPILER] Function '", e.fname, "' has index ", funcIdx, " in function table"
 
   # Reserve registers for arguments first
   let numArgs = completeArgs.len
@@ -857,11 +890,21 @@ proc compileCall(c: var RegCompiler, e: Expr): uint8 =
 
     argRegs.add(targetReg)
 
-  # Emit call instruction with function name register, number of args, and expected results
+  # Emit ropCall instruction with function index
+  # Uses opType=4 (function call format)
   let callDebug = c.makeDebugInfo(e.pos)
-  c.prog.emitABC(ropCall, result, uint8(completeArgs.len), 1, callDebug)
+  var instr = RegInstruction(
+    op: ropCall,
+    a: result,
+    opType: 4,
+    funcIdx: funcIdx,
+    numArgs: uint8(completeArgs.len),
+    numResults: 1,  # Always 1 result for now
+    debug: callDebug
+  )
+  c.prog.instructions.add(instr)
   if c.verbose:
-    echo "[REGCOMPILER] Emitted ropCall for ", e.fname, " at reg ", result, " with debug line ", e.pos.line
+    echo "[REGCOMPILER] Emitted ropCall for ", e.fname, " (index ", funcIdx, ") at reg ", result, " with ", completeArgs.len, " args at PC=", c.prog.instructions.len - 1
 
 proc compileForLoop(c: var RegCompiler, s: Stmt) =
   ## Compile optimized for loop
@@ -1606,11 +1649,20 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
           compiler.prog.emitABx(ropSetGlobal, valueReg, nameIdx)
           compiler.allocator.freeReg(valueReg)
 
-    # After global initialization, call main
+    # After global initialization, call main using ropCall
     let mainNameReg = compiler.allocator.allocReg()
-    let mainNameIdx = compiler.addStringConst(MAIN_FUNCTION_NAME)
-    compiler.prog.emitABx(ropLoadK, mainNameReg, mainNameIdx)
-    compiler.prog.emitABC(ropCall, mainNameReg, 0, 0)  # No args, no results expected from main
+    let mainFuncIdx = compiler.addFunctionIndex(MAIN_FUNCTION_NAME)
+
+    # Call main function using ropCall
+    var mainInstr = RegInstruction(
+      op: ropCall,
+      a: mainNameReg,
+      opType: 4,
+      funcIdx: mainFuncIdx,
+      numArgs: 0,
+      numResults: 0
+    )
+    compiler.prog.instructions.add(mainInstr)
     compiler.prog.emitABC(ropReturn, 0, 0, 0)  # Return after main completes
 
     # Set entry point to global initialization

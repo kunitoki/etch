@@ -1027,24 +1027,29 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
 
     # --- Function Calls ---
     of ropCall:
-      let funcReg = instr.a
-      let numArgs = instr.b
-      let numResults = instr.c
-
-      # Get function name from the register
-      let funcNameVal = getReg(vm, funcReg)
-      if funcNameVal.kind != vkString:
-        # Not a valid function name
-        log(verbose, "ropCall: ERROR - funcReg doesn't contain a string!")
-        setReg(vm, funcReg, makeNil())
+      # Function call using function table index
+      # Defensive check: ensure this instruction has opType=4
+      if instr.opType != 4:
+        log(verbose, "ropCall: ERROR - instruction has opType=" & $instr.opType & ", expected 4")
+        pc = pc + 1
         continue
 
-      let funcName = funcNameVal.sval
-      log(verbose, "ropCall: funcName='" & funcName & "' funcReg=" & $funcReg &
-          " numArgs=" & $numArgs & " numResults=" & $numResults)
+      let resultReg = instr.a
+      let funcIdx = instr.funcIdx
+      let numArgs = instr.numArgs
+      let numResults = instr.numResults
 
-      # Check for C FFI functions first - try to call through the registry
-      if callCFFIFunction(vm, funcName, funcReg, numArgs):
+      # Validate function index
+      if funcIdx >= uint16(vm.program.functionTable.len):
+        log(verbose, "ropCall: ERROR - funcIdx " & $funcIdx & " out of range (max: " & $(vm.program.functionTable.len - 1) & ")")
+        setReg(vm, resultReg, makeNil())
+        continue
+
+      let funcName = vm.program.functionTable[int(funcIdx)]
+      log(verbose, "ropCall: funcIdx=" & $funcIdx & " funcName='" & funcName & "' numArgs=" & $numArgs & " numResults=" & $numResults)
+
+      # Check for C FFI functions first
+      if callCFFIFunction(vm, funcName, resultReg, numArgs):
         log(verbose, "Called C FFI function: " & funcName)
         continue
 
@@ -1052,19 +1057,18 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       if vm.program.cffiInfo.hasKey(funcName):
         let cffiInfo = vm.program.cffiInfo[funcName]
         log(verbose, "C FFI function not loaded: " & funcName & " (library: " & cffiInfo.library & ")")
-        setReg(vm, funcReg, makeNil())
+        setReg(vm, resultReg, makeNil())
         continue
 
       # Check for user-defined functions
       elif vm.program.functions.hasKey(funcName):
         let funcInfo = vm.program.functions[funcName]
         log(verbose, "Calling user function " & funcName & " at " & $funcInfo.startPos &
-            " with " & $numArgs & " args, result reg=" & $funcReg)
+            " with " & $numArgs & " args, result reg=" & $resultReg)
 
         # Debugger hook - push stack frame
         if vm.debugger != nil:
           let debugger = cast[RegEtchDebugger](vm.debugger)
-          # Get debug info from the first instruction of the function being called
           let funcFirstInstr = if funcInfo.startPos < vm.program.instructions.len:
             vm.program.instructions[funcInfo.startPos]
           else:
@@ -1076,26 +1080,25 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
           let targetLine = if funcFirstInstr.debug.line > 0:
             funcFirstInstr.debug.line
           else:
-            1  # Default to line 1 if no debug info
+            1
 
           # Special case: calling main from <global> is a transition, not a nested call
-          # Pop <global> and push main at the same depth
           if funcName == MAIN_FUNCTION_NAME and debugger.stackFrames.len > 0 and
              debugger.stackFrames[^1].functionName == GLOBAL_INIT_FUNCTION_NAME:
-            debugger.popStackFrame()  # Remove <global>
+            debugger.popStackFrame()
 
           debugger.pushStackFrame(funcName, targetFile, targetLine, false)
 
         # Create new frame for the function
         var newFrame = RegisterFrame()
-        newFrame.returnAddr = pc + 1  # Save position AFTER this call instruction
-        newFrame.baseReg = funcReg     # Save result register
+        newFrame.returnAddr = pc + 1
+        newFrame.baseReg = resultReg
 
-        # Copy arguments to new frame's registers starting at R0
+        # Copy arguments to new frame's registers
         for i in 0'u8..<numArgs:
-          let argVal = getReg(vm, funcReg + 1'u8 + i)
+          let argVal = getReg(vm, resultReg + 1'u8 + i)
           newFrame.regs[i] = argVal
-          log(verbose, "Copying arg " & $i & " from reg " & $(funcReg + 1'u8 + i) &
+          log(verbose, "Copying arg " & $i & " from reg " & $(resultReg + 1'u8 + i) &
               " to new frame reg " & $i & " kind=" & $argVal.kind)
 
         # Push frame
@@ -1106,207 +1109,175 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
         pc = funcInfo.startPos
         continue
 
-      # Handle builtin functions inline for performance
-      # For builtin and C FFI functions, we need to handle both the mangled
-      # names (with type info) and base names for compatibility
-
-      # Debugger hook - track builtin function call
+      # Handle builtin functions
       if vm.debugger != nil:
         let debugger = cast[RegEtchDebugger](vm.debugger)
         let currentFile = if instr.debug.sourceFile.len > 0: instr.debug.sourceFile else: MAIN_FUNCTION_NAME
-        debugger.pushStackFrame(funcName, currentFile, instr.debug.line, true)  # isBuiltIn = true
+        debugger.pushStackFrame(funcName, currentFile, instr.debug.line, true)
 
       case funcName:
       of "seed":
         if numArgs == 1:
-          let seedVal = getReg(vm, funcReg + 1)
+          let seedVal = getReg(vm, resultReg + 1)
           if isInt(seedVal):
             c_srand(cuint(getInt(seedVal)))
-          setReg(vm, funcReg, makeNil())
+          setReg(vm, resultReg, makeNil())
 
       of "rand":
         if numArgs == 1:
-          # Single argument: rand(max) means rand from 0 to max
-          let maxVal = getReg(vm, funcReg + 1)
+          let maxVal = getReg(vm, resultReg + 1)
           if isInt(maxVal):
             let maxInt = getInt(maxVal)
             if maxInt > 0:
               let randVal = c_rand() mod cint(maxInt)
-              setReg(vm, funcReg, makeInt(int64(randVal)))
+              setReg(vm, resultReg, makeInt(int64(randVal)))
             else:
-              setReg(vm, funcReg, makeInt(0))
+              setReg(vm, resultReg, makeInt(0))
         elif numArgs == 2:
-          # Arguments: rand(max, min) in Etch becomes rand(arg1=min, arg2=max)
-          let minVal = getReg(vm, funcReg + 1)  # First argument is min
-          let maxVal = getReg(vm, funcReg + 2)  # Second argument is max
+          let minVal = getReg(vm, resultReg + 1)
+          let maxVal = getReg(vm, resultReg + 2)
           if isInt(minVal) and isInt(maxVal):
             let minInt = getInt(minVal)
             let maxInt = getInt(maxVal)
             let range = maxInt - minInt
             if range > 0:
               let randVal = (c_rand() mod cint(range)) + cint(minInt)
-              setReg(vm, funcReg, makeInt(int64(randVal)))
+              setReg(vm, resultReg, makeInt(int64(randVal)))
             else:
-              setReg(vm, funcReg, makeInt(minInt))
+              setReg(vm, resultReg, makeInt(minInt))
 
       of "print":
         if numArgs == 1:
-          let val = getReg(vm, funcReg + 1)
-          # Use the recursive formatter
+          let val = getReg(vm, resultReg + 1)
           let output = formatValueForPrint(val)
-
-          # Use unified print handler
           vmPrint(vm, output, outputBuffer, outputCount)
-
-          # Flush if buffer is getting large or we have many lines
           if outputBuffer.len >= BUFFER_SIZE or outputCount >= 100:
             flushOutput()
-
-          setReg(vm, funcReg, makeNil())
+          setReg(vm, resultReg, makeNil())
 
       of "toString":
         if numArgs == 1:
-          let val = getReg(vm, funcReg + 1)
-          # Use the recursive formatter
+          let val = getReg(vm, resultReg + 1)
           let resStr = formatValueForPrint(val)
-          setReg(vm, funcReg, makeString(resStr))
+          setReg(vm, resultReg, makeString(resStr))
 
-      # Reference operations
       of "new":
         if numArgs == 1:
-          # For now, just pass through the value (references are not truly implemented)
-          # In a real implementation, this would allocate heap memory
-          let val = getReg(vm, funcReg + 1)
-          setReg(vm, funcReg, val)
+          let val = getReg(vm, resultReg + 1)
+          setReg(vm, resultReg, val)
         else:
-          setReg(vm, funcReg, makeNil())
+          setReg(vm, resultReg, makeNil())
 
       of "deref":
         if numArgs == 1:
-          # For now, just pass through the value (references are not truly implemented)
-          # In a real implementation, this would dereference the pointer
-          let val = getReg(vm, funcReg + 1)
-          setReg(vm, funcReg, val)
+          let val = getReg(vm, resultReg + 1)
+          setReg(vm, resultReg, val)
         else:
-          setReg(vm, funcReg, makeNil())
+          setReg(vm, resultReg, makeNil())
 
-      # Array operations
       of "arrayNew":
         if numArgs == 2:
-          let sizeVal = getReg(vm, funcReg + 1)
-          let defaultVal = getReg(vm, funcReg + 2)
+          let sizeVal = getReg(vm, resultReg + 1)
+          let defaultVal = getReg(vm, resultReg + 2)
           if sizeVal.isInt():
             let size = sizeVal.ival
             var newArray = newSeq[V](size)
             for i in 0 ..< size:
               newArray[i] = defaultVal
-            setReg(vm, funcReg, makeArray(ensureMove(newArray)))
+            setReg(vm, resultReg, makeArray(ensureMove(newArray)))
           else:
-            setReg(vm, funcReg, makeArray(@[]))  # Return empty array if size not an int
+            setReg(vm, resultReg, makeArray(@[]))
         else:
-          setReg(vm, funcReg, makeArray(@[]))  # Return empty array for wrong arg count
+          setReg(vm, resultReg, makeArray(@[]))
 
-      # File I/O operations
       of "readFile":
         if numArgs == 1:
-          let pathVal = getReg(vm, funcReg + 1)
+          let pathVal = getReg(vm, resultReg + 1)
           if isString(pathVal):
             try:
               let content = readFile(pathVal.sval)
-              setReg(vm, funcReg, makeString(content))
+              setReg(vm, resultReg, makeString(content))
             except:
-              setReg(vm, funcReg, makeString(""))
+              setReg(vm, resultReg, makeString(""))
           else:
-            setReg(vm, funcReg, makeString(""))
+            setReg(vm, resultReg, makeString(""))
         else:
-          setReg(vm, funcReg, makeString(""))
+          setReg(vm, resultReg, makeString(""))
 
-      # Parsing functions
       of "parseInt":
         if numArgs == 1:
-          let strVal = getReg(vm, funcReg + 1)
+          let strVal = getReg(vm, resultReg + 1)
           if isString(strVal):
             try:
               let intVal = parseInt(strVal.sval)
-              # Return Some(intVal)
-              setReg(vm, funcReg, makeSome(makeInt(int64(intVal))))
+              setReg(vm, resultReg, makeSome(makeInt(int64(intVal))))
             except:
-              # Return None
-              setReg(vm, funcReg, makeNone())
+              setReg(vm, resultReg, makeNone())
           else:
-            setReg(vm, funcReg, makeNone())
+            setReg(vm, resultReg, makeNone())
         else:
-          setReg(vm, funcReg, makeNone())
+          setReg(vm, resultReg, makeNone())
 
       of "parseFloat":
         if numArgs == 1:
-          let strVal = getReg(vm, funcReg + 1)
+          let strVal = getReg(vm, resultReg + 1)
           if isString(strVal):
             try:
               let floatVal = parseFloat(strVal.sval)
-              # Return Some(floatVal)
-              setReg(vm, funcReg, makeSome(makeFloat(floatVal)))
+              setReg(vm, resultReg, makeSome(makeFloat(floatVal)))
             except:
-              # Return None
-              setReg(vm, funcReg, makeNone())
+              setReg(vm, resultReg, makeNone())
           else:
-            setReg(vm, funcReg, makeNone())
+            setReg(vm, resultReg, makeNone())
         else:
-          setReg(vm, funcReg, makeNone())
+          setReg(vm, resultReg, makeNone())
 
       of "parseBool":
         if numArgs == 1:
-          let strVal = getReg(vm, funcReg + 1)
+          let strVal = getReg(vm, resultReg + 1)
           if isString(strVal):
             if strVal.sval == "true":
-              setReg(vm, funcReg, makeSome(makeBool(true)))
+              setReg(vm, resultReg, makeSome(makeBool(true)))
             elif strVal.sval == "false":
-              setReg(vm, funcReg, makeSome(makeBool(false)))
+              setReg(vm, resultReg, makeSome(makeBool(false)))
             else:
-              setReg(vm, funcReg, makeNone())
+              setReg(vm, resultReg, makeNone())
           else:
-            setReg(vm, funcReg, makeNone())
+            setReg(vm, resultReg, makeNone())
         else:
-          setReg(vm, funcReg, makeNone())
+          setReg(vm, resultReg, makeNone())
 
-      # Option/Result type checking
       of "isSome":
         if numArgs == 1:
-          let val = getReg(vm, funcReg + 1)
-          # Check if the value has the Some tag
-          setReg(vm, funcReg, makeBool(isSome(val)))
+          let val = getReg(vm, resultReg + 1)
+          setReg(vm, resultReg, makeBool(isSome(val)))
         else:
-          setReg(vm, funcReg, makeBool(false))
+          setReg(vm, resultReg, makeBool(false))
 
       of "isNone":
         if numArgs == 1:
-          let val = getReg(vm, funcReg + 1)
-          # Check if the value has the None tag
-          setReg(vm, funcReg, makeBool(isNone(val)))
+          let val = getReg(vm, resultReg + 1)
+          setReg(vm, resultReg, makeBool(isNone(val)))
         else:
-          setReg(vm, funcReg, makeBool(true))
+          setReg(vm, resultReg, makeBool(true))
 
       of "isOk":
         if numArgs == 1:
-          let val = getReg(vm, funcReg + 1)
-          # Check if the value has the Ok tag
-          setReg(vm, funcReg, makeBool(isOk(val)))
+          let val = getReg(vm, resultReg + 1)
+          setReg(vm, resultReg, makeBool(isOk(val)))
         else:
-          setReg(vm, funcReg, makeBool(false))
+          setReg(vm, resultReg, makeBool(false))
 
       of "isErr":
         if numArgs == 1:
-          let val = getReg(vm, funcReg + 1)
-          # Check if the value has the Err tag
-          setReg(vm, funcReg, makeBool(isErr(val)))
+          let val = getReg(vm, resultReg + 1)
+          setReg(vm, resultReg, makeBool(isErr(val)))
         else:
-          setReg(vm, funcReg, makeBool(true))
+          setReg(vm, resultReg, makeBool(true))
 
       else:
-        # Check if it's an unimplemented builtin that just returns the function name
-        # (This is a placeholder for unimplemented builtins)
-        log(verbose, "Unknown function: " & funcName & " - returning function name as string")
-        setReg(vm, funcReg, makeString(funcName))
+        log(verbose, "Unknown function: " & funcName & " - returning nil")
+        setReg(vm, resultReg, makeNil())
 
       # Debugger hook - pop builtin function frame
       if vm.debugger != nil:
