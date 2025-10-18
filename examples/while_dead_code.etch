@@ -2,7 +2,7 @@
 // Shows range-based analysis catching impossible while conditions
 
 fn main() -> void {
-  let x: int = rand(10, 50);   // Range: [10, 50]
+  var x: int = rand(10, 50);   // Range: [10, 50]
   let y: int = rand(5);        // Range: [0, 5]
 
   print(111);  // Execution marker

@@ -1,82 +1,90 @@
-import std/[json, strutils, osproc, tables]
+import std/[unittest, json, osproc, strformat, tables]
 import ../src/etch/interpreter/[regvm, regvm_serialize, regvm_debugserver]
 
-# Compile the example
-echo "=== Compiling fn_order.etch ==="
-discard execProcess("./etch --compile examples/fn_order.etch")
+suite "Register VM Debugger - Function Order Stepping":
+  test "Program structure is correct":
+    # Compile the example
+    discard execProcess("./etch --compile examples/fn_order.etch")
 
-# Load and create debug server
-let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")
-let server = newRegDebugServer(prog, "examples/fn_order.etch")
+    # Load bytecode
+    let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")
 
-echo "\n=== Program Structure ==="
-echo "Entry point: ", prog.entryPoint
-echo "Functions:"
-for name, info in prog.functions:
-  echo "  ", name, " at PC ", info.startPos, "..", info.endPos
+    # Verify functions exist
+    check prog.functions.hasKey("<global>")
+    check prog.functions.hasKey("main")
+    check prog.entryPoint >= 0
 
-# Initialize
-echo "\n=== Initialize Request ==="
-let initReq = %*{"seq": 1, "type": "request", "command": "initialize", "arguments": {}}
-discard server.handleDebugRequest(initReq)
+  test "Launch initializes debugger correctly":
+    # Compile the example
+    discard execProcess("./etch --compile examples/fn_order.etch")
 
-# Launch with stopOnEntry
-echo "\n=== Launch Request ==="
-let launchReq = %*{
-  "seq": 2,
-  "type": "request",
-  "command": "launch",
-  "arguments": {
-    "stopOnEntry": true,
-    "program": "examples/fn_order.etch"
-  }
-}
-let launchResp = server.handleDebugRequest(launchReq)
-echo "Launch success: ", launchResp["success"].getBool()
+    # Load and create debug server
+    let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")
+    let server = newRegDebugServer(prog, "examples/fn_order.etch")
 
-# Get initial stack trace
-echo "\n=== Initial Stack Trace ==="
-let stackReq1 = %*{"seq": 3, "type": "request", "command": "stackTrace", "arguments": {"threadId": 1}}
-let stackResp1 = server.handleDebugRequest(stackReq1)
-let frames1 = stackResp1["body"]["stackFrames"].getElems()
-echo "Stack depth: ", frames1.len
-for i, frame in frames1:
-  echo "  [", i, "] ", frame["name"].getStr(), " at line ", frame["line"].getInt()
+    # Initialize
+    let initResp = server.handleDebugRequest(%*{"seq": 1, "type": "request", "command": "initialize", "arguments": {}})
+    check initResp["success"].getBool() == true
 
-# Step (next)
-echo "\n=== Step 1 (next) ==="
-let nextReq1 = %*{"seq": 4, "type": "request", "command": "next", "arguments": {"threadId": 1}}
-discard server.handleDebugRequest(nextReq1)
+    # Launch with stopOnEntry
+    let launchResp = server.handleDebugRequest(%*{
+      "seq": 2,
+      "type": "request",
+      "command": "launch",
+      "arguments": {"stopOnEntry": true, "program": "examples/fn_order.etch"}
+    })
+    check launchResp["success"].getBool() == true
 
-let stackReq2 = %*{"seq": 5, "type": "request", "command": "stackTrace", "arguments": {"threadId": 1}}
-let stackResp2 = server.handleDebugRequest(stackReq2)
-let frames2 = stackResp2["body"]["stackFrames"].getElems()
-echo "Stack depth: ", frames2.len
-for i, frame in frames2:
-  echo "  [", i, "] ", frame["name"].getStr(), " at line ", frame["line"].getInt()
+  test "Initial stack shows global init":
+    # Compile the example
+    discard execProcess("./etch --compile examples/fn_order.etch")
 
-# Step (next) again
-echo "\n=== Step 2 (next) ==="
-let nextReq2 = %*{"seq": 6, "type": "request", "command": "next", "arguments": {"threadId": 1}}
-discard server.handleDebugRequest(nextReq2)
+    # Load and create debug server
+    let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")
+    let server = newRegDebugServer(prog, "examples/fn_order.etch")
 
-let stackReq3 = %*{"seq": 7, "type": "request", "command": "stackTrace", "arguments": {"threadId": 1}}
-let stackResp3 = server.handleDebugRequest(stackReq3)
-let frames3 = stackResp3["body"]["stackFrames"].getElems()
-echo "Stack depth: ", frames3.len
-for i, frame in frames3:
-  echo "  [", i, "] ", frame["name"].getStr(), " at line ", frame["line"].getInt()
+    # Initialize and launch
+    discard server.handleDebugRequest(%*{"seq": 1, "type": "request", "command": "initialize", "arguments": {}})
+    discard server.handleDebugRequest(%*{
+      "seq": 2,
+      "type": "request",
+      "command": "launch",
+      "arguments": {"stopOnEntry": true, "program": "examples/fn_order.etch"}
+    })
 
-# Step (next) again
-echo "\n=== Step 3 (next) ==="
-let nextReq3 = %*{"seq": 8, "type": "request", "command": "next", "arguments": {"threadId": 1}}
-discard server.handleDebugRequest(nextReq3)
+    # Get initial stack trace
+    let stackResp = server.handleDebugRequest(%*{"seq": 3, "type": "request", "command": "stackTrace", "arguments": {"threadId": 1}})
+    let frames = stackResp["body"]["stackFrames"].getElems()
 
-let stackReq4 = %*{"seq": 9, "type": "request", "command": "stackTrace", "arguments": {"threadId": 1}}
-let stackResp4 = server.handleDebugRequest(stackReq4)
-let frames4 = stackResp4["body"]["stackFrames"].getElems()
-echo "Stack depth: ", frames4.len
-for i, frame in frames4:
-  echo "  [", i, "] ", frame["name"].getStr(), " at line ", frame["line"].getInt()
+    check frames.len == 1
+    check frames[0]["name"].getStr() == "<global>"
 
-echo "\n=== Done ==="
+  test "Stepping transitions from global to main":
+    # Compile the example
+    discard execProcess("./etch --compile examples/fn_order.etch")
+
+    # Load and create debug server
+    let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")
+    let server = newRegDebugServer(prog, "examples/fn_order.etch")
+
+    # Initialize and launch
+    discard server.handleDebugRequest(%*{"seq": 1, "type": "request", "command": "initialize", "arguments": {}})
+    discard server.handleDebugRequest(%*{
+      "seq": 2,
+      "type": "request",
+      "command": "launch",
+      "arguments": {"stopOnEntry": true, "program": "examples/fn_order.etch"}
+    })
+
+    # Step over to next line
+    discard server.handleDebugRequest(%*{"seq": 3, "type": "request", "command": "next", "arguments": {"threadId": 1}})
+
+    # Step over again to reach main
+    discard server.handleDebugRequest(%*{"seq": 4, "type": "request", "command": "next", "arguments": {"threadId": 1}})
+
+    # Get stack trace
+    let stackResp = server.handleDebugRequest(%*{"seq": 5, "type": "request", "command": "stackTrace", "arguments": {"threadId": 1}})
+    let frames = stackResp["body"]["stackFrames"].getElems()
+
+    check frames.len > 0
+    check frames[0]["name"].getStr() == "main"

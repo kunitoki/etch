@@ -32,7 +32,7 @@ const
 # Bytecode serialization constants
 const
   BYTECODE_MAGIC* = "ETCH"
-  BYTECODE_VERSION* = 22
+  BYTECODE_VERSION* = 23
 
 
 # Symbolic execution constants

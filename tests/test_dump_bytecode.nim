@@ -1,12 +1,28 @@
-import std/osproc
+import std/[unittest, osproc]
 import ../src/etch/interpreter/[regvm, regvm_serialize]
 
-# Compile the example first
-discard execProcess("./etch examples/fn_order.etch")
+suite "Bytecode Dumping":
+  test "Bytecode can be loaded and inspected":
+    # Compile the example first
+    discard execProcess("./etch examples/fn_order.etch")
 
-let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")
+    let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")
 
-echo "Entry point: ", prog.entryPoint
-echo "\nInstructions:"
-for i, instr in prog.instructions:
-  echo "PC ", i, ": op=", instr.op, " debug: line=", instr.debug.line, " file=", instr.debug.sourceFile
+    # Verify bytecode loaded correctly
+    check prog.entryPoint >= 0
+    check prog.instructions.len > 0
+
+  test "Instructions have debug information":
+    # Compile the example first
+    discard execProcess("./etch examples/fn_order.etch")
+
+    let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")
+
+    # Check that at least some instructions have debug info
+    var hasDebugInfo = false
+    for instr in prog.instructions:
+      if instr.debug.line > 0:
+        hasDebugInfo = true
+        break
+
+    check hasDebugInfo

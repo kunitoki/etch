@@ -59,16 +59,7 @@ File: src/etch/interpreter/regvm_compiler.nim
 
 Phase 2: Instruction Set Improvements (MEDIUM PRIORITY)
 
-2.1 Add Function Index Tables
-
-Files: src/etch/interpreter/regvm.nim, src/etch/interpreter/regvm_compiler.nim
-- Replace function name string lookups with integer indices
-- Add functionTable: seq[string] to RegBytecodeProgram
-- Change ropCall to use function indices instead of loading strings
-- Add ropCallDirect for direct function index calls
-- Impact: Faster function calls, smaller bytecode
-
-2.2 Add Jump Target Table
+2.1 Add Jump Target Table
 
 File: src/etch/interpreter/regvm.nim
 - Create explicit jump target table for each function
@@ -76,7 +67,7 @@ File: src/etch/interpreter/regvm.nim
 - Enable "switch out data tables" optimization mentioned in the document
 - Impact: Safer bytecode, enables advanced optimizations
 
-2.3 Add ARG Instructions for Function Calls
+2.2 Add ARG Instructions for Function Calls
 
 Files: src/etch/interpreter/regvm.nim, src/etch/interpreter/regvm_compiler.nim
 - Add ropArg and ropArgImm instructions
@@ -84,7 +75,7 @@ Files: src/etch/interpreter/regvm.nim, src/etch/interpreter/regvm_compiler.nim
 - Simplify function call codegen
 - Impact: Cleaner bytecode, easier to optimize
 
-2.4 Add Reversed Arithmetic Operations
+2.3 Add Reversed Arithmetic Operations
 
 File: src/etch/interpreter/regvm.nim
 - Add ropRSub, ropRDiv, ropRMod for when operands are swapped
@@ -222,35 +213,6 @@ New feature: Add --optimization-report flag
 - Show bytecode size before/after
 - Show estimated performance improvement
 - Impact: Better understanding of optimization effectiveness
-
-Implementation Priority
-
-Immediate (Week 1-2):
-1. Fix and re-enable optimizer (1.1)
-2. Integrate prover into optimizer (1.2)
-3. Function index tables (2.1)
-
-Short-term (Week 3-4):
-4. Type specialization (4.1) - HIGH IMPACT
-5. Enhanced constant folding (1.3)
-6. Peephole optimizations (3.1)
-
-Medium-term (Month 2):
-7. Inline small functions (4.2)
-8. Loop optimizations (3.4)
-9. ARG instructions (2.3)
-
-Long-term (Month 3+):
-10. Register allocation improvements (5.1, 5.2)
-11. More instruction fusion (6.1, 6.2)
-12. Bytecode verifier (8.1)
-
-Expected Performance Improvements
-
-Conservative estimates:
-- Phase 1-2: 20-30% improvement
-- Phase 3-4: 40-60% improvement
-- Phase 5-6: 60-80% improvement overall
 
 Testing Strategy
 

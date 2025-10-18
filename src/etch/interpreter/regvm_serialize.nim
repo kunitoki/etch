@@ -142,6 +142,10 @@ proc serializeRegInstruction(stream: Stream, instr: RegInstruction) =
     stream.write(instr.sbx)
   of 3:  # Ax format
     stream.write(instr.ax)
+  of 4:  # Function call format
+    stream.write(instr.funcIdx)
+    stream.write(instr.numArgs)
+    stream.write(instr.numResults)
   else:
     discard
 
@@ -174,6 +178,11 @@ proc deserializeRegInstruction(stream: Stream): RegInstruction =
   of 3:  # Ax format
     let ax = stream.readUint32()
     result = RegInstruction(op: op, a: a, opType: 3, ax: ax)
+  of 4:  # Function call format
+    let funcIdx = stream.readUint16()
+    let numArgs = stream.readUint8()
+    let numResults = stream.readUint8()
+    result = RegInstruction(op: op, a: a, opType: 4, funcIdx: funcIdx, numArgs: numArgs, numResults: numResults)
   else:
     # Default case - create as ABC format with zeros
     result = RegInstruction(op: op, a: a, opType: 0, b: 0, c: 0)

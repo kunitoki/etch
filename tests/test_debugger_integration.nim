@@ -272,17 +272,3 @@ fn main() -> void {
         foundThreads = true
         break
     check foundThreads
-
-# Run a summary at the end
-when isMainModule:
-  echo "\n===== Debugger Integration Test Summary ====="
-  echo "These tests validate that the register VM debugger:"
-  echo "  - Responds to DAP protocol requests"
-  echo "  - Stops at the correct lines"
-  echo "  - Shows variables with correct names and values"
-  echo "  - Steps through code line by line"
-  echo "  - Continues execution to completion"
-  echo "\nIf tests fail, check:"
-  echo "  1. The etch compiler is built (nim c src/etch.nim)"
-  echo "  2. No syntax errors in test programs"
-  echo "  3. Debug server output format hasn't changed"

@@ -371,7 +371,8 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
       opType: 4,
       funcIdx: funcIdx,
       numArgs: 1,
-      numResults: 1
+      numResults: 1,
+      debug: c.makeDebugInfo(e.pos)
     )
     c.prog.instructions.add(instr)
 
@@ -400,7 +401,8 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
       opType: 4,
       funcIdx: funcIdx,
       numArgs: 1,
-      numResults: 1
+      numResults: 1,
+      debug: c.makeDebugInfo(e.pos)
     )
     c.prog.instructions.add(instr)
 
@@ -430,7 +432,8 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
         opType: 4,
         funcIdx: funcIdx,
         numArgs: 1,
-        numResults: 1
+        numResults: 1,
+        debug: c.makeDebugInfo(e.pos)
       )
       c.prog.instructions.add(instr)
     else:
@@ -1660,7 +1663,8 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
       opType: 4,
       funcIdx: mainFuncIdx,
       numArgs: 0,
-      numResults: 0
+      numResults: 0,
+      debug: RegDebugInfo()  # Empty debug info for global initialization
     )
     compiler.prog.instructions.add(mainInstr)
     compiler.prog.emitABC(ropReturn, 0, 0, 0)  # Return after main completes
