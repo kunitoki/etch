@@ -1,0 +1,62 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Nim
+      uses: jiro4989/setup-nim-action@v2
+      with:
+        nim-version: '2.2.4'
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Install just (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+
+    - name: Install just (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install just
+
+    - name: Verify installations
+      run: |
+        nim --version
+        nimble --version
+        just --version
+
+    - name: Build C libraries
+      run: just libs
+
+    - name: Run example tests
+      run: nim r src/etch.nim --test examples/
+
+    - name: Run debugger tests
+      run: nimble test
+
+    - name: Build release binary
+      run: just build
+
+    - name: Upload build artifacts
+      if: matrix.os == 'ubuntu-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: etch-binary
+        path: etch
+        retention-days: 7
