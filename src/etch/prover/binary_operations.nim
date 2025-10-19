@@ -53,17 +53,17 @@ proc analyzeBinaryAddition*(e: Expr, a: Info, b: Info): Info =
       raise newProverError(e.pos, "addition overflow on constants")
     return infoConst(s)
 
-  # Range addition - check for potential overflow more precisely
+  # Range addition - check for overflow strictly
   var minS, maxS: int64
 
   # Check for overflow in minimum computation: a.minv + b.minv
   if (b.minv > 0 and a.minv > IMax - b.minv) or (b.minv < 0 and a.minv < IMin - b.minv):
-    raise newProverError(e.pos, "potential addition overflow")
+    raise newProverError(e.pos, "addition overflow")
   minS = a.minv + b.minv
 
   # Check for overflow in maximum computation: a.maxv + b.maxv
   if (b.maxv > 0 and a.maxv > IMax - b.maxv) or (b.maxv < 0 and a.maxv < IMin - b.maxv):
-    raise newProverError(e.pos, "potential addition overflow")
+    raise newProverError(e.pos, "addition overflow")
   maxS = a.maxv + b.maxv
 
   return Info(known: false, minv: minS, maxv: maxS, nonZero: a.nonZero or b.nonZero, initialized: true)
@@ -74,18 +74,25 @@ proc analyzeBinarySubtraction*(e: Expr, a: Info, b: Info): Info =
   if e.typ != nil and e.typ.kind == tkFloat:
     return Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
 
-  # Similar policy as add
+  # Check constant subtraction
   if a.known and b.known:
     let d = a.cval - b.cval
     if ( (b.cval < 0 and a.cval > IMax + b.cval) or (b.cval > 0 and a.cval < IMin + b.cval) ):
-      raise newException(ValueError, "Prover: possible - overflow on constants")
+      raise newProverError(e.pos, "subtraction overflow on constants")
     return infoConst(d)
 
-  # When either is unknown, compute range difference and check for overflow
-  let minD = a.minv - b.maxv
-  let maxD = a.maxv - b.minv
-  if minD < IMin or maxD > IMax:
-    raise newException(ValueError, "Prover: potential - overflow")
+  # Range subtraction - check for overflow strictly
+  var minD, maxD: int64
+
+  # Check for underflow in minimum computation: a.minv - b.maxv
+  if (b.maxv < 0 and a.minv > IMax + b.maxv) or (b.maxv > 0 and a.minv < IMin + b.maxv):
+    raise newProverError(e.pos, "subtraction overflow")
+  minD = a.minv - b.maxv
+
+  # Check for overflow in maximum computation: a.maxv - b.minv
+  if (b.minv < 0 and a.maxv > IMax + b.minv) or (b.minv > 0 and a.maxv < IMin + b.minv):
+    raise newProverError(e.pos, "subtraction overflow")
+  maxD = a.maxv - b.minv
 
   return Info(known: false, minv: minD, maxv: maxD, initialized: true)
 

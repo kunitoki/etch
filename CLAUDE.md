@@ -217,8 +217,7 @@ New feature: Add --optimization-report flag
 
 Testing Strategy
 
-- Run just tests after each change
-- Use just perf to benchmark improvements
+- Run `just tests` after each change
+- Use `just perf` to benchmark improvements
 - Create regression tests for each optimization
 - Ensure prover still catches all safety violations
-│ ╰─────────────────────────────────────────────────────────

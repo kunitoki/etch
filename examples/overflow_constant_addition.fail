@@ -1,0 +1,5 @@
+examples/overflow_constant_addition.etch:10:15: error: addition overflow
+  9 |     // Adding them could overflow since x could be near IMax
+  10 |     var z = x + y;
+                     ^
+  11 |

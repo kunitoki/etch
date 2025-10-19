@@ -1,0 +1,26 @@
+// Test type specialization for integer arithmetic
+fn main() {
+  // Integer arithmetic - should use specialized int instructions
+  let a: int = 10;
+  let b: int = 20;
+  let c: int = 30;
+
+  let sum: int = a + b;
+  print(sum);  // 30
+
+  let diff: int = c - a;
+  print(diff);  // 20
+
+  let prod: int = a * b;
+  print(prod);  // 200
+
+  let quot: int = c / a;
+  print(quot);  // 3
+
+  let rem: int = c % a;
+  print(rem);  // 0
+
+  // Complex expressions
+  let result: int = (a + b) * c - (quot * rem);
+  print(result);  // 900
+}

@@ -1,0 +1,14 @@
+// Test case: Subtraction underflow with large ranges
+// Uses rand() to create values with ranges that can underflow
+
+fn main() {
+    // Create a variable with very large negative potential range
+    // rand returns [0, max], so negate it to get negative range
+    var x = -rand(9223372036854775000);  // Range: [-near IMin, 0]
+    var y = rand(1000);  // Range: [0, 1000]
+
+    // Subtracting positive from potentially very negative value can underflow
+    var z = x - y;
+
+    print(z);
+}

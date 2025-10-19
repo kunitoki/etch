@@ -593,6 +593,18 @@ proc analyzeIndexExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
         else:
           return analyzeExpr(elementExpr, env, ctx)
 
+  # Case 3: Array/String has element range information
+  # When the array info has been initialized with element bounds (minv/maxv),
+  # return those bounds for scalar array indexing
+  if (arrayInfo.isArray or arrayInfo.isString) and arrayInfo.initialized:
+    return Info(
+      known: false,
+      minv: arrayInfo.minv,
+      maxv: arrayInfo.maxv,
+      nonZero: false,
+      initialized: true
+    )
+
   # If result type is an array but we can't determine exact size
   if e.typ != nil and e.typ.kind == tkArray:
     return infoArray(-1, sizeKnown = false)

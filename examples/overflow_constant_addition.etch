@@ -1,0 +1,13 @@
+// Test case: Overflow with large range values
+// Uses rand() to create values with unknown ranges that can overflow
+
+fn main() {
+    // Create a variable with very large potential range
+    var x = rand(9223372036854775000);  // Range: [0, near IMax]
+    var y = rand(1000);  // Range: [0, 1000]
+
+    // Adding them could overflow since x could be near IMax
+    var z = x + y;
+
+    print(z);
+}

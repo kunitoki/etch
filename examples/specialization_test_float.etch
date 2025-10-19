@@ -1,0 +1,23 @@
+// Test type specialization for float arithmetic
+fn main() {
+  // Float arithmetic - should use specialized float instructions
+  let a: float = 10.5;
+  let b: float = 20.25;
+  let c: float = 5.0;
+
+  let sum: float = a + b;
+  print(sum);  // 30.75
+
+  let diff: float = b - a;
+  print(diff);  // 9.75
+
+  let prod: float = a * c;
+  print(prod);  // 52.5
+
+  let quot: float = b / c;
+  print(quot);  // 4.05
+
+  // Complex expression
+  let result: float = (a + b) / c;
+  print(result);  // 6.15
+}
