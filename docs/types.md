@@ -33,6 +33,7 @@ var greeting = "Hello";  // Type inferred as string
 // Character
 var ch: char = 'A';
 var letter = 'x';  // Type inferred as char
+var digit = '5';   // Type inferred as char
 
 // Boolean
 var flag: bool = true;
@@ -56,6 +57,60 @@ var large = 1000000;
 var f1 = 3.14;
 var f2 = 2.0;
 var scientific = 1.23e-4;
+```
+
+### Character Type
+
+The `char` type represents a single character:
+
+```etch
+// Character literals use single quotes
+let letter: char = 'a';
+let digit: char = '5';
+let symbol: char = '@';
+
+// String indexing returns char
+let text: string = "Hello";
+let first: char = text[0];    // 'H'
+let last: char = text[4];     // 'o'
+
+// Character comparison
+let ch1: char = 'a';
+let ch2: char = 'b';
+let ch3: char = 'a';
+
+if ch1 == ch3 {
+    print("Equal chars work!");      // This prints
+}
+
+if ch1 != ch2 {
+    print("Different chars work!");  // This prints
+}
+
+// Extract character from string and compare
+let str: string = "abc";
+let first_char: char = str[0];
+
+if first_char == 'a' {
+    print("First character is 'a'");  // This prints
+}
+```
+
+**Key Points:**
+- Char literals use single quotes: `'a'`, `'Z'`, `'5'`
+- String indexing with `[]` returns a char
+- Chars can be compared with `==` and `!=`
+- Chars are distinct from single-character strings
+
+```etch
+// ✅ Valid: char type
+let ch: char = 'x';
+
+// ✅ Valid: string type
+let s: string = "x";
+
+// ❌ Different types - cannot directly compare
+if ch == s { }  // Type error: char != string
 ```
 
 ## Type Inference

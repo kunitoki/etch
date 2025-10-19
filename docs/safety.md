@@ -121,6 +121,48 @@ let z = x + y;  // ERROR: cannot add int and float
 let z = toFloat(x) + y;  // Safe (if toFloat exists)
 ```
 
+### 7. Unreachable Code Detection
+
+```etch
+// ✅ The prover detects unreachable code
+fn main() {
+    var x: int;
+
+    if true {
+        x = 42;
+    } else {
+        x = 99;  // ⚠️ Unreachable: condition is always true
+    }
+
+    print(x);
+}
+
+// ✅ Detects unreachable code in while loops
+fn loop_example() {
+    var count = 0;
+
+    while false {
+        count = count + 1;  // ⚠️ Unreachable: condition is always false
+    }
+
+    print(count);
+}
+
+// ✅ Detects unreachable code after conditions
+fn conditional_example(x: int) {
+    if x > 100 and x < 50 {
+        // ⚠️ Unreachable: x cannot be both > 100 and < 50
+        print("impossible");
+    }
+}
+```
+
+**Benefits:**
+- Finds dead code paths that will never execute
+- Identifies logical errors in conditional expressions
+- Helps keep code clean by detecting redundant branches
+- Catches copy-paste errors and logic mistakes
+
 ## How the Prover Works
 
 ### Range Analysis
@@ -457,6 +499,7 @@ Etch's compile-time safety checking provides:
 ✅ **Null safety** - No null pointer dereferences
 ✅ **Initialization safety** - No uninitialized variables
 ✅ **Type safety** - No type confusion
+✅ **Unreachable code detection** - Finds dead code paths
 ✅ **Zero runtime cost** - All checks at compile time
 
 **If your Etch program compiles, it's guaranteed to be free from these entire classes of bugs.**

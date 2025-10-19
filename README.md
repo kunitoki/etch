@@ -4,6 +4,8 @@
 
 A modern, safety-first programming language that proves correctness at compile-time through advanced static analysis. Etch combines the simplicity of C-like syntax with powerful compile-time execution, range-based safety proofs, and intelligent dead code elimination.
 
+[![Tests](https://github.com/kunitoki/etch/actions/workflows/test.yml/badge.svg)](https://github.com/kunitoki/etch/actions/workflows/test.yml)
+
 ## Why Etch?
 
 **Safety Without Runtime Overhead**

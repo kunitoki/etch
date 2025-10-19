@@ -11,7 +11,7 @@ Welcome to the Etch programming language documentation!
 ### Core Language Features
 
 1. **[types.md](types.md)** - Type system and type inference
-   - Primitive types (int, float, string, bool)
+   - Primitive types (int, float, string, bool, char)
    - Arrays and compound types
    - Algebraic data types (option[T], result[T])
    - Generics and type inference
@@ -47,6 +47,7 @@ Welcome to the Etch programming language documentation!
    - What safety guarantees Etch provides
    - How the prover works
    - Working with the prover
+   - Unreachable code detection
    - Common patterns for safe code
 
 7. **[overflow.md](overflow.md)** - Overflow detection (Detailed)
@@ -54,6 +55,21 @@ Welcome to the Etch programming language documentation!
    - Range tracking and analysis
    - Writing overflow-safe code
    - Debugging overflow errors
+
+### Advanced Features
+
+8. **[comptime.md](comptime.md)** - Compile-time evaluation
+   - Comptime expressions and blocks
+   - File embedding at compile time
+   - Code injection and metaprogramming
+   - Dynamic code generation
+   - Build-time configuration
+
+9. **[operator-overloading.md](operator-overloading.md)** - Custom operators
+   - Overloading arithmetic operators (+, -, *, /, %)
+   - Overloading comparison operators (==, !=, <, >, <=, >=)
+   - Use cases and best practices
+   - When to use UFCS instead
 
 ## Learning Path
 
@@ -75,9 +91,11 @@ Welcome to the Etch programming language documentation!
 ### For Advanced Users
 
 1. Deep dive into the prover's [range analysis](overflow.md#how-it-works)
-2. Learn [C FFI](modules.md#c-ffi-foreign-function-interface) for system programming
-3. Study advanced [pattern matching](control-flow.md#pattern-matching) techniques
-4. Explore [higher-order functions](functions.md#higher-order-functions)
+2. Master [compile-time evaluation](comptime.md) for metaprogramming
+3. Learn [operator overloading](operator-overloading.md) for custom types
+4. Explore [C FFI](modules.md#c-ffi-foreign-function-interface) for system programming
+5. Study advanced [pattern matching](control-flow.md#pattern-matching) techniques
+6. Explore [higher-order functions](functions.md#higher-order-functions)
 
 ## Quick Reference
 

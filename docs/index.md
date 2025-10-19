@@ -106,7 +106,40 @@ fn main() {
 }
 ```
 
-### 7. Minimalist Syntax
+### 7. Compile-Time Evaluation
+
+Run code during compilation for metaprogramming and optimization:
+
+```etch
+// Evaluate functions at compile time
+fn factorial(n: int) -> int {
+    if n <= 1 {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+
+fn main() {
+    let value: int = comptime(factorial(10));  // Computed during compilation
+    print(value);  // No function call at runtime!
+}
+
+// Embed files directly into binary
+let config: string = comptime(readFile("config.txt"));
+
+// Code injection for metaprogramming
+comptime {
+    inject("debug_mode", "int", 1);
+    inject("version", "string", "1.0.0");
+}
+
+// Use injected variables at runtime
+if debug_mode == 1 {
+    print("Debug: " + version);
+}
+```
+
+### 8. Minimalist Syntax
 
 Etch has a small, consistent syntax that's easy to learn:
 
@@ -197,13 +230,20 @@ fn main() {
 
 ## Documentation
 
+### Core Language
 - **[Type System & Inference](types.md)** - Types, inference, generics, algebraic types
 - **[Functions & UFCS](functions.md)** - Function definitions, UFCS, higher-order functions
 - **[Control Flow](control-flow.md)** - if, for, while, match expressions
 - **[Modules & FFI](modules.md)** - Imports, exports, C FFI
 - **[Global Variables](globals.md)** - Global state and compile-time evaluation
+
+### Safety & Verification
 - **[Compile-Time Safety](safety.md)** - How the prover works, writing safe code
 - **[Overflow Detection](overflow.md)** - Understanding overflow checking
+
+### Advanced Features
+- **[Compile-Time Evaluation](comptime.md)** - Metaprogramming, file embedding, code injection
+- **[Operator Overloading](operator-overloading.md)** - Custom operators for types
 
 ## Example Programs
 
