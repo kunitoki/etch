@@ -13,9 +13,15 @@ suite "Register VM Debugger - Basic Sanity":
     writeFile(testProg, "fn main() -> void { var x: int = 1; print(x); }")
     defer: removeFile(testProg)
 
-    let baseCmd = etchExe & " --debug-server " & testProg & " 2>&1"
-    let timedCmd = wrapWithTimeout(baseCmd, 1)
-    let cmd = "echo '{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}' | " & timedCmd
+    # Write command to file for cross-platform compatibility
+    let cmds = getTestTempDir() / "init_cmd.txt"
+    writeFile(cmds, "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}")
+    defer: removeFile(cmds)
+
+    # Use cross-platform stderr redirection
+    let stderrRedir = when defined(windows): "2>NUL" else: "2>&1"
+    let baseCmd = etchExe & " --debug-server " & testProg & " < " & cmds & " " & stderrRedir
+    let cmd = wrapWithTimeout(baseCmd, 1)
     let (output, _) = execCmdEx(cmd)
 
     check output.contains("\"success\":true")
@@ -31,7 +37,9 @@ suite "Register VM Debugger - Basic Sanity":
                     "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{\"program\":\"" & testProg & "\",\"stopOnEntry\":true}}")
     defer: removeFile(cmds)
 
-    let baseCmd = etchExe & " --debug-server " & testProg & " < " & cmds & " 2>/dev/null"
+    # Use cross-platform stderr redirection
+    let stderrRedir = when defined(windows): "2>NUL" else: "2>/dev/null"
+    let baseCmd = etchExe & " --debug-server " & testProg & " < " & cmds & " " & stderrRedir
     let cmd = wrapWithTimeout(baseCmd, 1)
     let (output, _) = execCmdEx(cmd)
 
@@ -61,7 +69,9 @@ fn main() -> void {
                     "{\"seq\":7,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}")
     defer: removeFile(cmds)
 
-    let baseCmd = etchExe & " --debug-server " & testProg & " < " & cmds & " 2>/dev/null"
+    # Use cross-platform stderr redirection
+    let stderrRedir = when defined(windows): "2>NUL" else: "2>/dev/null"
+    let baseCmd = etchExe & " --debug-server " & testProg & " < " & cmds & " " & stderrRedir
     let cmd = wrapWithTimeout(baseCmd, 1)
     let (output, _) = execCmdEx(cmd)
 
@@ -97,7 +107,9 @@ fn main() -> void {
                     "{\"seq\":4,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}")
     defer: removeFile(cmds)
 
-    let baseCmd = etchExe & " --debug-server " & testProg & " < " & cmds & " 2>/dev/null"
+    # Use cross-platform stderr redirection
+    let stderrRedir = when defined(windows): "2>NUL" else: "2>/dev/null"
+    let baseCmd = etchExe & " --debug-server " & testProg & " < " & cmds & " " & stderrRedir
     let cmd = wrapWithTimeout(baseCmd, 1)
     let (output, _) = execCmdEx(cmd)
 

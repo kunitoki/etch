@@ -92,18 +92,31 @@ proc ensureEtchBinary*(): bool =
   ## Ensure the etch binary is built and available
   ## Returns true if binary is available, false otherwise
 
-  # First check if binary already exists
-  if fileExists("./etch") or fileExists("../etch"):
-    return true
+  # First check if binary already exists (platform-specific)
+  when defined(windows):
+    if fileExists("./etch.exe") or fileExists("../etch.exe") or fileExists("etch.exe"):
+      return true
+  else:
+    if fileExists("./etch") or fileExists("../etch"):
+      return true
 
   # Try to build it
   echo "Building etch binary for tests..."
-  let buildCmd = if fileExists("src/etch.nim"):
-    "nim c -d:danger -o:etch src/etch.nim"
-  elif fileExists("../src/etch.nim"):
-    "cd .. && nim c -d:danger -o:etch src/etch.nim"
+
+  when defined(windows):
+    let buildCmd = if fileExists("src/etch.nim"):
+      "nim c -d:danger -o:etch.exe src/etch.nim"
+    elif fileExists("../src/etch.nim"):
+      "cd .. && nim c -d:danger -o:etch.exe src/etch.nim"
+    else:
+      return false
   else:
-    return false
+    let buildCmd = if fileExists("src/etch.nim"):
+      "nim c -d:danger -o:etch src/etch.nim"
+    elif fileExists("../src/etch.nim"):
+      "cd .. && nim c -d:danger -o:etch src/etch.nim"
+    else:
+      return false
 
   let (output, exitCode) = execCmdEx(buildCmd)
   if exitCode != 0:
