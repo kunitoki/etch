@@ -23,17 +23,17 @@ proc formatRegisterValue(val: V): string =
   elif val.isSome():
     # Extract the wrapped value
     let inner = val.wrapped[]
-    return "Some(" & formatRegisterValue(inner) & ")"
+    return "some(" & formatRegisterValue(inner) & ")"
   elif val.isNone():
-    return "None"
+    return "none"
   elif val.isOk():
     # Extract the wrapped value
     let inner = val.wrapped[]
-    return "Ok(" & formatRegisterValue(inner) & ")"
+    return "ok(" & formatRegisterValue(inner) & ")"
   elif val.isErr():
     # Extract the error value
     let inner = val.wrapped[]
-    return "Err(" & formatRegisterValue(inner) & ")"
+    return "error(" & formatRegisterValue(inner) & ")"
   elif val.isArray():
     if val.aval.len == 0:
       return "[]"

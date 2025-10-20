@@ -49,10 +49,10 @@ proc compileToRegBytecode(options: CompilerOptions): RegBytecodeProgram =
     let flags = CompilerFlags(verbose: options.verbose, debug: options.debug)
     return compileProgramWithGlobals(prog, sourceHash, evaluatedGlobals, options.sourceFile, flags)
   except OverflowDefect as e:
-    echo "Error: Internal compiler error: ", e.msg
+    echo "Internal compiler error: ", e.msg
     quit 1
   except Exception as e:
-    echo "Error: ", e.msg
+    echo e.msg
     quit 1
 
 
@@ -90,10 +90,23 @@ proc compileAndRunCBackend(bytecode: RegBytecodeProgram, sourceFile: string, ver
         linkerFlags &= " -l" & linkName
 
   let optFlags = if not debug: " -O3" else: ""
+
+  # Add rpath for dynamic library loading at runtime (macOS and Linux)
+  var rpathFlags = ""
+  if libPaths != "":
+    # Extract library directories from -L flags and add as rpath
+    let libDir = joinPath(dir, "clib")
+    if dirExists(libDir):
+      when defined(macosx) or defined(macos):
+        # Use @executable_path to make path relative to executable location
+        rpathFlags = " -Wl,-rpath,@executable_path/../clib"
+      else:
+        rpathFlags = " -Wl,-rpath,$ORIGIN/../clib"
+
   when defined(macosx) or defined(macos):
-    let compileCmd = "xcrun clang" & optFlags & " -o " & exeFile & " " & cFile & libPaths & linkerFlags & " 2>&1"
+    let compileCmd = "xcrun clang" & optFlags & " -o " & exeFile & " " & cFile & libPaths & linkerFlags & rpathFlags & " 2>&1"
   else:
-    let compileCmd = "clang" & optFlags & " -o " & exeFile & " " & cFile & libPaths & linkerFlags & " 2>&1"
+    let compileCmd = "clang" & optFlags & " -o " & exeFile & " " & cFile & libPaths & linkerFlags & rpathFlags & " 2>&1"
 
   if verbose:
     echo "Compiling: ", compileCmd

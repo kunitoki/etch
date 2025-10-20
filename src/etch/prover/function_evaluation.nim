@@ -120,7 +120,7 @@ proc tryEvaluateComplexFunction*(body: seq[Stmt], paramEnv: Table[string, int64]
 
 proc tryEvaluatePureFunction*(call: Expr, argInfos: seq[Info], fn: FunDecl, prog: Program): Option[int64] =
   ## Try to evaluate a pure function with constant arguments
-  ## Returns the result if successful, None if the function cannot be evaluated
+  ## Returns the result if successful, none if the function cannot be evaluated
 
   # Create parameter environment with constant argument values
   var paramEnv: Table[string, int64] = initTable[string, int64]()

@@ -85,13 +85,13 @@ proc formatInstruction*(instr: RegInstruction): string =
     of ropSlice:
       result = &"R[{instr.a}] = R[{instr.b}][R[{instr.c}]:end]"
     of ropWrapSome:
-      result = &"R[{instr.a}] = Some(R[{instr.b}])"
+      result = &"R[{instr.a}] = some(R[{instr.b}])"
     of ropLoadNone:
-      result = &"R[{instr.a}] = None"
+      result = &"R[{instr.a}] = none"
     of ropWrapOk:
-      result = &"R[{instr.a}] = Ok(R[{instr.b}])"
+      result = &"R[{instr.a}] = ok(R[{instr.b}])"
     of ropWrapErr:
-      result = &"R[{instr.a}] = Err(R[{instr.b}])"
+      result = &"R[{instr.a}] = error(R[{instr.b}])"
     of ropTestTag:
       result = &"if R[{instr.a}] not tagged {instr.b} then skip"
     of ropUnwrapOption:
@@ -175,13 +175,13 @@ proc dumpConstants*(prog: RegBytecodeProgram) =
         of vkChar:
           &"'{constant.cval}'"
         of vkSome:
-          "Some(...)"
+          "some(...)"
         of vkNone:
-          "None"
+          "none"
         of vkOk:
-          "Ok(...)"
+          "ok(...)"
         of vkErr:
-          "Err(...)"
+          "error(...)"
         of vkArray:
           &"[array:{constant.aval.len}]"
         of vkTable:

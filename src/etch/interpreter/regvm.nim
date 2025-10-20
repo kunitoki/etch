@@ -52,10 +52,10 @@ type
     ropCast,          # R[A] = cast(R[B], type=C)
 
     # Option/Result wrapping
-    ropWrapSome,      # R[A] = Some(R[B])
-    ropLoadNone,      # R[A] = None
-    ropWrapOk,        # R[A] = Ok(R[B])
-    ropWrapErr,       # R[A] = Err(R[B])
+    ropWrapSome,      # R[A] = some(R[B])
+    ropLoadNone,      # R[A] = none
+    ropWrapOk,        # R[A] = ok(R[B])
+    ropWrapErr,       # R[A] = error(R[B])
     ropTestTag,       # Test if R[A] has tag B, if not skip next
     ropUnwrapOption,  # R[A] = unwrap(Option R[B])
     ropUnwrapResult,  # R[A] = unwrap(Result R[B])
@@ -181,7 +181,7 @@ type
     vkString, vkArray, vkTable,
     vkSome, vkNone, vkOk, vkErr
 
-  VBox* = ref V  # Boxed V for wrapped types (Some/Ok/Err) to avoid recursion
+  VBox* = ref V  # Boxed V for wrapped types (some/ok/error) to avoid recursion
 
   V* = object
     case kind*: VKind

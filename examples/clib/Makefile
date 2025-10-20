@@ -38,6 +38,9 @@ all: $(LIBFULLNAME)
 
 $(LIBFULLNAME): mathlib.c
 	$(CC) $(CFLAGS) $(XFLAGS) -o $@ $< $(LDFLAGS)
+ifeq ($(UNAME_S),Darwin)
+	install_name_tool -id @rpath/$(LIBFULLNAME) $(LIBFULLNAME)
+endif
 
 clean:
 ifeq ($(OS),Windows_NT)

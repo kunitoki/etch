@@ -50,6 +50,11 @@ proc emitCRuntime(gen: var CGenerator) =
 #include <stdbool.h>
 #include <math.h>
 
+// Global constants
+#ifndef ETCH_MAX_GLOBALS
+#define ETCH_MAX_GLOBALS 256
+#endif
+
 // Value types
 typedef enum {
   VK_INT, VK_FLOAT, VK_BOOL, VK_CHAR, VK_NIL,
@@ -80,7 +85,7 @@ struct EtchV {
       size_t len;
       size_t cap;
     } tval;
-    EtchV* wrapped;  // For Some/Ok/Err
+    EtchV* wrapped;  // For some/ok/error
   };
 };
 
@@ -89,6 +94,46 @@ struct EtchVTableEntry {
   char* key;
   EtchV value;
 };
+
+// Global variables table
+typedef struct {
+  char* name;
+  EtchV value;
+} EtchGlobalEntry;
+
+EtchGlobalEntry etch_globals_table[ETCH_MAX_GLOBALS];
+int etch_globals_count = 0;
+
+static EtchV etch_get_global(const char* name) {
+  for (int i = 0; i < etch_globals_count; i++) {
+    if (strcmp(etch_globals_table[i].name, name) == 0) {
+      return etch_globals_table[i].value;
+    }
+  }
+  return etch_make_nil();
+}
+
+static void etch_set_global(const char* name, EtchV value) {
+  // Check if global already exists
+  for (int i = 0; i < etch_globals_count; i++) {
+    if (strcmp(etch_globals_table[i].name, name) == 0) {
+      etch_globals_table[i].value = value;
+      return;
+    }
+  }
+  // Add new global
+  if (etch_globals_count < ETCH_MAX_GLOBALS) {
+    etch_globals_table[etch_globals_count].name = strdup(name);
+    etch_globals_table[etch_globals_count].value = value;
+    etch_globals_count++;
+  }
+}
+
+// Panic
+static inline void etch_panic(const char* msg) {
+  fprintf(stderr, "%s\n", msg);
+  exit(1);
+}
 
 // Value constructors
 static inline EtchV etch_make_int(int64_t val) {
@@ -121,13 +166,13 @@ static inline EtchV etch_make_none(void) {
   return v;
 }
 
-EtchV etch_make_string(const char* val) {
+static inline EtchV etch_make_string(const char* val) {
   EtchV v = {.kind = VK_STRING};
   v.sval = strdup(val);
   return v;
 }
 
-EtchV etch_make_array(size_t cap) {
+static inline EtchV etch_make_array(size_t cap) {
   EtchV v = {.kind = VK_ARRAY};
   v.aval.data = malloc(cap * sizeof(EtchV));
   v.aval.len = 0;
@@ -135,7 +180,7 @@ EtchV etch_make_array(size_t cap) {
   return v;
 }
 
-EtchV etch_make_table(void) {
+static inline EtchV etch_make_table(void) {
   EtchV v = {.kind = VK_TABLE};
   v.tval.entries = NULL;
   v.tval.len = 0;
@@ -143,56 +188,21 @@ EtchV etch_make_table(void) {
   return v;
 }
 
-// Global variables table
-#define ETCH_MAX_GLOBALS 256
-typedef struct {
-  char* name;
-  EtchV value;
-} EtchGlobalEntry;
-
-EtchGlobalEntry etch_globals_table[ETCH_MAX_GLOBALS];
-int etch_globals_count = 0;
-
-EtchV etch_get_global(const char* name) {
-  for (int i = 0; i < etch_globals_count; i++) {
-    if (strcmp(etch_globals_table[i].name, name) == 0) {
-      return etch_globals_table[i].value;
-    }
-  }
-  return etch_make_nil();
-}
-
-void etch_set_global(const char* name, EtchV value) {
-  // Check if global already exists
-  for (int i = 0; i < etch_globals_count; i++) {
-    if (strcmp(etch_globals_table[i].name, name) == 0) {
-      etch_globals_table[i].value = value;
-      return;
-    }
-  }
-  // Add new global
-  if (etch_globals_count < ETCH_MAX_GLOBALS) {
-    etch_globals_table[etch_globals_count].name = strdup(name);
-    etch_globals_table[etch_globals_count].value = value;
-    etch_globals_count++;
-  }
-}
-
-EtchV etch_make_some(EtchV val) {
+static inline EtchV etch_make_some(EtchV val) {
   EtchV v = {.kind = VK_SOME};
   v.wrapped = malloc(sizeof(EtchV));
   *v.wrapped = val;
   return v;
 }
 
-EtchV etch_make_ok(EtchV val) {
+static inline EtchV etch_make_ok(EtchV val) {
   EtchV v = {.kind = VK_OK};
   v.wrapped = malloc(sizeof(EtchV));
   *v.wrapped = val;
   return v;
 }
 
-EtchV etch_make_err(EtchV val) {
+static inline EtchV etch_make_err(EtchV val) {
   EtchV v = {.kind = VK_ERR};
   v.wrapped = malloc(sizeof(EtchV));
   *v.wrapped = val;
@@ -213,8 +223,7 @@ EtchV etch_add(EtchV a, EtchV b) {
   } else if (a.kind == VK_STRING && b.kind == VK_STRING) {
     return etch_concat_strings(a, b);
   }
-  fprintf(stderr, "Type error in etch_add\n");
-  exit(1);
+  etch_panic("Type error in etch_add");
 }
 
 EtchV etch_sub(EtchV a, EtchV b) {
@@ -225,8 +234,7 @@ EtchV etch_sub(EtchV a, EtchV b) {
     double bv = (b.kind == VK_INT) ? (double)b.ival : b.fval;
     return etch_make_float(av - bv);
   }
-  fprintf(stderr, "Type error in etch_sub\n");
-  exit(1);
+  etch_panic("Type error in etch_sub");
 }
 
 EtchV etch_mul(EtchV a, EtchV b) {
@@ -237,15 +245,13 @@ EtchV etch_mul(EtchV a, EtchV b) {
     double bv = (b.kind == VK_INT) ? (double)b.ival : b.fval;
     return etch_make_float(av * bv);
   }
-  fprintf(stderr, "Type error in etch_mul\n");
-  exit(1);
+  etch_panic("Type error in etch_mul");
 }
 
 EtchV etch_div(EtchV a, EtchV b) {
   if (a.kind == VK_INT && b.kind == VK_INT) {
     if (b.ival == 0) {
-      fprintf(stderr, "Division by zero\n");
-      exit(1);
+      etch_panic("Division by zero");
     }
     return etch_make_int(a.ival / b.ival);
   } else if (a.kind == VK_FLOAT || b.kind == VK_FLOAT) {
@@ -253,20 +259,17 @@ EtchV etch_div(EtchV a, EtchV b) {
     double bv = (b.kind == VK_INT) ? (double)b.ival : b.fval;
     return etch_make_float(av / bv);
   }
-  fprintf(stderr, "Type error in etch_div\n");
-  exit(1);
+  etch_panic("Type error in etch_div");
 }
 
 EtchV etch_mod(EtchV a, EtchV b) {
   if (a.kind == VK_INT && b.kind == VK_INT) {
     if (b.ival == 0) {
-      fprintf(stderr, "Modulo by zero\n");
-      exit(1);
+      etch_panic("Modulo by zero");
     }
     return etch_make_int(a.ival % b.ival);
   }
-  fprintf(stderr, "Type error in mod\n");
-  exit(1);
+  etch_panic("Type error in etch_mod");
 }
 
 EtchV etch_pow(EtchV a, EtchV b) {
@@ -281,8 +284,7 @@ EtchV etch_unm(EtchV a) {
   } else if (a.kind == VK_FLOAT) {
     return etch_make_float(-a.fval);
   }
-  fprintf(stderr, "Type error in etch_unm\n");
-  exit(1);
+  etch_panic("Type error in etch_unm");
 }
 
 // Comparison operations
@@ -309,8 +311,7 @@ bool etch_lt(EtchV a, EtchV b) {
     double bv = (b.kind == VK_INT) ? (double)b.ival : b.fval;
     return av < bv;
   }
-  fprintf(stderr, "Type error in etch_lt\n");
-  exit(1);
+  etch_panic("Type error in etch_lt");
 }
 
 bool etch_le(EtchV a, EtchV b) {
@@ -322,8 +323,7 @@ bool etch_le(EtchV a, EtchV b) {
     double bv = (b.kind == VK_INT) ? (double)b.ival : b.fval;
     return av <= bv;
   }
-  fprintf(stderr, "Type error in etch_le\n");
-  exit(1);
+  etch_panic("Type error in etch_le");
 }
 
 // Logical operations
@@ -331,66 +331,56 @@ EtchV etch_not(EtchV a) {
   if (a.kind == VK_BOOL) {
     return etch_make_bool(!a.bval);
   }
-  fprintf(stderr, "Type error in not\n");
-  exit(1);
+  etch_panic("Type error in etch_not");
 }
 
 EtchV etch_and(EtchV a, EtchV b) {
   if (a.kind == VK_BOOL && b.kind == VK_BOOL) {
     return etch_make_bool(a.bval && b.bval);
   }
-  fprintf(stderr, "Type error in and\n");
-  exit(1);
+  etch_panic("Type error in etch_and");
 }
 
 EtchV etch_or(EtchV a, EtchV b) {
   if (a.kind == VK_BOOL && b.kind == VK_BOOL) {
     return etch_make_bool(a.bval || b.bval);
   }
-  fprintf(stderr, "Type error in or\n");
-  exit(1);
+  etch_panic("Type error in etch_or");
 }
 
 // Array operations
 EtchV etch_get_index(EtchV container, EtchV idx) {
   if (idx.kind != VK_INT) {
-    fprintf(stderr, "Type error: index must be int\n");
-    exit(1);
+    etch_panic("Type error: index must be int");
   }
   int64_t i = idx.ival;
 
   if (container.kind == VK_ARRAY) {
     if (i < 0 || (size_t)i >= container.aval.len) {
-      fprintf(stderr, "Index out of bounds\n");
-      exit(1);
+      etch_panic("Index out of bounds");
     }
     return container.aval.data[i];
   } else if (container.kind == VK_STRING) {
     size_t len = strlen(container.sval);
     if (i < 0 || (size_t)i >= len) {
-      fprintf(stderr, "Index out of bounds\n");
-      exit(1);
+      etch_panic("Index out of bounds");
     }
     return etch_make_char(container.sval[i]);
   }
 
-  fprintf(stderr, "Type error: indexing requires array or string\n");
-  exit(1);
+  etch_panic("Type error in etch_get_index, indexing requires array or string");
 }
 
 void etch_set_index(EtchV* arr, EtchV idx, EtchV val) {
   if (arr->kind != VK_ARRAY) {
-    fprintf(stderr, "Type error: not an array\n");
-    exit(1);
+    etch_panic("Type error: not an array");
   }
   if (idx.kind != VK_INT) {
-    fprintf(stderr, "Type error: index must be int\n");
-    exit(1);
+    etch_panic("Type error: index must be int");
   }
   int64_t i = idx.ival;
   if (i < 0 || (size_t)i >= arr->aval.len) {
-    fprintf(stderr, "Index out of bounds\n");
-    exit(1);
+    etch_panic("Index out of bounds");
   }
   arr->aval.data[i] = val;
 }
@@ -401,8 +391,7 @@ EtchV etch_get_length(EtchV arr) {
   } else if (arr.kind == VK_STRING) {
     return etch_make_int((int64_t)strlen(arr.sval));
   }
-  fprintf(stderr, "Type error: len requires array or string\n");
-  exit(1);
+  etch_panic("Type error in etch_get_length, length requires array or string");
 }
 
 // String concatenation
@@ -416,8 +405,7 @@ EtchV etch_concat_strings(EtchV a, EtchV b) {
     EtchV v = {.kind = VK_STRING, .sval = result};
     return v;
   }
-  fprintf(stderr, "Type error: string concatenation requires strings\n");
-  exit(1);
+  etch_panic("Type error in etch_concat_strings, string concatenation requires strings");
 }
 
 // Array concatenation
@@ -434,15 +422,13 @@ EtchV etch_concat_arrays(EtchV a, EtchV b) {
     result.aval.len = newLen;
     return result;
   }
-  fprintf(stderr, "Type error: array concatenation requires arrays\n");
-  exit(1);
+  etch_panic("Type error in etch_concat_arrays, array concatenation requires arrays");
 }
 
 // Table field access
 EtchV etch_get_field(EtchV table, const char* fieldName) {
   if (table.kind != VK_TABLE) {
-    fprintf(stderr, "Type error: field access requires table\n");
-    exit(1);
+    etch_panic("Type error in etch_get_field, field access requires table");
   }
   // Linear search for field
   for (size_t i = 0; i < table.tval.len; i++) {
@@ -455,8 +441,7 @@ EtchV etch_get_field(EtchV table, const char* fieldName) {
 
 void etch_set_field(EtchV* table, const char* fieldName, EtchV value) {
   if (table->kind != VK_TABLE) {
-    fprintf(stderr, "Type error: field access requires table\n");
-    exit(1);
+    etch_panic("Type error in etch_set_field, field access requires table");
   }
   // Check if field already exists
   for (size_t i = 0; i < table->tval.len; i++) {
@@ -480,8 +465,7 @@ void etch_set_field(EtchV* table, const char* fieldName, EtchV value) {
 EtchV etch_slice_op(EtchV container, EtchV start_idx, EtchV end_idx) {
   if (container.kind == VK_STRING) {
     if (start_idx.kind != VK_INT || end_idx.kind != VK_INT) {
-      fprintf(stderr, "Type error: slice indices must be integers\n");
-      exit(1);
+      etch_panic("Type error in etch_slice_op, slice indices must be integers");
     }
     int64_t start = start_idx.ival;
     int64_t end = end_idx.ival;
@@ -500,8 +484,7 @@ EtchV etch_slice_op(EtchV container, EtchV start_idx, EtchV end_idx) {
     return etch_make_string(result);
   } else if (container.kind == VK_ARRAY) {
     if (start_idx.kind != VK_INT || end_idx.kind != VK_INT) {
-      fprintf(stderr, "Type error: slice indices must be integers\n");
-      exit(1);
+      etch_panic("Type error in etch_slice_op, slice indices must be integers");
     }
     int64_t start = start_idx.ival;
     int64_t end = end_idx.ival;
@@ -520,8 +503,8 @@ EtchV etch_slice_op(EtchV container, EtchV start_idx, EtchV end_idx) {
     result.aval.len = slice_len;
     return result;
   }
-  fprintf(stderr, "Type error: slice requires string or array\n");
-  exit(1);
+
+  etch_panic("Type error in etch_slice_op, slice requires string or array");
 }
 
 // RNG state (global) - initialized to 1 to match VM default
@@ -616,7 +599,7 @@ char* etch_to_string(EtchV val) {
     case VK_NIL:
       return strdup("nil");
     case VK_NONE:
-      return strdup("None");
+      return strdup("none");
     case VK_STRING:
       return strdup(val.sval);
     default:
@@ -670,8 +653,8 @@ EtchV etch_cast_value(EtchV val, EtchVKind target_kind) {
     default:
       break;
   }
-  fprintf(stderr, "Invalid type cast\n");
-  exit(1);
+
+  etch_panic("Invalid type cast");
 }
 
 // Print operation
@@ -706,23 +689,23 @@ void etch_print_value(EtchV val) {
       printf("nil");
       break;
     case VK_NONE:
-      printf("None");
+      printf("none");
       break;
     case VK_STRING:
       printf("%s", val.sval);
       break;
     case VK_SOME:
-      printf("Some(");
+      printf("some(");
       etch_print_value(*val.wrapped);
       printf(")");
       break;
     case VK_OK:
-      printf("Ok(");
+      printf("ok(");
       etch_print_value(*val.wrapped);
       printf(")");
       break;
     case VK_ERR:
-      printf("Err(");
+      printf("error(");
       etch_print_value(*val.wrapped);
       printf(")");
       break;
@@ -753,7 +736,7 @@ proc emitConstantPool(gen: var CGenerator) =
   ## Emit the constant pool as a C array
   let poolSize = max(1, gen.program.constants.len)
   gen.emit(&"\n// Constant pool ({gen.program.constants.len} etch_constants)")
-  gen.emit(&"#define CONST_POOL_SIZE {poolSize}")
+  gen.emit(&"#define ETCH_CONST_POOL_SIZE {poolSize}")
   gen.emit(&"EtchV etch_constants[{poolSize}];")
   gen.emit("\nvoid etch_init_constants(void) {")
   gen.incIndent()
@@ -801,14 +784,14 @@ proc emitCFFIDeclarations(gen: var CGenerator) =
           params &= ", "
         # Map TypeKind strings to C types
         case paramType
-        of "tkInt":
-          params &= "int64_t"
-        of "tkFloat":
-          params &= "double"
         of "tkBool":
           params &= "bool"
         of "tkChar":
           params &= "char"
+        of "tkInt":
+          params &= "int64_t"
+        of "tkFloat":
+          params &= "double"
         else:
           params &= "void*"  # Default to void* for unknown types
     else:
@@ -816,11 +799,11 @@ proc emitCFFIDeclarations(gen: var CGenerator) =
 
     # Map return type
     let returnType = case info.returnType
-    of "tkInt": "int64_t"
-    of "tkFloat": "double"
+    of "tkVoid": "void"
     of "tkBool": "bool"
     of "tkChar": "char"
-    of "tkVoid": "void"
+    of "tkInt": "int64_t"
+    of "tkFloat": "double"
     else: "void*"
 
     gen.emit(&"extern {returnType} {info.symbol}({params});")
@@ -999,9 +982,6 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
 
   of ropTest:
     let c = instr.c
-    # isTrue = not nil AND not (bool and false)
-    # When c=1: skip if NOT isTrue (skip if false or nil)
-    # When c=0: skip if isTrue (skip if true)
     if c == 1:
       # Skip if value is nil or (bool and false)
       gen.emit(&"if (r[{a}].kind == VK_NIL || (r[{a}].kind == VK_BOOL && !r[{a}].bval)) goto L{pc + 2};  // Test")
@@ -1014,7 +994,6 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
       let size = instr.bx
       gen.emit(&"r[{a}] = etch_make_array({size});  // NewArray")
       gen.emit(&"r[{a}].aval.len = {size};  // Set array length")
-      # Initialize all elements to nil
       gen.emit(&"for (size_t i = 0; i < {size}; i++) r[{a}].aval.data[i] = etch_make_nil();")
     else:
       gen.emit(&"// TODO: NewArray with opType {instr.opType}")
@@ -1080,7 +1059,7 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
   of ropExecDefers:
     gen.emit(&"// ExecDefers: execute all deferred blocks in LIFO order")
     gen.emit(&"if (__etch_defer_count > 0) {{")
-    gen.emit(&"  defer_return_pc = {pc};  // Save return point")
+    gen.emit(&"  __defer_return_pc = {pc};  // Save return point")
     gen.emit(&"  int __etch_defer_pc = __etch_defer_stack[--__etch_defer_count];  // Pop defer")
     gen.emit(&"  switch (__etch_defer_pc) {{")
     # Generate case statements for all defer targets
@@ -1107,7 +1086,7 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
     gen.emit(&"  }}")
     gen.emit(&"}} else {{")
     gen.emit(&"  // All defers executed, return to saved PC")
-    gen.emit(&"  switch (defer_return_pc) {{")
+    gen.emit(&"  switch (__defer_return_pc) {{")
     # Generate cases for all ExecDefers locations (return points)
     for returnPC in gen.execDefersLocations:
       gen.emit(&"    case {returnPC}: goto L{returnPC};")
@@ -1167,7 +1146,7 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
     of vkOk:
       gen.emit(&"if (r[{a}].kind == VK_OK) goto L{pc + 2};  // TestTag Ok - skip Jmp if match")
     of vkErr:
-      gen.emit(&"if (r[{a}].kind == VK_ERR) goto L{pc + 2};  // TestTag Err - skip Jmp if match")
+      gen.emit(&"if (r[{a}].kind == VK_ERR) goto L{pc + 2};  // TestTag Error - skip Jmp if match")
 
   of ropUnwrapOption:
     let b = instr.b
@@ -1175,7 +1154,7 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
 
   of ropUnwrapResult:
     let b = instr.b
-    gen.emit(&"r[{a}] = (r[{b}].kind == VK_OK || r[{b}].kind == VK_ERR) ? *r[{b}].wrapped : etch_make_nil();  // UnwrapResult (Ok or Err)")
+    gen.emit(&"r[{a}] = (r[{b}].kind == VK_OK || r[{b}].kind == VK_ERR) ? *r[{b}].wrapped : etch_make_nil();  // UnwrapResult (Ok or Error)")
 
   of ropIn:
     let b = instr.b
@@ -1370,6 +1349,8 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
                     args &= &"r[{argReg}].fval"
                   of "tkInt":
                     args &= &"r[{argReg}].ival"
+                  of "tkChar":
+                    args &= &"r[{argReg}].cval"
                   of "tkBool":
                     args &= &"r[{argReg}].bval"
                   else:
@@ -1386,6 +1367,8 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
               gen.emit(&"r[{resultReg}] = etch_make_int({symbol}({args}));")
             of "tkBool":
               gen.emit(&"r[{resultReg}] = etch_make_bool({symbol}({args}));")
+            of "tkChar":
+              gen.emit(&"r[{resultReg}] = etch_make_char({symbol}({args}));")
             of "tkVoid":
               gen.emit(&"{symbol}({args});")
               gen.emit(&"r[{resultReg}] = etch_make_nil();")
@@ -1417,7 +1400,7 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
     if instr.opType == 1:
       let bx = instr.bx
       gen.emit(&"// GetGlobal: R[{a}] = globals[K[{bx}]]")
-      gen.emit(&"if ({bx} < CONST_POOL_SIZE) {{")
+      gen.emit(&"if ({bx} < ETCH_CONST_POOL_SIZE) {{")
       gen.emit(&"  const char* name = etch_constants[{bx}].sval;")
       gen.emit(&"  r[{a}] = etch_get_global(name);")
       gen.emit(&"}} else {{")
@@ -1430,7 +1413,7 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
     if instr.opType == 1:
       let bx = instr.bx
       gen.emit(&"// SetGlobal: globals[K[{bx}]] = R[{a}]")
-      gen.emit(&"if ({bx} < CONST_POOL_SIZE) {{")
+      gen.emit(&"if ({bx} < ETCH_CONST_POOL_SIZE) {{")
       gen.emit(&"  const char* name = etch_constants[{bx}].sval;")
       gen.emit(&"  etch_set_global(name, r[{a}]);")
       gen.emit(&"}}")
@@ -1494,7 +1477,7 @@ proc emitFunction(gen: var CGenerator, funcName: string, info: FunctionInfo) =
     gen.emit("// Defer stack")
     gen.emit("int __etch_defer_stack[32];  // Stack of PC locations for defer blocks")
     gen.emit("int __etch_defer_count = 0;")
-    gen.emit("int defer_return_pc = -1;")
+    gen.emit("int __defer_return_pc = -1;")
 
   # Copy parameters to registers
   if info.numParams > 0:

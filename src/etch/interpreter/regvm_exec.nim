@@ -1,7 +1,7 @@
 # regvm_exec.nim
 # Execution engine for register-based VM with aggressive optimizations
 
-import std/[tables, math, strutils]
+import std/[tables, macros, math, strutils]
 import ../common/[constants, cffi, values, types, logging]
 import regvm, regvm_debugger
 
@@ -10,10 +10,20 @@ import regvm, regvm_debugger
 # Algorithm: https://en.wikipedia.org/wiki/Xorshift
 # Period: 2^64 - 1, excellent statistical properties
 
+
+# Logging helper for VM execution
+macro log(verbose: untyped, msg: untyped): untyped =
+  result = quote do:
+    if `verbose`:
+      let flags = CompilerFlags(verbose: true, debug: false)
+      logCompiler(flags, `msg`)
+
+
 proc etch_srand(vm: RegisterVM, seed: uint64) {.inline.} =
   # Initialize RNG state with seed
   # Avoid zero state (would produce all zeros)
   vm.rngState = if seed == 0: 1'u64 else: seed
+
 
 proc etch_rand(vm: RegisterVM): uint64 {.inline.} =
   # Xorshift64* algorithm
@@ -24,11 +34,6 @@ proc etch_rand(vm: RegisterVM): uint64 {.inline.} =
   vm.rngState = x
   result = x * 0x2545F4914F6CDD1D'u64  # Multiplication constant for better distribution
 
-# Logging helper for VM execution
-template log(verbose: bool, msg: untyped) =
-  if verbose:
-    let flags = CompilerFlags(verbose: true, debug: false)
-    logVM(flags, $msg)
 
 # Create new VM instance
 proc newRegisterVM*(prog: RegBytecodeProgram): RegisterVM =
@@ -43,6 +48,7 @@ proc newRegisterVM*(prog: RegBytecodeProgram): RegisterVM =
     rngState: 1'u64  # Initialize RNG with default seed
   )
   result.currentFrame = addr result.frames[0]
+
 
 proc newRegisterVMWithDebugger*(prog: RegBytecodeProgram, debugger: RegEtchDebugger): RegisterVM =
   result = RegisterVM(
@@ -60,12 +66,12 @@ proc newRegisterVMWithDebugger*(prog: RegBytecodeProgram, debugger: RegEtchDebug
   if debugger != nil:
     debugger.attachToVM(cast[pointer](result))
 
+
 # Fast register access macros
 template getReg(vm: RegisterVM, idx: uint8): V =
   vm.currentFrame.regs[idx]
 
 template setReg(vm: RegisterVM, idx: uint8, val: sink V) =
-  # Use sink to take ownership of val, avoiding copies
   vm.currentFrame.regs[idx] = val
 
 template getConst(vm: RegisterVM, idx: uint16): V =
@@ -73,7 +79,6 @@ template getConst(vm: RegisterVM, idx: uint16): V =
 
 # Debugger helper functions that need access to V type
 proc formatRegisterValue*(v: V): string =
-  ## Format a register value for display in debugger
   case v.kind
   of vkInt:
     result = $v.ival
@@ -110,15 +115,15 @@ proc formatRegisterValue*(v: V): string =
     result = "{table:" & $v.tval.len & " entries}"
   of vkSome:
     let inner = v.wrapped[]
-    result = "Some(" & formatRegisterValue(inner) & ")"
+    result = "some(" & formatRegisterValue(inner) & ")"
   of vkNone:
-    result = "None"
+    result = "none"
   of vkOk:
     let inner = v.wrapped[]
-    result = "Ok(" & formatRegisterValue(inner) & ")"
+    result = "ok(" & formatRegisterValue(inner) & ")"
   of vkErr:
     let inner = v.wrapped[]
-    result = "Err(" & formatRegisterValue(inner) & ")"
+    result = "error(" & formatRegisterValue(inner) & ")"
 
 proc formatValueForPrint*(v: V): string =
   ## Format a value for print output (recursive for nested structures)
@@ -131,7 +136,6 @@ proc formatValueForPrint*(v: V): string =
       result = formatFloat(v.fval, ffDecimal, 1)  # X.0 format for whole numbers
     else:
       result = formatFloat(v.fval, ffDefault, -1)  # %g format
-      # Ensure decimal point is present
       if '.' notin result and 'e' notin result and 'E' notin result:
         result.add(".0")
   of vkChar:
@@ -177,13 +181,13 @@ proc formatValueForPrint*(v: V): string =
     res.add("]")
     result = res
   of vkSome:
-    result = "Some(" & formatValueForPrint(v.wrapped[]) & ")"
+    result = "some(" & formatValueForPrint(v.wrapped[]) & ")"
   of vkNone:
-    result = "None"
+    result = "none"
   of vkOk:
-    result = "Ok(" & formatValueForPrint(v.wrapped[]) & ")"
+    result = "ok(" & formatValueForPrint(v.wrapped[]) & ")"
   of vkErr:
-    result = "Err(" & formatValueForPrint(v.wrapped[]) & ")"
+    result = "error(" & formatValueForPrint(v.wrapped[]) & ")"
   else:
     result = "nil"
 
@@ -232,13 +236,11 @@ template doAdd(a, b: V): V =
   elif a.kind == vkFloat and b.kind == vkFloat:
     makeFloat(a.fval + b.fval)
   elif a.kind == vkString and b.kind == vkString:
-    # Optimize string concatenation by pre-allocating and using move semantics
     var resultStr = newStringOfCap(a.sval.len + b.sval.len)
     resultStr.add(a.sval)
     resultStr.add(b.sval)
     makeString(ensureMove(resultStr))
   elif a.kind == vkArray and b.kind == vkArray:
-    # Optimize array concatenation by pre-allocating and using move semantics
     var resultArr = newSeqOfCap[V](a.aval.len + b.aval.len)
     resultArr.add(a.aval)
     resultArr.add(b.aval)
@@ -779,21 +781,21 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
 
     # --- Option/Result handling ---
     of ropWrapSome:
-      # Wrap value as Some
+      # Wrap value as some
       let val = getReg(vm, instr.b)
       setReg(vm, instr.a, makeSome(val))
 
     of ropLoadNone:
-      # Load None value
+      # Load none value
       setReg(vm, instr.a, makeNone())
 
     of ropWrapOk:
-      # Wrap value as Ok
+      # Wrap value as ok
       let val = getReg(vm, instr.b)
       setReg(vm, instr.a, makeOk(val))
 
     of ropWrapErr:
-      # Wrap value as Err
+      # Wrap value as error
       let val = getReg(vm, instr.b)
       setReg(vm, instr.a, makeErr(val))
 
@@ -814,14 +816,14 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       if val.isSome():
         let unwrapped = val.unwrapOption()
         setReg(vm, instr.a, unwrapped)
-        log(verbose, "ropUnwrapOption: unwrapped Some value to reg " & $instr.a & " value: " &
+        log(verbose, "ropUnwrapOption: unwrapped some value to reg " & $instr.a & " value: " &
             (if unwrapped.isInt(): $unwrapped.ival
              elif unwrapped.isFloat(): $unwrapped.fval
              elif unwrapped.isString(): unwrapped.sval
              else: "unknown"))
       else:
         setReg(vm, instr.a, makeNil())
-        log(verbose, "ropUnwrapOption: value was None, set nil in reg " & $instr.a)
+        log(verbose, "ropUnwrapOption: value was none, set nil in reg " & $instr.a)
 
     of ropUnwrapResult:
       # Unwrap Result value
