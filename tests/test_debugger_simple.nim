@@ -1,12 +1,17 @@
 # test_debugger_simple.nim
 # Simple test for the register VM debugger
 
-import std/[unittest, json, osproc, streams, os, strutils, sequtils]
+import std/[unittest, json, os, strutils]
+import test_utils
 
 suite "Register VM Debugger - Basic":
+  # Ensure etch binary is built before running tests
+  discard ensureEtchBinary()
+  let etchExe = findEtchExecutable()
+
   test "Debug server starts and responds to initialize":
     # Create a simple test program
-    let testProgram = getTempDir() / "test_debug.etch"
+    let testProgram = getTestTempDir() / "test_debug.etch"
     writeFile(testProgram, """
 fn main() -> void {
     var x: int = 1;
@@ -15,10 +20,8 @@ fn main() -> void {
 """)
     defer: removeFile(testProgram)
 
-    # Start debug server and send commands via stdin
-    let (output, exitCode) = execCmdEx(
-      "echo '{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}' | timeout 1 ./etch --debug-server " & testProgram & " 2>&1 || true"
-    )
+    let inputCommands = "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n"
+    let (output, _) = runDebugServerWithInput(etchExe, testProgram, inputCommands, timeoutSecs = 2)
 
     # Check that we got a response
     check output.contains("\"success\":true")
@@ -26,7 +29,7 @@ fn main() -> void {
     check output.contains("supportsStepInRequest")
 
   test "Debug server processes multiple commands":
-    let testProgram = getTempDir() / "test_step.etch"
+    let testProgram = getTestTempDir() / "test_step.etch"
     writeFile(testProgram, """
 fn main() -> void {
     var a: int = 10;
@@ -37,20 +40,11 @@ fn main() -> void {
 """)
     defer: removeFile(testProgram)
 
-    # Create input file with DAP commands (note: no scopes needed before variables)
-    let inputFile = getTempDir() / "debug_input.txt"
-    let commands = @[
-      """{"seq":1,"type":"request","command":"initialize","arguments":{}}""",
-      """{"seq":2,"type":"request","command":"launch","arguments":{"program":"$1","stopOnEntry":true}}""".format(testProgram),
-      """{"seq":3,"type":"request","command":"threads","arguments":{}}""",
-      """{"seq":4,"type":"request","command":"disconnect","arguments":{}}"""
-    ]
-    writeFile(inputFile, commands.join("\n"))
-    defer: removeFile(inputFile)
-
-    let (output, exitCode) = execCmdEx(
-      "timeout 2 ./etch --debug-server " & testProgram & " < " & inputFile & " 2>&1 | grep -v '^DEBUG' | grep -v '^\\[' || true"
-    )
+    let inputCommands = "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n" &
+                        "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{\"program\":\"" & testProgram & "\",\"stopOnEntry\":true}}\n" &
+                        "{\"seq\":3,\"type\":\"request\",\"command\":\"threads\",\"arguments\":{}}\n" &
+                        "{\"seq\":4,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}\n"
+    let (output, _) = runDebugServerWithInput(etchExe, testProgram, inputCommands, timeoutSecs = 3)
 
     # Check key responses
     check output.contains("\"success\":true")
@@ -63,7 +57,7 @@ fn main() -> void {
     check output.contains("\"event\":\"stopped\"")
 
   test "Debug server tracks line numbers":
-    let testProgram = getTempDir() / "test_lines.etch"
+    let testProgram = getTestTempDir() / "test_lines.etch"
     writeFile(testProgram, """
 fn main() -> void {
     var x: int = 1;
@@ -74,17 +68,11 @@ fn main() -> void {
 """)
     defer: removeFile(testProgram)
 
-    # Create input to get stack trace
-    let inputFile = getTempDir() / "debug_lines_input.txt"
-    writeFile(inputFile, """{"seq":1,"type":"request","command":"initialize","arguments":{}}
-{"seq":2,"type":"request","command":"launch","arguments":{"program":"$1","stopOnEntry":true}}
-{"seq":3,"type":"request","command":"stackTrace","arguments":{"threadId":1}}
-{"seq":4,"type":"request","command":"disconnect","arguments":{}}""".format(testProgram))
-    defer: removeFile(inputFile)
-
-    let (output, exitCode) = execCmdEx(
-      "timeout 1 ./etch --debug-server " & testProgram & " < " & inputFile & " 2>&1 | grep -v '^DEBUG' | grep -v '^\\[' || true"
-    )
+    let inputCommands = "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n" &
+                        "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{\"program\":\"" & testProgram & "\",\"stopOnEntry\":true}}\n" &
+                        "{\"seq\":3,\"type\":\"request\",\"command\":\"stackTrace\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":4,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}\n"
+    let (output, _) = runDebugServerWithInput(etchExe, testProgram, inputCommands, timeoutSecs = 2)
 
     # Parse output to find stackTrace response
     var foundStackTrace = false
@@ -100,7 +88,7 @@ fn main() -> void {
     check foundStackTrace
 
   test "Variables show correct values after stepping":
-    let testProgram = getTempDir() / "test_values.etch"
+    let testProgram = getTestTempDir() / "test_values.etch"
     writeFile(testProgram, """
 fn main() -> void {
     var x: int = 5;
@@ -111,27 +99,21 @@ fn main() -> void {
 """)
     defer: removeFile(testProgram)
 
-    # Commands to step through and check variables
-    let inputFile = getTempDir() / "debug_values_input.txt"
-    writeFile(inputFile, """{"seq":1,"type":"request","command":"initialize","arguments":{}}
-{"seq":2,"type":"request","command":"launch","arguments":{"program":"$1","stopOnEntry":true}}
-{"seq":3,"type":"request","command":"scopes","arguments":{"frameId":0}}
-{"seq":4,"type":"request","command":"variables","arguments":{"variablesReference":1}}
-{"seq":5,"type":"request","command":"next","arguments":{"threadId":1}}
-{"seq":6,"type":"request","command":"scopes","arguments":{"frameId":0}}
-{"seq":7,"type":"request","command":"variables","arguments":{"variablesReference":1}}
-{"seq":8,"type":"request","command":"next","arguments":{"threadId":1}}
-{"seq":9,"type":"request","command":"scopes","arguments":{"frameId":0}}
-{"seq":10,"type":"request","command":"variables","arguments":{"variablesReference":1}}
-{"seq":11,"type":"request","command":"next","arguments":{"threadId":1}}
-{"seq":12,"type":"request","command":"scopes","arguments":{"frameId":0}}
-{"seq":13,"type":"request","command":"variables","arguments":{"variablesReference":1}}
-{"seq":14,"type":"request","command":"disconnect","arguments":{}}""".format(testProgram))
-    defer: removeFile(inputFile)
-
-    let (output, exitCode) = execCmdEx(
-      "timeout 2 ./etch --debug-server " & testProgram & " < " & inputFile & " 2>&1 | grep -v '^DEBUG' | grep -v '^\\[' || true"
-    )
+    let inputCommands = "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n" &
+                        "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{\"program\":\"" & testProgram & "\",\"stopOnEntry\":true}}\n" &
+                        "{\"seq\":3,\"type\":\"request\",\"command\":\"scopes\",\"arguments\":{\"frameId\":0}}\n" &
+                        "{\"seq\":4,\"type\":\"request\",\"command\":\"variables\",\"arguments\":{\"variablesReference\":1}}\n" &
+                        "{\"seq\":5,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":6,\"type\":\"request\",\"command\":\"scopes\",\"arguments\":{\"frameId\":0}}\n" &
+                        "{\"seq\":7,\"type\":\"request\",\"command\":\"variables\",\"arguments\":{\"variablesReference\":1}}\n" &
+                        "{\"seq\":8,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":9,\"type\":\"request\",\"command\":\"scopes\",\"arguments\":{\"frameId\":0}}\n" &
+                        "{\"seq\":10,\"type\":\"request\",\"command\":\"variables\",\"arguments\":{\"variablesReference\":1}}\n" &
+                        "{\"seq\":11,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":12,\"type\":\"request\",\"command\":\"scopes\",\"arguments\":{\"frameId\":0}}\n" &
+                        "{\"seq\":13,\"type\":\"request\",\"command\":\"variables\",\"arguments\":{\"variablesReference\":1}}\n" &
+                        "{\"seq\":14,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}\n"
+    let (output, _) = runDebugServerWithInput(etchExe, testProgram, inputCommands, timeoutSecs = 4)
 
     # Parse variable responses
     var varResponses: seq[JsonNode] = @[]
@@ -139,7 +121,7 @@ fn main() -> void {
       if line.contains("\"command\":\"variables\"") and line.contains("\"type\":\"response\""):
         try:
           varResponses.add(parseJson(line))
-        except:
+        except CatchableError:
           discard
 
     check varResponses.len >= 3  # Should have at least 3 variable responses

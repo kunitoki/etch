@@ -1,7 +1,7 @@
 # test_utils.nim
 # Common utilities for Etch tests
 
-import std/[os, osproc, strutils]
+import std/[os, osproc, strutils, streams, times]
 
 proc getTimeoutCommand*(): string =
   ## Get the appropriate timeout command for the current platform
@@ -125,3 +125,71 @@ proc ensureEtchBinary*(): bool =
     return false
 
   return true
+
+proc runDebugServerWithInput*(etchExe: string, testProg: string, inputCommands: string, timeoutSecs: int = 5): tuple[output: string, exitCode: int] =
+  ## Run the debug server with input commands using proper process piping
+  ## This works reliably across all platforms including Windows
+  var args: seq[string] = @["--debug-server", testProg]
+
+  # Start the process with piped stdin/stdout/stderr
+  let process = startProcess(
+    etchExe,
+    args = args,
+    options = {poUsePath, poStdErrToStdOut}  # Merge stderr into stdout
+  )
+
+  try:
+    # Write input commands to stdin
+    let inputStream = process.inputStream
+    inputStream.write(inputCommands)
+    inputStream.close()
+
+    # Read output with timeout
+    var output = ""
+    let startTime = cpuTime()
+    let outputStream = process.outputStream
+
+    while process.running:
+      if cpuTime() - startTime > float(timeoutSecs):
+        # Timeout reached
+        process.kill()
+        break
+
+      # Try to read available data without blocking indefinitely
+      try:
+        if not outputStream.atEnd:
+          let line = outputStream.readLine()
+          output.add(line & "\n")
+        else:
+          # No data available right now, sleep briefly
+          sleep(10)
+      except IOError:
+        # Stream closed or error reading, break out
+        break
+
+    # Wait for process to finish (with remaining timeout)
+    let remainingTime = max(0, int((float(timeoutSecs) - (cpuTime() - startTime)) * 1000))
+    if remainingTime > 0 and process.running:
+      discard process.waitForExit(timeout = remainingTime)
+
+    # Read any remaining output after process finishes
+    try:
+      while not outputStream.atEnd:
+        let line = outputStream.readLine()
+        output.add(line & "\n")
+    except IOError:
+      discard  # Stream closed, that's ok
+
+    let exitCode = if process.running: -1 else: process.peekExitCode()
+    process.close()
+
+    return (output, exitCode)
+
+  except Exception:
+    try:
+      if process.running:
+        process.kill()
+    except:
+      discard
+    process.close()
+    raise

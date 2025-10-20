@@ -1,30 +1,36 @@
-import std/[json, unittest, strformat, osproc, os, strutils]
+import std/[json, unittest, strformat, os, strutils]
+import test_utils
 
 suite "While Loop Debugging":
+  # Ensure etch binary is built before running tests
+  discard ensureEtchBinary()
+  let etchExe = findEtchExecutable()
+
   test "Stepping alternates between while statement and body":
     # Test that stepping through a while loop shows the while condition
     # on each iteration, not just after the first loop
-    let cmds = getTempDir() / "while_loop_stepping_cmds.txt"
-    writeFile(cmds, """{"seq":1,"type":"request","command":"initialize","arguments":{}}
-{"seq":2,"type":"request","command":"launch","arguments":{}}
-{"seq":3,"type":"request","command":"stackTrace","arguments":{"threadId":1}}
-{"seq":4,"type":"request","command":"next","arguments":{"threadId":1}}
-{"seq":5,"type":"request","command":"stackTrace","arguments":{"threadId":1}}
-{"seq":6,"type":"request","command":"next","arguments":{"threadId":1}}
-{"seq":7,"type":"request","command":"stackTrace","arguments":{"threadId":1}}
-{"seq":8,"type":"request","command":"next","arguments":{"threadId":1}}
-{"seq":9,"type":"request","command":"stackTrace","arguments":{"threadId":1}}
-{"seq":10,"type":"request","command":"next","arguments":{"threadId":1}}
-{"seq":11,"type":"request","command":"stackTrace","arguments":{"threadId":1}}
-{"seq":12,"type":"request","command":"next","arguments":{"threadId":1}}
-{"seq":13,"type":"request","command":"stackTrace","arguments":{"threadId":1}}
-{"seq":14,"type":"request","command":"next","arguments":{"threadId":1}}
-{"seq":15,"type":"request","command":"stackTrace","arguments":{"threadId":1}}
-{"seq":16,"type":"request","command":"disconnect","arguments":{}}""")
-    defer: removeFile(cmds)
+    let testProg = getTestTempDir() / "while_break_test.etch"
+    # Copy the example file to temp directory for testing
+    copyFile("examples/while_break_test.etch", testProg)
+    defer: removeFile(testProg)
 
-    let cmd = "timeout 2 ./etch --debug-server examples/while_break_test.etch < " & cmds & " 2>/dev/null"
-    let (output, _) = execCmdEx(cmd)
+    let inputCommands = "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n" &
+                        "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{}}\n" &
+                        "{\"seq\":3,\"type\":\"request\",\"command\":\"stackTrace\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":4,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":5,\"type\":\"request\",\"command\":\"stackTrace\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":6,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":7,\"type\":\"request\",\"command\":\"stackTrace\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":8,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":9,\"type\":\"request\",\"command\":\"stackTrace\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":10,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":11,\"type\":\"request\",\"command\":\"stackTrace\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":12,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":13,\"type\":\"request\",\"command\":\"stackTrace\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":14,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":15,\"type\":\"request\",\"command\":\"stackTrace\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":16,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}\n"
+    let (output, _) = runDebugServerWithInput(etchExe, testProg, inputCommands, timeoutSecs = 2)
 
     # Helper to extract line number from stack trace response
     proc getLineFromTrace(output: string, seq: int): int =

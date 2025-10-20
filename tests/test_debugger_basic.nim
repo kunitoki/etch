@@ -1,7 +1,7 @@
 # test_debug_basic.nim
 # Basic sanity tests for the register VM debugger
 
-import std/[unittest, osproc, os, strutils]
+import std/[unittest, os, strutils]
 import test_utils
 
 suite "Register VM Debugger - Basic Sanity":
@@ -13,16 +13,8 @@ suite "Register VM Debugger - Basic Sanity":
     writeFile(testProg, "fn main() -> void { var x: int = 1; print(x); }")
     defer: removeFile(testProg)
 
-    # Write command to file for cross-platform compatibility
-    let cmds = getTestTempDir() / "init_cmd.txt"
-    writeFile(cmds, "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}")
-    defer: removeFile(cmds)
-
-    # Use cross-platform stderr redirection
-    let stderrRedir = when defined(windows): "2>NUL" else: "2>&1"
-    let baseCmd = etchExe & " --debug-server " & testProg & " < " & cmds & " " & stderrRedir
-    let cmd = wrapWithTimeout(baseCmd, 1)
-    let (output, _) = execCmdEx(cmd)
+    let inputCommands = "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n"
+    let (output, _) = runDebugServerWithInput(etchExe, testProg, inputCommands, timeoutSecs = 2)
 
     check output.contains("\"success\":true")
     check output.contains("supportsStepInRequest")
@@ -32,16 +24,9 @@ suite "Register VM Debugger - Basic Sanity":
     writeFile(testProg, "fn main() -> void { var x: int = 1; print(x); }")
     defer: removeFile(testProg)
 
-    let cmds = getTestTempDir() / "cmds.txt"
-    writeFile(cmds, "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n" &
-                    "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{\"program\":\"" & testProg & "\",\"stopOnEntry\":true}}")
-    defer: removeFile(cmds)
-
-    # Use cross-platform stderr redirection
-    let stderrRedir = when defined(windows): "2>NUL" else: "2>/dev/null"
-    let baseCmd = etchExe & " --debug-server " & testProg & " < " & cmds & " " & stderrRedir
-    let cmd = wrapWithTimeout(baseCmd, 1)
-    let (output, _) = execCmdEx(cmd)
+    let inputCommands = "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n" &
+                        "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{\"program\":\"" & testProg & "\",\"stopOnEntry\":true}}\n"
+    let (output, _) = runDebugServerWithInput(etchExe, testProg, inputCommands, timeoutSecs = 2)
 
     # Should see both responses
     check output.contains("\"command\":\"initialize\"")
@@ -59,21 +44,14 @@ fn main() -> void {
 """)
     defer: removeFile(testProg)
 
-    let cmds = getTestTempDir() / "cmds.txt"
-    writeFile(cmds, "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n" &
-                    "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{\"program\":\"" & testProg & "\",\"stopOnEntry\":true}}\n" &
-                    "{\"seq\":3,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
-                    "{\"seq\":4,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
-                    "{\"seq\":5,\"type\":\"request\",\"command\":\"scopes\",\"arguments\":{\"frameId\":0}}\n" &
-                    "{\"seq\":6,\"type\":\"request\",\"command\":\"variables\",\"arguments\":{\"variablesReference\":1}}\n" &
-                    "{\"seq\":7,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}")
-    defer: removeFile(cmds)
-
-    # Use cross-platform stderr redirection
-    let stderrRedir = when defined(windows): "2>NUL" else: "2>/dev/null"
-    let baseCmd = etchExe & " --debug-server " & testProg & " < " & cmds & " " & stderrRedir
-    let cmd = wrapWithTimeout(baseCmd, 1)
-    let (output, _) = execCmdEx(cmd)
+    let inputCommands = "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n" &
+                        "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{\"program\":\"" & testProg & "\",\"stopOnEntry\":true}}\n" &
+                        "{\"seq\":3,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":4,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":5,\"type\":\"request\",\"command\":\"scopes\",\"arguments\":{\"frameId\":0}}\n" &
+                        "{\"seq\":6,\"type\":\"request\",\"command\":\"variables\",\"arguments\":{\"variablesReference\":1}}\n" &
+                        "{\"seq\":7,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}\n"
+    let (output, _) = runDebugServerWithInput(etchExe, testProg, inputCommands, timeoutSecs = 3)
 
     # Should see scopes with Local Variables
     check output.contains("Local Variables")
@@ -100,18 +78,11 @@ fn main() -> void {
 """)
     defer: removeFile(testProg)
 
-    let cmds = getTestTempDir() / "cmds.txt"
-    writeFile(cmds, "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n" &
-                    "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{\"program\":\"" & testProg & "\",\"stopOnEntry\":true}}\n" &
-                    "{\"seq\":3,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
-                    "{\"seq\":4,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}")
-    defer: removeFile(cmds)
-
-    # Use cross-platform stderr redirection
-    let stderrRedir = when defined(windows): "2>NUL" else: "2>/dev/null"
-    let baseCmd = etchExe & " --debug-server " & testProg & " < " & cmds & " " & stderrRedir
-    let cmd = wrapWithTimeout(baseCmd, 1)
-    let (output, _) = execCmdEx(cmd)
+    let inputCommands = "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n" &
+                        "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{\"program\":\"" & testProg & "\",\"stopOnEntry\":true}}\n" &
+                        "{\"seq\":3,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
+                        "{\"seq\":4,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}\n"
+    let (output, _) = runDebugServerWithInput(etchExe, testProg, inputCommands, timeoutSecs = 3)
 
     # Should see step response
     check output.contains("\"command\":\"next\"")

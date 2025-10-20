@@ -1,7 +1,8 @@
 # test_debugger_integration.nim
 # Integration tests for the register VM debugger with DAP protocol
 
-import std/[unittest, json, osproc, os, strutils, sequtils, times]
+import std/[unittest, json, os, strutils]
+import test_utils
 
 proc cleanEtchCache(dir: string) =
   ## Clean etch cache files in a directory
@@ -9,16 +10,6 @@ proc cleanEtchCache(dir: string) =
   if dirExists(cacheDir):
     for file in walkFiles(cacheDir / "*.etcx"):
       removeFile(file)
-
-proc runDebugServer(program: string, commands: seq[string], timeout: int = 2): string =
-  ## Run debug server with given commands and return output
-  let cmdFile = getTempDir() / "debug_commands.txt"
-  writeFile(cmdFile, commands.join("\n"))
-  defer: removeFile(cmdFile)
-
-  let cmd = "timeout " & $timeout & " ./etch --debug-server " & program & " < " & cmdFile & " 2>/dev/null || true"
-  let (output, _) = execCmdEx(cmd)
-  return output
 
 proc parseJsonLines(output: string): seq[JsonNode] =
   ## Parse JSON objects from output lines
@@ -45,21 +36,23 @@ proc hasEvent(responses: seq[JsonNode], event: string): bool =
   return false
 
 suite "Register VM Debugger Integration":
+  # Ensure etch binary is built before running tests
+  discard ensureEtchBinary()
+  let etchExe = findEtchExecutable()
+
   setup:
     # Clean any cached bytecode
-    cleanEtchCache(getTempDir())
+    cleanEtchCache(getTestTempDir())
 
   test "Initialize and capabilities":
-    let testProg = getTempDir() / "init_test.etch"
+    let testProg = getTestTempDir() / "init_test.etch"
     writeFile(testProg, "fn main() -> void { var x: int = 1; print(x); }")
     defer: removeFile(testProg)
 
-    let commands = @[
-      """{"seq":1,"type":"request","command":"initialize","arguments":{}}""",
-      """{"seq":2,"type":"request","command":"disconnect","arguments":{}}"""
-    ]
+    let inputCommands = """{"seq":1,"type":"request","command":"initialize","arguments":{}}""" & "\n" &
+                        """{"seq":2,"type":"request","command":"disconnect","arguments":{}}""" & "\n"
 
-    let output = runDebugServer(testProg, commands, 1)
+    let (output, _) = runDebugServerWithInput(etchExe, testProg, inputCommands, timeoutSecs = 1)
     let responses = parseJsonLines(output)
 
     check responses.len > 0
@@ -78,7 +71,7 @@ suite "Register VM Debugger Integration":
     check hasCapabilities
 
   test "Launch and stop on entry":
-    let testProg = getTempDir() / "launch_test.etch"
+    let testProg = getTestTempDir() / "launch_test.etch"
     writeFile(testProg, """
 fn main() -> void {
     var x: int = 42;
@@ -87,13 +80,11 @@ fn main() -> void {
 """)
     defer: removeFile(testProg)
 
-    let commands = @[
-      """{"seq":1,"type":"request","command":"initialize","arguments":{}}""",
-      """{"seq":2,"type":"request","command":"launch","arguments":{"program":"$1","stopOnEntry":true}}""".format(testProg),
-      """{"seq":3,"type":"request","command":"disconnect","arguments":{}}"""
-    ]
+    let inputCommands = """{"seq":1,"type":"request","command":"initialize","arguments":{}}""" & "\n" &
+                        """{"seq":2,"type":"request","command":"launch","arguments":{"program":"$1","stopOnEntry":true}}""".format(testProg) & "\n" &
+                        """{"seq":3,"type":"request","command":"disconnect","arguments":{}}""" & "\n"
 
-    let output = runDebugServer(testProg, commands)
+    let (output, _) = runDebugServerWithInput(etchExe, testProg, inputCommands, timeoutSecs = 2)
     let responses = parseJsonLines(output)
 
     check hasResponse(responses, "launch")
@@ -106,7 +97,7 @@ fn main() -> void {
         break
 
   test "Stack trace shows correct line":
-    let testProg = getTempDir() / "stack_test.etch"
+    let testProg = getTestTempDir() / "stack_test.etch"
     writeFile(testProg, """
 fn main() -> void {
     var a: int = 10;
@@ -116,14 +107,12 @@ fn main() -> void {
 """)
     defer: removeFile(testProg)
 
-    let commands = @[
-      """{"seq":1,"type":"request","command":"initialize","arguments":{}}""",
-      """{"seq":2,"type":"request","command":"launch","arguments":{"program":"$1","stopOnEntry":true}}""".format(testProg),
-      """{"seq":3,"type":"request","command":"stackTrace","arguments":{"threadId":1}}""",
-      """{"seq":4,"type":"request","command":"disconnect","arguments":{}}"""
-    ]
+    let inputCommands = """{"seq":1,"type":"request","command":"initialize","arguments":{}}""" & "\n" &
+                        """{"seq":2,"type":"request","command":"launch","arguments":{"program":"$1","stopOnEntry":true}}""".format(testProg) & "\n" &
+                        """{"seq":3,"type":"request","command":"stackTrace","arguments":{"threadId":1}}""" & "\n" &
+                        """{"seq":4,"type":"request","command":"disconnect","arguments":{}}""" & "\n"
 
-    let output = runDebugServer(testProg, commands)
+    let (output, _) = runDebugServerWithInput(etchExe, testProg, inputCommands, timeoutSecs = 2)
     let responses = parseJsonLines(output)
 
     # Find stackTrace response
@@ -140,7 +129,7 @@ fn main() -> void {
     check foundStackTrace
 
   test "Variables show correct values":
-    let testProg = getTempDir() / "vars_test.etch"
+    let testProg = getTestTempDir() / "vars_test.etch"
     writeFile(testProg, """
 fn main() -> void {
     var x: int = 100;
@@ -152,24 +141,19 @@ fn main() -> void {
     defer: removeFile(testProg)
 
     # Step through and check variable values
-    let commands = @[
-      """{"seq":1,"type":"request","command":"initialize","arguments":{}}""",
-      """{"seq":2,"type":"request","command":"launch","arguments":{"program":"$1","stopOnEntry":true}}""".format(testProg),
-      # Get initial variables (all should be 0)
-      """{"seq":3,"type":"request","command":"scopes","arguments":{"frameId":0}}""",
-      """{"seq":4,"type":"request","command":"variables","arguments":{"variablesReference":1}}""",
-      # Step to line 3 (after x = 100)
-      """{"seq":5,"type":"request","command":"next","arguments":{"threadId":1}}""",
-      """{"seq":6,"type":"request","command":"scopes","arguments":{"frameId":0}}""",
-      """{"seq":7,"type":"request","command":"variables","arguments":{"variablesReference":1}}""",
-      # Step to line 4 (after y = 200)
-      """{"seq":8,"type":"request","command":"next","arguments":{"threadId":1}}""",
-      """{"seq":9,"type":"request","command":"scopes","arguments":{"frameId":0}}""",
-      """{"seq":10,"type":"request","command":"variables","arguments":{"variablesReference":1}}""",
-      """{"seq":11,"type":"request","command":"disconnect","arguments":{}}"""
-    ]
+    let inputCommands = """{"seq":1,"type":"request","command":"initialize","arguments":{}}""" & "\n" &
+                        """{"seq":2,"type":"request","command":"launch","arguments":{"program":"$1","stopOnEntry":true}}""".format(testProg) & "\n" &
+                        """{"seq":3,"type":"request","command":"scopes","arguments":{"frameId":0}}""" & "\n" &
+                        """{"seq":4,"type":"request","command":"variables","arguments":{"variablesReference":1}}""" & "\n" &
+                        """{"seq":5,"type":"request","command":"next","arguments":{"threadId":1}}""" & "\n" &
+                        """{"seq":6,"type":"request","command":"scopes","arguments":{"frameId":0}}""" & "\n" &
+                        """{"seq":7,"type":"request","command":"variables","arguments":{"variablesReference":1}}""" & "\n" &
+                        """{"seq":8,"type":"request","command":"next","arguments":{"threadId":1}}""" & "\n" &
+                        """{"seq":9,"type":"request","command":"scopes","arguments":{"frameId":0}}""" & "\n" &
+                        """{"seq":10,"type":"request","command":"variables","arguments":{"variablesReference":1}}""" & "\n" &
+                        """{"seq":11,"type":"request","command":"disconnect","arguments":{}}""" & "\n"
 
-    let output = runDebugServer(testProg, commands, 3)
+    let (output, _) = runDebugServerWithInput(etchExe, testProg, inputCommands, timeoutSecs = 3)
     let responses = parseJsonLines(output)
 
     # Collect all variable responses
@@ -191,7 +175,7 @@ fn main() -> void {
       check foundX
 
   test "Stepping works correctly":
-    let testProg = getTempDir() / "step_test.etch"
+    let testProg = getTestTempDir() / "step_test.etch"
     writeFile(testProg, """
 fn main() -> void {
     var a: int = 1;
@@ -202,16 +186,14 @@ fn main() -> void {
 """)
     defer: removeFile(testProg)
 
-    let commands = @[
-      """{"seq":1,"type":"request","command":"initialize","arguments":{}}""",
-      """{"seq":2,"type":"request","command":"launch","arguments":{"program":"$1","stopOnEntry":true}}""".format(testProg),
-      """{"seq":3,"type":"request","command":"next","arguments":{"threadId":1}}""",
-      """{"seq":4,"type":"request","command":"next","arguments":{"threadId":1}}""",
-      """{"seq":5,"type":"request","command":"next","arguments":{"threadId":1}}""",
-      """{"seq":6,"type":"request","command":"disconnect","arguments":{}}"""
-    ]
+    let inputCommands = """{"seq":1,"type":"request","command":"initialize","arguments":{}}""" & "\n" &
+                        """{"seq":2,"type":"request","command":"launch","arguments":{"program":"$1","stopOnEntry":true}}""".format(testProg) & "\n" &
+                        """{"seq":3,"type":"request","command":"next","arguments":{"threadId":1}}""" & "\n" &
+                        """{"seq":4,"type":"request","command":"next","arguments":{"threadId":1}}""" & "\n" &
+                        """{"seq":5,"type":"request","command":"next","arguments":{"threadId":1}}""" & "\n" &
+                        """{"seq":6,"type":"request","command":"disconnect","arguments":{}}""" & "\n"
 
-    let output = runDebugServer(testProg, commands)
+    let (output, _) = runDebugServerWithInput(etchExe, testProg, inputCommands, timeoutSecs = 2)
     let responses = parseJsonLines(output)
 
     # Count stopped events (should be at least 4: entry + 3 steps)
@@ -223,7 +205,7 @@ fn main() -> void {
     check stoppedCount >= 4
 
   test "Continue runs to completion":
-    let testProg = getTempDir() / "continue_test.etch"
+    let testProg = getTestTempDir() / "continue_test.etch"
     writeFile(testProg, """
 fn main() -> void {
     var x: int = 10;
@@ -232,32 +214,28 @@ fn main() -> void {
 """)
     defer: removeFile(testProg)
 
-    let commands = @[
-      """{"seq":1,"type":"request","command":"initialize","arguments":{}}""",
-      """{"seq":2,"type":"request","command":"launch","arguments":{"program":"$1","stopOnEntry":true}}""".format(testProg),
-      """{"seq":3,"type":"request","command":"continue","arguments":{"threadId":1}}""",
-      """{"seq":4,"type":"request","command":"disconnect","arguments":{}}"""
-    ]
+    let inputCommands = """{"seq":1,"type":"request","command":"initialize","arguments":{}}""" & "\n" &
+                        """{"seq":2,"type":"request","command":"launch","arguments":{"program":"$1","stopOnEntry":true}}""".format(testProg) & "\n" &
+                        """{"seq":3,"type":"request","command":"continue","arguments":{"threadId":1}}""" & "\n" &
+                        """{"seq":4,"type":"request","command":"disconnect","arguments":{}}""" & "\n"
 
-    let output = runDebugServer(testProg, commands)
+    let (output, _) = runDebugServerWithInput(etchExe, testProg, inputCommands, timeoutSecs = 2)
     let responses = parseJsonLines(output)
 
     check hasResponse(responses, "continue")
     check hasEvent(responses, "terminated")
 
   test "Threads request returns main thread":
-    let testProg = getTempDir() / "threads_test.etch"
+    let testProg = getTestTempDir() / "threads_test.etch"
     writeFile(testProg, "fn main() -> void { print(1); }")
     defer: removeFile(testProg)
 
-    let commands = @[
-      """{"seq":1,"type":"request","command":"initialize","arguments":{}}""",
-      """{"seq":2,"type":"request","command":"launch","arguments":{"program":"$1","stopOnEntry":true}}""".format(testProg),
-      """{"seq":3,"type":"request","command":"threads","arguments":{}}""",
-      """{"seq":4,"type":"request","command":"disconnect","arguments":{}}"""
-    ]
+    let inputCommands = """{"seq":1,"type":"request","command":"initialize","arguments":{}}""" & "\n" &
+                        """{"seq":2,"type":"request","command":"launch","arguments":{"program":"$1","stopOnEntry":true}}""".format(testProg) & "\n" &
+                        """{"seq":3,"type":"request","command":"threads","arguments":{}}""" & "\n" &
+                        """{"seq":4,"type":"request","command":"disconnect","arguments":{}}""" & "\n"
 
-    let output = runDebugServer(testProg, commands)
+    let (output, _) = runDebugServerWithInput(etchExe, testProg, inputCommands, timeoutSecs = 2)
     let responses = parseJsonLines(output)
 
     # Find threads response

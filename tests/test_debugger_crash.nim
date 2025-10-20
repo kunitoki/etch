@@ -1,5 +1,6 @@
 import unittest
-import std/[osproc, json, strutils, os, sequtils]
+import std/[json, strutils, os]
+import test_utils
 
 proc parseJsonLines(output: string): seq[JsonNode] =
   ## Parse JSON objects from output lines, ignoring non-JSON lines
@@ -11,20 +12,13 @@ proc parseJsonLines(output: string): seq[JsonNode] =
       except:
         discard
 
-proc runDebugCommands(program: string, commands: seq[JsonNode]): string =
-  ## Run debug server with given commands and return output
-  let cmdFile = getTempDir() / "debug_crash_test.txt"
-  writeFile(cmdFile, commands.mapIt($it).join("\n"))
-  defer: removeFile(cmdFile)
-
-  let cmd = "timeout 2 ./etch --debug-server " & program & " < " & cmdFile & " 2>&1 || true"
-  let (output, _) = execCmdEx(cmd)
-  return output
-
 suite "Debugger Crash Tests":
+  # Ensure etch binary is built before running tests
+  discard ensureEtchBinary()
+  let etchExe = findEtchExecutable()
   test "Variables request should not crash":
     # Create a simple test program
-    let testProgram = getTempDir() / "test_crash.etch"
+    let testProgram = getTestTempDir() / "test_crash.etch"
     writeFile(testProgram, """
 fn main() {
     let a: int = 10;
@@ -39,48 +33,14 @@ fn main() {
     defer: removeFile(testProgram)
 
     # Create debug commands that previously caused a crash
-    let commands = @[
-      %*{
-        "seq": 1,
-        "type": "request",
-        "command": "initialize",
-        "arguments": {}
-      },
-      %*{
-        "seq": 2,
-        "type": "request",
-        "command": "launch",
-        "arguments": {
-          "program": testProgram,
-          "stopOnEntry": true
-        }
-      },
-      %*{
-        "seq": 3,
-        "type": "request",
-        "command": "scopes",
-        "arguments": {
-          "frameId": 0
-        }
-      },
-      %*{
-        "seq": 4,
-        "type": "request",
-        "command": "variables",
-        "arguments": {
-          "variablesReference": 1  # Local variables
-        }
-      },
-      %*{
-        "seq": 5,
-        "type": "request",
-        "command": "disconnect",
-        "arguments": {}
-      }
-    ]
+    let inputCommands = "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n" &
+                        "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{\"program\":\"" & testProgram & "\",\"stopOnEntry\":true}}\n" &
+                        "{\"seq\":3,\"type\":\"request\",\"command\":\"scopes\",\"arguments\":{\"frameId\":0}}\n" &
+                        "{\"seq\":4,\"type\":\"request\",\"command\":\"variables\",\"arguments\":{\"variablesReference\":1}}\n" &
+                        "{\"seq\":5,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}\n"
 
     # Run the commands - this should not crash
-    let output = runDebugCommands(testProgram, commands)
+    let (output, _) = runDebugServerWithInput(etchExe, testProgram, inputCommands, timeoutSecs = 3)
 
     # Check that we didn't get a segfault
     check not output.contains("SIGSEGV")
@@ -106,7 +66,7 @@ fn main() {
 
   test "Variables with lifetime data":
     # Test that lifetime data is properly handled
-    let testProgram = getTempDir() / "test_lifetime.etch"
+    let testProgram = getTestTempDir() / "test_lifetime.etch"
     writeFile(testProgram, """
 fn main() {
     let x: int = 10;
@@ -116,39 +76,12 @@ fn main() {
 """)
     defer: removeFile(testProgram)
 
-    let commands = @[
-      %*{
-        "seq": 1,
-        "type": "request",
-        "command": "initialize",
-        "arguments": {}
-      },
-      %*{
-        "seq": 2,
-        "type": "request",
-        "command": "launch",
-        "arguments": {
-          "program": testProgram,
-          "stopOnEntry": true
-        }
-      },
-      %*{
-        "seq": 3,
-        "type": "request",
-        "command": "variables",
-        "arguments": {
-          "variablesReference": 1
-        }
-      },
-      %*{
-        "seq": 4,
-        "type": "request",
-        "command": "disconnect",
-        "arguments": {}
-      }
-    ]
+    let inputCommands = "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n" &
+                        "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{\"program\":\"" & testProgram & "\",\"stopOnEntry\":true}}\n" &
+                        "{\"seq\":3,\"type\":\"request\",\"command\":\"variables\",\"arguments\":{\"variablesReference\":1}}\n" &
+                        "{\"seq\":4,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}\n"
 
-    let output = runDebugCommands(testProgram, commands)
+    let (output, _) = runDebugServerWithInput(etchExe, testProgram, inputCommands, timeoutSecs = 3)
 
     # Check that we didn't crash
     check not output.contains("SIGSEGV")
