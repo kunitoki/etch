@@ -6,17 +6,17 @@ import constants
 
 
 # Verbose logging function
-proc verboseLog*(verbose: bool, module: string, msg: string) =
+template verboseLog*(verbose: bool, module: string, msg: untyped) =
   if verbose:
-    echo "[", module, "] ", msg
+    echo "[", module, "] ", $msg
 
 
 # Convenience templates for each module
-template logCompiler*(flags: CompilerFlags, msg: string) =
+template logCompiler*(flags: CompilerFlags, msg: untyped) =
   verboseLog(flags.verbose, MODULE_COMPILER, msg)
 
-template logProver*(flags: CompilerFlags, msg: string) =
+template logProver*(flags: CompilerFlags, msg: untyped) =
   verboseLog(flags.verbose, MODULE_PROVER, msg)
 
-template logVM*(flags: CompilerFlags, msg: string) =
+template logVM*(flags: CompilerFlags, msg: untyped) =
   verboseLog(flags.verbose, MODULE_VM, msg)

@@ -1,10 +1,10 @@
 # etch_cli.nim
 # CLI for Etch: parse, typecheck, monomorphize on call, prove safety, run VM or emit C
 
-import std/[os, strutils, osproc, tables]
+import std/[os, strutils, osproc, tables, times]
 import ./etch/[compiler, tester]
 import ./etch/common/[types]
-import ./etch/interpreter/[regvm_dump, regvm_debugserver]
+import ./etch/interpreter/[regvm, regvm_dump, regvm_debugserver]
 import ./etch/backend/c/[generator]
 
 
@@ -25,6 +25,91 @@ proc usage() =
   echo "  --test-c         Run tests in directory (default: tests/) with C backend"
   echo "                   Tests need .pass (expected output) or .fail (expected failure)"
   quit 1
+
+
+proc validateFile(path: string) =
+  if not fileExists(path):
+    echo "Error: cannot open: ", path
+    quit 1
+
+
+proc makeCompilerOptions(sourceFile: string, runVM: bool, verbose: bool, debug: bool): CompilerOptions =
+  CompilerOptions(
+    sourceFile: sourceFile,
+    runVM: runVM,
+    verbose: verbose,
+    debug: debug,
+    release: not debug
+  )
+
+
+proc compileToRegBytecode(options: CompilerOptions): RegBytecodeProgram =
+  try:
+    let (prog, sourceHash, evaluatedGlobals) = parseAndTypecheck(options)
+    let flags = CompilerFlags(verbose: options.verbose, debug: options.debug)
+    return compileProgramWithGlobals(prog, sourceHash, evaluatedGlobals, options.sourceFile, flags)
+  except OverflowDefect as e:
+    echo "Error: Internal compiler error: ", e.msg
+    quit 1
+  except Exception as e:
+    echo "Error: ", e.msg
+    quit 1
+
+
+proc generateCCodeToFile(bytecode: RegBytecodeProgram, sourceFile: string): string =
+  let cCode = generateCCode(bytecode)
+  let (dir, name, _) = splitFile(sourceFile)
+  let outputFile = joinPath(dir, name & ".c")
+  writeFile(outputFile, cCode)
+  return outputFile
+
+
+proc compileAndRunCBackend(bytecode: RegBytecodeProgram, sourceFile: string, verbose: bool, debug: bool): int =
+  let (dir, name, _) = splitFile(sourceFile)
+  let etchDir = joinPath(dir, "__etch__")
+  createDir(etchDir)
+  let cFile = joinPath(etchDir, name & ".c")
+  let exeFile = joinPath(etchDir, name & "_c")
+
+  let cCode = generateCCode(bytecode)
+  writeFile(cFile, cCode)
+
+  if verbose:
+    echo "Generated C code: ", cFile
+
+  var linkerFlags = " -lm"
+  var libPaths = ""
+  for funcName, cffiInfo in bytecode.cffiInfo:
+    let libName = cffiInfo.library
+    if libName != "cmath" and libName != "math":
+      let libDir = joinPath(dir, "clib")
+      if not libPaths.contains(libDir):
+        libPaths &= " -L" & libDir
+      let linkName = if libName.startsWith("lib"): libName[3..^1] else: libName
+      if not linkerFlags.contains("-l" & linkName):
+        linkerFlags &= " -l" & linkName
+
+  let optFlags = if not debug: " -O3" else: ""
+  when defined(macosx) or defined(macos):
+    let compileCmd = "xcrun clang" & optFlags & " -o " & exeFile & " " & cFile & libPaths & linkerFlags & " 2>&1"
+  else:
+    let compileCmd = "clang" & optFlags & " -o " & exeFile & " " & cFile & libPaths & linkerFlags & " 2>&1"
+
+  if verbose:
+    echo "Compiling: ", compileCmd
+
+  let (compileOutput, compileExitCode) = execCmdEx(compileCmd)
+  if compileExitCode != 0:
+    echo "C compilation failed:"
+    echo compileOutput
+    quit 1
+
+  if verbose:
+    echo "Running: ", exeFile
+
+  let (runOutput, runExitCode) = execCmdEx(exeFile)
+  echo runOutput
+  return runExitCode
 
 
 when isMainModule:
@@ -100,24 +185,14 @@ when isMainModule:
       echo "Error: --debug-server requires a file argument"
       quit 1
 
-    let sourceFile = modeArg
-
-    if not fileExists(sourceFile):
-      echo "Error: cannot open: ", sourceFile
-      quit 1
-
-    let options = CompilerOptions(
-      sourceFile: sourceFile,
-      runVM: false,
-      verbose: verbose,
-      debug: true
-    )
+    validateFile(modeArg)
+    let options = makeCompilerOptions(modeArg, runVM = false, verbose, debug = true)
 
     try:
       let (prog, sourceHash, evaluatedGlobals) = parseAndTypecheck(options)
       let flags = CompilerFlags(verbose: verbose, debug: true)
-      let regBytecode = compileProgramWithGlobals(prog, sourceHash, evaluatedGlobals, sourceFile, flags)
-      runRegDebugServer(regBytecode, sourceFile)
+      let regBytecode = compileProgramWithGlobals(prog, sourceHash, evaluatedGlobals, modeArg, flags)
+      runRegDebugServer(regBytecode, modeArg)
     except Exception as e:
       sendCompilationError(e.msg)
       quit 1
@@ -128,31 +203,11 @@ when isMainModule:
     if modeArg == "":
       echo "Error: --dump-bytecode requires a file argument"
       quit 1
-    let sourceFile = modeArg
 
-    if not fileExists(sourceFile):
-      echo "Error: cannot open: ", sourceFile
-      quit 1
-
-    let options = CompilerOptions(
-      sourceFile: sourceFile,
-      runVM: false,
-      verbose: verbose,
-      debug: debug
-    )
-
-    try:
-      let (prog, sourceHash, evaluatedGlobals) = parseAndTypecheck(options)
-      let flags = CompilerFlags(verbose: verbose, debug: debug)
-      let bytecodeProgram = compileProgramWithGlobals(prog, sourceHash, evaluatedGlobals, sourceFile, flags)
-      dumpBytecodeProgram(bytecodeProgram, sourceFile)
-    except OverflowDefect as e:
-      echo "Error: Internal compiler error: ", e.msg
-      quit 1
-    except Exception as e:
-      echo "Error: ", e.msg
-      quit 1
-
+    validateFile(modeArg)
+    let options = makeCompilerOptions(modeArg, runVM = false, verbose, debug)
+    let bytecodeProgram = compileToRegBytecode(options)
+    dumpBytecodeProgram(bytecodeProgram, modeArg)
     quit 0
 
   if files.len != 1: usage()
@@ -161,131 +216,50 @@ when isMainModule:
 
   # Handle code generation mode
   if backend != "":
-    if not fileExists(sourceFile):
-      echo "Error: cannot open: ", sourceFile
-      quit 1
+    validateFile(sourceFile)
+    let options = makeCompilerOptions(sourceFile, runVM = false, verbose, debug)
+    let bytecodeProgram = compileToRegBytecode(options)
 
-    let options = CompilerOptions(
-      sourceFile: sourceFile,
-      runVM: false,
-      verbose: verbose,
-      debug: debug,
-      release: not debug
-    )
-
-    try:
-      let (prog, sourceHash, evaluatedGlobals) = parseAndTypecheck(options)
-      let flags = CompilerFlags(verbose: verbose, debug: debug)
-      let bytecodeProgram = compileProgramWithGlobals(prog, sourceHash, evaluatedGlobals, sourceFile, flags)
-
-      case backend
-      of "c":
-        let cCode = generateCCode(bytecodeProgram)
-        let (dir, name, _) = splitFile(sourceFile)
-        let outputFile = joinPath(dir, name & ".c")
-        writeFile(outputFile, cCode)
-        echo "Generated C code: ", outputFile
-      else:
-        echo "Error: Unknown backend '", backend, "'. Available backends: c"
-        quit 1
-    except OverflowDefect as e:
-      echo "Internal compiler error: ", e.msg
-      quit 1
-    except Exception as e:
-      echo e.msg
+    case backend
+    of "c":
+      let outputFile = generateCCodeToFile(bytecodeProgram, sourceFile)
+      echo "Generated C code: ", outputFile
+    else:
+      echo "Error: Unknown backend '", backend, "'. Available backends: c"
       quit 1
 
     quit 0
 
   # Handle run with C backend
   if runVm and runBackend == "c":
-    if not fileExists(sourceFile):
-      echo "Error: cannot open: ", sourceFile
-      quit 1
+    validateFile(sourceFile)
 
-    let options = CompilerOptions(
-      sourceFile: sourceFile,
-      runVM: false,
-      verbose: verbose,
-      debug: debug,
-      release: not debug
-    )
+    # Check if we can use cached executable
+    let (dir, name, _) = splitFile(sourceFile)
+    let etchDir = joinPath(dir, "__etch__")
+    let exeFile = joinPath(etchDir, name & "_c")
 
-    try:
-      # Compile to bytecode first
-      let (prog, sourceHash, evaluatedGlobals) = parseAndTypecheck(options)
-      let flags = CompilerFlags(verbose: verbose, debug: debug)
-      let bytecodeProgram = compileProgramWithGlobals(prog, sourceHash, evaluatedGlobals, sourceFile, flags)
+    var needsRecompile = true
+    if fileExists(exeFile):
+      let sourceTime = getLastModificationTime(sourceFile)
+      let exeTime = getLastModificationTime(exeFile)
+      if not (sourceTime > exeTime):
+        needsRecompile = false
+        if verbose:
+          echo "Using cached C executable: ", exeFile
 
-      # Generate C code
-      let cCode = generateCCode(bytecodeProgram)
-      let (dir, name, _) = splitFile(sourceFile)
-      let etchDir = joinPath(dir, "__etch__")
-      createDir(etchDir)
-      let cFile = joinPath(etchDir, name & ".c")
-      let exeFile = joinPath(etchDir, name & "_c")
+        let (runOutput, runExitCode) = execCmdEx(exeFile)
+        echo runOutput
+        quit runExitCode
 
-      writeFile(cFile, cCode)
-
-      if verbose:
-        echo "Generated C code: ", cFile
-
-      # Collect CFFI libraries for linking
-      var linkerFlags = " -lm"
-      var libPaths = ""
-      for funcName, cffiInfo in bytecodeProgram.cffiInfo:
-        let libName = cffiInfo.library
-        # Skip standard math library (already handled with -lm)
-        if libName != "cmath" and libName != "math":
-          # Add library path relative to source file directory
-          let libDir = joinPath(dir, "clib")
-          if not libPaths.contains(libDir):
-            libPaths &= " -L" & libDir
-          # Add library link flag (remove 'lib' prefix if present)
-          let linkName = if libName.startsWith("lib"): libName[3..^1] else: libName
-          if not linkerFlags.contains("-l" & linkName):
-            linkerFlags &= " -l" & linkName
-
-      # Compile C code (use xcrun on macOS to find proper SDK)
-      let optFlags = if not debug: " -O3" else: ""
-      when defined(macosx) or defined(macos):
-        let compileCmd = "xcrun clang" & optFlags & " -o " & exeFile & " " & cFile & libPaths & linkerFlags & " 2>&1"
-      else:
-        let compileCmd = "clang" & optFlags & " -o " & exeFile & " " & cFile & libPaths & linkerFlags & " 2>&1"
-
-      if verbose:
-        echo "Compiling: ", compileCmd
-
-      let (compileOutput, compileExitCode) = execCmdEx(compileCmd)
-      if compileExitCode != 0:
-        echo "C compilation failed:"
-        echo compileOutput
-        quit 1
-
-      # Run the compiled executable
-      if verbose:
-        echo "Running: ", exeFile
-
-      let (runOutput, runExitCode) = execCmdEx(exeFile)
-      echo runOutput
-      quit runExitCode
-
-    except OverflowDefect as e:
-      echo "Internal compiler error: ", e.msg
-      quit 1
-    except Exception as e:
-      echo e.msg
-      quit 1
+    # Need to compile
+    let options = makeCompilerOptions(sourceFile, runVM = false, verbose, debug)
+    let bytecodeProgram = compileToRegBytecode(options)
+    let exitCode = compileAndRunCBackend(bytecodeProgram, sourceFile, verbose, debug)
+    quit exitCode
 
   # Normal VM execution or compilation without running
-  let options = CompilerOptions(
-    sourceFile: sourceFile,
-    runVM: runVm,
-    verbose: verbose,
-    debug: debug,
-    release: not debug
-  )
-
+  let options = makeCompilerOptions(sourceFile, runVm, verbose, debug)
   let compilerResult = tryRunCachedOrCompile(options)
 
   if not compilerResult.success:
