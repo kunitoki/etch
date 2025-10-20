@@ -25,10 +25,10 @@ proc etch_rand(vm: RegisterVM): uint64 {.inline.} =
   result = x * 0x2545F4914F6CDD1D'u64  # Multiplication constant for better distribution
 
 # Logging helper for VM execution
-template log(verbose: bool, msg: string) =
+template log(verbose: bool, msg: untyped) =
   if verbose:
     let flags = CompilerFlags(verbose: true, debug: false)
-    logVM(flags, msg)
+    logVM(flags, $msg)
 
 # Create new VM instance
 proc newRegisterVM*(prog: RegBytecodeProgram): RegisterVM =
@@ -78,7 +78,7 @@ proc formatRegisterValue*(v: V): string =
   of vkInt:
     result = $v.ival
   of vkFloat:
-    result = $v.fval
+    result = formatFloat(v.fval, ffDefault, -1)
   of vkBool:
     result = $v.bval
   of vkNil:
@@ -126,7 +126,14 @@ proc formatValueForPrint*(v: V): string =
   of vkInt:
     result = $v.ival
   of vkFloat:
-    result = $v.fval
+    # Always print floats with decimal point (X.Y format)
+    if v.fval == float64(int64(v.fval)):
+      result = formatFloat(v.fval, ffDecimal, 1)  # X.0 format for whole numbers
+    else:
+      result = formatFloat(v.fval, ffDefault, -1)  # %g format
+      # Ensure decimal point is present
+      if '.' notin result and 'e' notin result and 'E' notin result:
+        result.add(".0")
   of vkChar:
     result = $v.cval
   of vkBool:
@@ -144,7 +151,14 @@ proc formatValueForPrint*(v: V): string =
       if elem.isInt():
         res.add($elem.ival)
       elif elem.isFloat():
-        res.add($elem.fval)
+        if elem.fval == float64(int64(elem.fval)):
+          res.add(formatFloat(elem.fval, ffDecimal, 1))
+        else:
+          let fstr = formatFloat(elem.fval, ffDefault, -1)
+          if '.' notin fstr and 'e' notin fstr and 'E' notin fstr:
+            res.add(fstr & ".0")
+          else:
+            res.add(fstr)
       elif elem.isChar():
         res.add("'")
         res.add($elem.cval)
@@ -704,11 +718,11 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
     # --- Type conversions ---
     of ropCast:
       let val = getReg(vm, instr.b)
-      let castType = instr.c
+      let castType = VKind(instr.c)  # Cast to VKind enum
       var res: V
 
       case castType:
-      of 1:  # To int
+      of vkInt:  # To int
         if isInt(val):
           res = val
         elif isFloat(val):
@@ -722,7 +736,7 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
         else:
           res = makeNil()
 
-      of 2:  # To float
+      of vkFloat:  # To float
         if isFloat(val):
           res = val
         elif isInt(val):
@@ -736,11 +750,19 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
         else:
           res = makeNil()
 
-      of 3:  # To string
+      of vkString:  # To string
         if isInt(val):
           res = makeString($getInt(val))
         elif isFloat(val):
-          res = makeString($getFloat(val))
+          let fv = getFloat(val)
+          if fv == float64(int64(fv)):
+            res = makeString(formatFloat(fv, ffDecimal, 1))
+          else:
+            let fstr = formatFloat(fv, ffDefault, -1)
+            if '.' notin fstr and 'e' notin fstr and 'E' notin fstr:
+              res = makeString(fstr & ".0")
+            else:
+              res = makeString(fstr)
         elif isString(val):
           res = val
         elif isBool(val):

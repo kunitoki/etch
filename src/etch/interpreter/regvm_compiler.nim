@@ -189,11 +189,13 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
     let exprReg = c.compileExpr(e.castExpr)
     result = c.allocator.allocReg()
 
-    # Determine cast type code
+    # Determine cast type code - map TypeKind to VKind ordinals
     let castTypeCode = case e.castType.kind:
-      of tkInt: 1
-      of tkFloat: 2
-      of tkString: 3
+      of tkInt: ord(vkInt)       # 0
+      of tkFloat: ord(vkFloat)   # 1
+      of tkBool: ord(vkBool)     # 2
+      of tkChar: ord(vkChar)     # 3
+      of tkString: ord(vkString) # 5
       else: 0
 
     # Emit cast instruction (using ropCast - we'll need to implement this)

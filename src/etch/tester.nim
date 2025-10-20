@@ -112,7 +112,7 @@ proc smartFilterOutput(execResult: ExecutionResult): string =
 
   normalizeOutput(lines.join("\n"))
 
-proc runSingleTest*(testFile: string, verbose: bool = false, release: bool = false): TestResult =
+proc runSingleTest*(testFile: string, verbose: bool = false, release: bool = false, backend: string = ""): TestResult =
   ## Run a single test file and compare output with expected result
   let baseName = testFile.splitFile.name
   let testDir = testFile.splitFile.dir
@@ -146,6 +146,8 @@ proc runSingleTest*(testFile: string, verbose: bool = false, release: bool = fal
   # Execute the test
   let etchExe = getAppFilename()
   var flags = "--run"
+  if backend != "":
+    flags &= " " & backend
   if verbose: flags &= " --verbose"
   # Register VM is now the default
   if release: flags &= " --release"
@@ -211,16 +213,16 @@ proc findTestFiles*(directory: string): seq[string] =
 
   result.sort()
 
-proc runTests*(path: string = "examples", verbose: bool = false, release: bool = false): int =
+proc runTests*(path: string = "examples", verbose: bool = false, release: bool = false, backend: string = ""): int =
   ## Run tests - if path is a file, run single test; if directory, run all tests
 
   # Check if path is a file or directory
   if fileExists(path):
     # Single file test
     echo fmt"Running single test: {path}"
-    if verbose: echo fmt"  verbose: {verbose}, release: {release}"
+    if verbose: echo fmt"  verbose: {verbose}, release: {release}, backend: {backend}"
 
-    let res = runSingleTest(path, verbose, release)
+    let res = runSingleTest(path, verbose, release, backend)
 
     if res.passed:
       echo "✓ PASSED"
@@ -239,7 +241,8 @@ proc runTests*(path: string = "examples", verbose: bool = false, release: bool =
 
   elif dirExists(path):
     # Directory test (existing behavior)
-    echo fmt"Running tests in directory: {path}"
+    let backendMsg = if backend != "": fmt" with {backend} backend" else: ""
+    echo fmt"Running tests in directory: {path}{backendMsg}"
 
     let testFiles = findTestFiles(path)
     if testFiles.len == 0:
@@ -255,7 +258,7 @@ proc runTests*(path: string = "examples", verbose: bool = false, release: bool =
 
     for testFile in testFiles:
       echo fmt"Running {testFile.splitFile.name}... "
-      let res = runSingleTest(testFile, verbose, release)
+      let res = runSingleTest(testFile, verbose, release, backend)
       results.add(res)
 
       if res.passed:

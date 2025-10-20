@@ -18,6 +18,17 @@ test file:
     @just libs
     nim r src/etch.nim --test {{file}}
 
+# Test compiling and running all examples + debugger tests (c)
+tests-c:
+    @just libs
+    nim r src/etch.nim --test-c examples/
+    #nimble test
+
+# Test compiling and running a specific example file (c)
+test-c file:
+    @just libs
+    nim r src/etch.nim --test-c {{file}}
+
 # Run a specific example file
 go file:
     @just libs

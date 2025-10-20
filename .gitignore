@@ -13,5 +13,7 @@ __etch__/
 *.etca
 *.vsix
 etch.out
-/examples/*_c
-/examples/*.c
+/examples/*
+!/examples/*.etch
+!/examples/*.pass
+!/examples/*.fail
