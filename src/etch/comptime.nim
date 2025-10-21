@@ -1,10 +1,11 @@
 # comptime.nim
 # Compile-time evaluation and injection helpers for Etch
 
-import std/[tables, options]
+import std/[tables, options, strutils]
 import common/[types]
 import prover/[function_evaluation, types]
 import frontend/ast
+import interpreter/[regvm, regvm_compiler, regvm_exec]
 
 
 proc hasImpureExpr(e: Expr): bool
@@ -209,6 +210,44 @@ proc foldStmt(prog: Program, s: var Stmt) =
     for i in 0..<s.cbody.len:
       foldStmt(prog, s.cbody[i])
 
+    # Execute the comptime block using the VM
+    try:
+      # Create a temporary function containing the comptime block
+      # Name it "main" so the VM will execute it as the entry point
+      let comptimeFunc = FunDecl(
+        name: "main",
+        typarams: @[],
+        params: @[],
+        ret: tVoid(),
+        body: s.cbody,
+        isExported: false,
+        isCFFI: false
+      )
+
+      # Create a temporary program with just this function
+      var tempProg = Program(
+        funs: initTable[string, seq[FunDecl]](),
+        funInstances: initTable[string, FunDecl](),
+        globals: @[],
+        types: prog.types
+      )
+      tempProg.funInstances["main"] = comptimeFunc
+
+      # Make all function instances available for comptime execution
+      for name, instances in prog.funInstances:
+        if name != "main":
+          tempProg.funInstances[name] = instances
+
+      # Compile to bytecode
+      let bytecode = compileProgram(tempProg, optimizeLevel = 0, verbose = false, debug = false)
+
+      # Execute the comptime block
+      discard runRegProgram(bytecode, false)
+    except Exception as e:
+      echo "Warning: Failed to execute comptime block: ", e.msg
+      echo "Exception: ", e.getStackTrace()
+
+    # Now extract injected variables
     var injectedVars: seq[Stmt] = @[]
     var comptimeScope: Table[string, Expr] = initTable[string, Expr]()
 
