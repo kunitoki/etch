@@ -265,6 +265,14 @@ proc serializeToBinary*(prog: RegBytecodeProgram, sourceHash: string = "",
     stream.write(uint32(info.numParams))
     stream.write(uint32(info.numLocals))
 
+  # Function table (index -> name mapping for direct calls)
+  var funcTableCount = uint32(prog.functionTable.len)
+  stream.write(funcTableCount)
+  for funcName in prog.functionTable:
+    var nameLen = uint32(funcName.len)
+    stream.write(nameLen)
+    stream.write(funcName)
+
   # CFFI info
   var cffiCount = uint32(prog.cffiInfo.len)
   stream.write(cffiCount)
@@ -416,6 +424,13 @@ proc deserializeFromBinary*(data: string): RegBytecodeProgram =
     info.numParams = int(stream.readUint32())
     info.numLocals = int(stream.readUint32())
     result.functions[name] = info
+
+  # Read function table (index -> name mapping for direct calls)
+  let funcTableCount = stream.readUint32()
+  result.functionTable = newSeq[string](funcTableCount)
+  for i in 0..<funcTableCount:
+    let nameLen = stream.readUint32()
+    result.functionTable[i] = stream.readStr(int(nameLen))
 
   # Read CFFI info
   let cffiCount = stream.readUint32()

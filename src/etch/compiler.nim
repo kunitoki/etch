@@ -37,8 +37,8 @@ proc shouldRecompile*(sourceFile, bytecodeFile: string, options: CompilerOptions
   if sourceTime > bytecodeTime:
     return true
 
-  # For now, always recompile - register VM caching will be improved later
-  return true
+  # Bytecode is up to date
+  return false
 
 proc ensureMainInst(prog: Program) =
   ## Ensure main function instance exists if main template is non-generic

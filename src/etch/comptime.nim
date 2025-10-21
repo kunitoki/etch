@@ -229,14 +229,15 @@ proc foldStmt(prog: Program, s: var Stmt) =
         funs: initTable[string, seq[FunDecl]](),
         funInstances: initTable[string, FunDecl](),
         globals: @[],
-        types: prog.types
+        types: initTable[string, EtchType]()  # Don't share types to avoid pollution
       )
       tempProg.funInstances["main"] = comptimeFunc
 
       # Make all function instances available for comptime execution
-      for name, instances in prog.funInstances:
+      # But create copies to avoid modifying the original
+      for name, funcDecl in prog.funInstances:
         if name != "main":
-          tempProg.funInstances[name] = instances
+          tempProg.funInstances[name] = funcDecl
 
       # Compile to bytecode
       let bytecode = compileProgram(tempProg, optimizeLevel = 0, verbose = false, debug = false)
