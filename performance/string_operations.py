@@ -1,7 +1,7 @@
 import random
 
 def main():
-    result = ""
+    res = ""
     count = 0
 
     # String operations benchmark
@@ -10,13 +10,13 @@ def main():
         str_num = str(num)
 
         # String concatenation
-        result = result + str_num + ","
+        res = res + str_num + ","
 
         # String length operations
-        count = count + len(result)
+        count = count + len(res)
 
     print(count)
-    print(result)
-    print(len(result))
+    print(res)
+    print(len(res))
 
 main()

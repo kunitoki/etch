@@ -1438,7 +1438,59 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
   of ropTailCall, ropTestSet:
     gen.emit(&"// TODO: Implement {instr.op}")
 
-  of ropAddAdd, ropMulAdd, ropCmpJmp, ropIncTest, ropLoadAddStore, ropGetAddSet:
+  of ropAddAdd:
+    # R[A] = R[B] + R[C] + R[D]
+    let bReg = uint8(instr.ax and 0xFF)
+    let cReg = uint8((instr.ax shr 8) and 0xFF)
+    let dReg = uint8((instr.ax shr 16) and 0xFF)
+    gen.emit(&"// AddAdd: R[{a}] = R[{bReg}] + R[{cReg}] + R[{dReg}]")
+    # Try string concatenation first
+    gen.emit(&"if (r[{bReg}].kind == VK_STRING && r[{cReg}].kind == VK_STRING && r[{dReg}].kind == VK_STRING) {{")
+    gen.emit(&"  size_t len1 = strlen(r[{bReg}].sval);")
+    gen.emit(&"  size_t len2 = strlen(r[{cReg}].sval);")
+    gen.emit(&"  size_t len3 = strlen(r[{dReg}].sval);")
+    gen.emit(&"  char* result = malloc(len1 + len2 + len3 + 1);")
+    gen.emit(&"  strcpy(result, r[{bReg}].sval);")
+    gen.emit(&"  strcat(result, r[{cReg}].sval);")
+    gen.emit(&"  strcat(result, r[{dReg}].sval);")
+    gen.emit(&"  r[{a}] = etch_make_string(result);")
+    # Integer addition
+    gen.emit(&"}} else if (r[{bReg}].kind == VK_INT && r[{cReg}].kind == VK_INT && r[{dReg}].kind == VK_INT) {{")
+    gen.emit(&"  r[{a}] = etch_make_int(r[{bReg}].ival + r[{cReg}].ival + r[{dReg}].ival);")
+    # Float addition
+    gen.emit(&"}} else if ((r[{bReg}].kind == VK_INT || r[{bReg}].kind == VK_FLOAT) &&")
+    gen.emit(&"           (r[{cReg}].kind == VK_INT || r[{cReg}].kind == VK_FLOAT) &&")
+    gen.emit(&"           (r[{dReg}].kind == VK_INT || r[{dReg}].kind == VK_FLOAT)) {{")
+    gen.emit(&"  double bv = (r[{bReg}].kind == VK_INT) ? (double)r[{bReg}].ival : r[{bReg}].fval;")
+    gen.emit(&"  double cv = (r[{cReg}].kind == VK_INT) ? (double)r[{cReg}].ival : r[{cReg}].fval;")
+    gen.emit(&"  double dv = (r[{dReg}].kind == VK_INT) ? (double)r[{dReg}].ival : r[{dReg}].fval;")
+    gen.emit(&"  r[{a}] = etch_make_float(bv + cv + dv);")
+    gen.emit(&"}} else {{")
+    gen.emit(&"  r[{a}] = etch_make_nil();")
+    gen.emit(&"}}")
+
+  of ropMulAdd:
+    # R[A] = R[B] * R[C] + R[D]
+    let bReg = uint8(instr.ax and 0xFF)
+    let cReg = uint8((instr.ax shr 8) and 0xFF)
+    let dReg = uint8((instr.ax shr 16) and 0xFF)
+    gen.emit(&"// MulAdd: R[{a}] = R[{bReg}] * R[{cReg}] + R[{dReg}]")
+    # Integer mul-add
+    gen.emit(&"if (r[{bReg}].kind == VK_INT && r[{cReg}].kind == VK_INT && r[{dReg}].kind == VK_INT) {{")
+    gen.emit(&"  r[{a}] = etch_make_int(r[{bReg}].ival * r[{cReg}].ival + r[{dReg}].ival);")
+    # Float mul-add
+    gen.emit(&"}} else if ((r[{bReg}].kind == VK_INT || r[{bReg}].kind == VK_FLOAT) &&")
+    gen.emit(&"           (r[{cReg}].kind == VK_INT || r[{cReg}].kind == VK_FLOAT) &&")
+    gen.emit(&"           (r[{dReg}].kind == VK_INT || r[{dReg}].kind == VK_FLOAT)) {{")
+    gen.emit(&"  double bv = (r[{bReg}].kind == VK_INT) ? (double)r[{bReg}].ival : r[{bReg}].fval;")
+    gen.emit(&"  double cv = (r[{cReg}].kind == VK_INT) ? (double)r[{cReg}].ival : r[{cReg}].fval;")
+    gen.emit(&"  double dv = (r[{dReg}].kind == VK_INT) ? (double)r[{dReg}].ival : r[{dReg}].fval;")
+    gen.emit(&"  r[{a}] = etch_make_float(bv * cv + dv);")
+    gen.emit(&"}} else {{")
+    gen.emit(&"  r[{a}] = etch_make_nil();")
+    gen.emit(&"}}")
+
+  of ropCmpJmp, ropIncTest, ropLoadAddStore, ropGetAddSet:
     gen.emit(&"// TODO: Fused instruction {instr.op}")
 
   else:

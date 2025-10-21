@@ -1423,7 +1423,13 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
 
       if isInt(b) and isInt(c) and isInt(d):
         setReg(vm, instr.a, makeInt(getInt(b) + getInt(c) + getInt(d)))
+      elif isFloat(b) and isFloat(c) and isFloat(d):
+        setReg(vm, instr.a, makeFloat(getFloat(b) + getFloat(c) + getFloat(d)))
+      elif isString(b) and isString(c) and isString(d):
+        # String concatenation: b + c + d
+        setReg(vm, instr.a, makeString(b.sval & c.sval & d.sval))
       else:
+        # Mixed types or unsupported - fall back to nil
         setReg(vm, instr.a, makeNil())
 
     of ropMulAdd:
@@ -1434,6 +1440,8 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
 
       if isInt(b) and isInt(c) and isInt(d):
         setReg(vm, instr.a, makeInt(getInt(b) * getInt(c) + getInt(d)))
+      elif isFloat(b) and isFloat(c) and isFloat(d):
+        setReg(vm, instr.a, makeFloat(getFloat(b) * getFloat(c) * getFloat(d)))
       else:
         setReg(vm, instr.a, makeNil())
 

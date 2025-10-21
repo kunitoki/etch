@@ -106,10 +106,11 @@ proc makeDebugInfo(c: RegCompiler, pos: Pos): RegDebugInfo =
     echo "[DEBUG] makeDebugInfo: line=", pos.line, " col=", pos.col, " file=", pos.filename
 
 # Pattern matching for instruction fusion
-proc tryFuseArithmetic(c: var RegCompiler, e: Expr): bool =
+proc tryFuseArithmetic(c: var RegCompiler, e: Expr): tuple[fused: bool, reg: uint8] =
   ## Try to generate fused arithmetic instructions
+  ## Returns (fused=true, reg=destReg) if fusion succeeded, (fused=false, reg=0) otherwise
   if e.kind != ekBin:
-    return false
+    return (false, 0'u8)
 
   # Pattern: (a + b) + c -> AddAdd
   if e.bop == boAdd and e.lhs.kind == ekBin and e.lhs.bop == boAdd:
@@ -127,7 +128,7 @@ proc tryFuseArithmetic(c: var RegCompiler, e: Expr): bool =
       opType: 3,  # Special format for 4 operands
       ax: uint32(aReg) or (uint32(bReg) shl 8) or (uint32(cReg) shl 16)
     )
-    return true
+    return (true, destReg)
 
   # Pattern: a * b + c -> MulAdd
   if e.bop == boAdd and e.lhs.kind == ekBin and e.lhs.bop == boMul:
@@ -142,16 +143,18 @@ proc tryFuseArithmetic(c: var RegCompiler, e: Expr): bool =
       opType: 3,
       ax: uint32(aReg) or (uint32(bReg) shl 8) or (uint32(cReg) shl 16)
     )
-    return true
+    return (true, destReg)
 
-  return false
+  return (false, 0'u8)
 
 proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
   ## Compile expression to register, return register number
 
   # Try instruction fusion first (if optimization enabled)
-  if c.optimizeLevel >= 2 and c.tryFuseArithmetic(e):
-    return c.allocator.nextReg - 1  # Fusion already allocated result
+  if c.optimizeLevel >= 2:
+    let (fused, reg) = c.tryFuseArithmetic(e)
+    if fused:
+      return reg  # Return the actual destination register from fusion
 
   case e.kind:
   of ekInt:

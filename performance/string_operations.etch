@@ -1,20 +1,20 @@
 fn main() {
-    var result = "";
+    var res = "";
     var count = 0;
 
     // String operations benchmark
-    for i in 0..<5000 {
+    for i in 0 ..< 5000 {
         var num = rand(1);
         var str_num = toString(num);
 
         // String concatenation
-        result = result + str_num + ",";
+        res = res + str_num + ",";
 
         // String length operations
-        count = count + #result;
+        count = count + #res;
     }
 
     print(count);
-    print(result);
-    print(#result);
+    print(res);
+    print(#res);
 }
