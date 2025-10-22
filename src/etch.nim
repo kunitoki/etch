@@ -3,7 +3,7 @@
 
 import std/[os, strutils, osproc, tables, times]
 import ./etch/[compiler, tester]
-import ./etch/common/[constants, types]
+import ./etch/common/[constants, types, cffi, logging]
 import ./etch/interpreter/[regvm, regvm_dump, regvm_debugserver]
 import ./etch/backend/c/[generator]
 
@@ -44,10 +44,38 @@ proc makeCompilerOptions(sourceFile: string, runVM: bool, verbose: bool, debug: 
   )
 
 
+proc populateCFFIInfo(regProg: var RegBytecodeProgram, verbose: bool) =
+  ## Populate CFFI info from the global registry into the bytecode program
+  for funcName, cffiFunc in globalCFFIRegistry.functions:
+    var paramTypes: seq[string] = @[]
+    for param in cffiFunc.signature.params:
+      paramTypes.add($param.typ.kind)
+
+    # Get the actual library path from the registry
+    let libraryPath = if cffiFunc.library in globalCFFIRegistry.libraries:
+      let path = globalCFFIRegistry.libraries[cffiFunc.library].path
+      logCompiler(verbose, "CFFI function " & funcName & " uses library " & cffiFunc.library & " at path: " & path)
+      path
+    else:
+      logCompiler(verbose, "CFFI function " & funcName & " library " & cffiFunc.library & " NOT in registry!")
+      ""
+
+    regProg.cffiInfo[funcName] = regvm.CFFIInfo(
+      library: cffiFunc.library,
+      libraryPath: libraryPath,
+      symbol: cffiFunc.symbol,
+      baseName: cffiFunc.symbol,
+      paramTypes: paramTypes,
+      returnType: $cffiFunc.signature.returnType.kind
+    )
+
+
 proc compileToRegBytecode(options: CompilerOptions): RegBytecodeProgram =
   try:
     let (prog, sourceHash, evaluatedGlobals) = parseAndTypecheck(options)
-    return compileProgramWithGlobals(prog, sourceHash, evaluatedGlobals, options.sourceFile, options)
+    result = compileProgramWithGlobals(prog, sourceHash, evaluatedGlobals, options.sourceFile, options)
+    # Populate CFFI info from the global registry
+    populateCFFIInfo(result, options.verbose)
   except OverflowDefect as e:
     echo "Internal compiler error: ", e.msg
     quit 1
@@ -78,32 +106,67 @@ proc compileAndRunCBackend(bytecode: RegBytecodeProgram, sourceFile: string, ver
     echo "Generated C code: ", cFile
 
   var linkerFlags = " -lm"
-  var libPaths = ""
+  var libDirs: seq[string] = @[]  # Collect unique library directories
+
+  # Extract library directories from actual library paths
   for funcName, cffiInfo in bytecode.cffiInfo:
     let libName = cffiInfo.library
-    if libName != "cmath" and libName != "math":
-      let libDir = joinPath(dir, "clib")
-      if not libPaths.contains(libDir):
-        libPaths &= " -L" & libDir
-      let linkName = if libName.startsWith("lib"): libName[3..^1] else: libName
-      if not linkerFlags.contains("-l" & linkName):
-        linkerFlags &= " -l" & linkName
+
+    if verbose:
+      echo "CFFI Function: ", funcName
+      echo "  Library: ", libName
+      echo "  Library Path: ", cffiInfo.libraryPath
+
+    # Skip standard system libraries (they don't need -L or -rpath)
+    if libName in ["c", "cmath", "math", "m", "pthread", "dl"]:
+      continue
+
+    # If we have a library path, extract its directory
+    if cffiInfo.libraryPath != "":
+      let libDir = parentDir(cffiInfo.libraryPath)
+      if verbose:
+        echo "  Library Dir: ", libDir
+      if libDir != "" and libDir notin libDirs:
+        libDirs.add(libDir)
+
+    # Add linker flag for the library
+    let linkName = if libName.startsWith("lib"): libName[3..^1] else: libName
+    if not linkerFlags.contains("-l" & linkName):
+      linkerFlags &= " -l" & linkName
+
+  # Build -L flags for all unique library directories
+  var libPaths = ""
+  for libDir in libDirs:
+    libPaths &= " -L" & libDir
+
+  if verbose and libDirs.len > 0:
+    echo "Library directories found:"
+    for libDir in libDirs:
+      echo "  ", libDir
 
   let optFlags = if not debug: " -O3" else: ""
 
   # Add rpath for dynamic library loading at runtime (macOS and Linux)
   # This tells the dynamic linker where to find shared libraries relative to the executable
   var rpathFlags = ""
-  if libPaths != "":
-    # Extract library directories from -L flags and add as rpath
-    let libDir = joinPath(dir, "clib")
-    if dirExists(libDir):
-      when defined(macosx) or defined(macos):
-        # Use @executable_path to make path relative to executable location
-        rpathFlags = " -Wl,-rpath,@executable_path/../clib"
-      else:
-        # Use $ORIGIN for Linux/Unix to make path relative to executable location
-        rpathFlags = " -Wl,-rpath,'$$ORIGIN/../clib'"
+  if libDirs.len > 0:
+    # Build rpath entries for each unique library directory
+    when defined(macosx) or defined(macos):
+      # Use @executable_path to make path relative to executable location
+      for libDir in libDirs:
+        # Calculate relative path from executable to library directory
+        let relPath = relativePath(libDir, etchDir)
+        rpathFlags &= " -Wl,-rpath,@executable_path/" & relPath
+    else:
+      # Use $ORIGIN for Linux/Unix to make path relative to executable location
+      # IMPORTANT: -z origin flag is required to enable $ORIGIN processing on Linux
+      rpathFlags &= " -Wl,-z,origin"
+      for libDir in libDirs:
+        # Calculate relative path from executable to library directory
+        let relPath = relativePath(libDir, etchDir)
+        # Use $$ORIGIN (double $ escapes in Nim, becomes $ORIGIN in shell)
+        # Single quotes protect the variable from shell expansion
+        rpathFlags &= " '-Wl,-rpath,$$ORIGIN/" & relPath & "'"
 
   when defined(macosx) or defined(macos):
     let compileCmd = "xcrun clang" & optFlags & " -o " & exeFile & " " & cFile & libPaths & linkerFlags & rpathFlags & " 2>&1"

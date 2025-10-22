@@ -32,7 +32,7 @@ const
 # Bytecode serialization constants
 const
   BYTECODE_MAGIC* = "ETCH"
-  BYTECODE_VERSION* = 23
+  BYTECODE_VERSION* = 24  # Added libraryPath to CFFIInfo
 
 
 # Symbolic execution constants

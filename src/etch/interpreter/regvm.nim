@@ -156,9 +156,10 @@ type
     numLocals*: int
 
   CFFIInfo* = object
-    library*: string
+    library*: string        # Normalized library name (e.g., "mathlib", "c", "cmath")
+    libraryPath*: string    # Actual resolved library file path (e.g., "examples/clib/libmathlib.so")
     symbol*: string
-    baseName*: string  # Base name without mangling (e.g., "sin")
+    baseName*: string       # Base name without mangling (e.g., "sin")
     paramTypes*: seq[string]
     returnType*: string
 

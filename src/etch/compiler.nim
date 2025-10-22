@@ -321,8 +321,18 @@ proc compileAndRun*(options: CompilerOptions): CompilerResult =
       for param in cffiFunc.signature.params:
         paramTypes.add($param.typ.kind)
 
+      # Get the actual library path from the registry
+      let libraryPath = if cffiFunc.library in globalCFFIRegistry.libraries:
+        let path = globalCFFIRegistry.libraries[cffiFunc.library].path
+        logCompiler(options.verbose, "CFFI function " & funcName & " uses library " & cffiFunc.library & " at path: " & path)
+        path
+      else:
+        logCompiler(options.verbose, "CFFI function " & funcName & " library " & cffiFunc.library & " NOT in registry!")
+        ""
+
       regProg.cffiInfo[funcName] = regvm.CFFIInfo(
         library: cffiFunc.library,
+        libraryPath: libraryPath,
         symbol: cffiFunc.symbol,
         baseName: cffiFunc.symbol,
         paramTypes: paramTypes,

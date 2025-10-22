@@ -26,7 +26,8 @@ type
     funcPtr*: CFunctionPtr
 
   CFFILibrary* = object
-    path*: string
+    name*: string           # Normalized library name (e.g., "mathlib", "c")
+    path*: string           # Actual file path used to load the library
     handle*: LibHandle
     functions*: Table[string, CFFIFunction]
 
@@ -46,6 +47,7 @@ proc loadLibrary*(registry: CFFIRegistry, name: string, path: string): CFFILibra
     raise newException(IOError, "Failed to load library: " & path)
 
   result = CFFILibrary(
+    name: name,
     path: path,
     handle: handle,
     functions: initTable[string, CFFIFunction]()

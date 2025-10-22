@@ -2,6 +2,7 @@
 # Etch testing framework: test discovery, execution, and result reporting
 
 import std/[os, strformat, strutils, algorithm, osproc, sequtils]
+import ./common/constants
 
 type
   TestResult* = object
@@ -196,6 +197,18 @@ proc runSingleTest*(testFile: string, verbose: bool = false, release: bool = fal
         if not result.passed:
           result.error = "Output mismatch"
 
+proc clearCachedBytecode(testFile: string) =
+  ## Clear the cached bytecode (.etcx) file for a given test file
+  let (dir, name, _) = testFile.splitFile
+  let cacheDir = dir / BYTECODE_CACHE_DIR
+  let bytecodeFile = cacheDir / name & BYTECODE_FILE_EXTENSION
+
+  if fileExists(bytecodeFile):
+    try:
+      removeFile(bytecodeFile)
+    except:
+      discard  # Silently ignore errors
+
 proc findTestFiles*(directory: string): seq[string] =
   ## Find all .etch files in directory that have corresponding .result or .error files
   result = @[]
@@ -240,9 +253,10 @@ proc runTests*(path: string = "examples", verbose: bool = false, release: bool =
       return 1
 
   elif dirExists(path):
-    # Directory test (existing behavior)
+    # Directory test - run each test twice: without and with cached bytecode
     let backendMsg = if backend != "": fmt" with {backend} backend" else: ""
     echo fmt"Running tests in directory: {path}{backendMsg}"
+    echo "Each test runs twice: without cached bytecode, then with cached bytecode"
 
     let testFiles = findTestFiles(path)
     if testFiles.len == 0:
@@ -257,24 +271,56 @@ proc runTests*(path: string = "examples", verbose: bool = false, release: bool =
     var results: seq[TestResult] = @[]
 
     for testFile in testFiles:
-      echo fmt"Running {testFile.splitFile.name}... "
-      let res = runSingleTest(testFile, verbose, release, backend)
-      results.add(res)
+      let testName = testFile.splitFile.name
+      echo fmt"Running {testName}... "
 
-      if res.passed:
-        echo "✓ PASSED"
+      # Clear cached bytecode before first run
+      clearCachedBytecode(testFile)
+
+      # First run: without cached bytecode (fresh compilation)
+      let res1 = runSingleTest(testFile, verbose, release, backend)
+
+      # Second run: with cached bytecode (should use cache from first run)
+      let res2 = runSingleTest(testFile, verbose, release, backend)
+
+      # Both runs should independently pass their .pass/.fail validation
+      # We don't compare fresh vs cached output (they may differ for comptime tests)
+      if res1.passed and res2.passed:
+        echo "✓ PASSED (fresh + cached)"
         inc passed
+        results.add(res1)  # Store first result for summary
       else:
         echo "✗ FAILED"
         inc failed
-        echo fmt"  Error: {res.error}"
-        if res.expected != res.actual:
+
+        # Show which run(s) failed
+        if not res1.passed and not res2.passed:
+          echo "  Error in both fresh and cached compilation:"
+          echo fmt"    Fresh: {res1.error}"
+          echo fmt"    Cached: {res2.error}"
+          results.add(res1)
+        elif not res1.passed:
+          echo "  Error in fresh compilation:"
+          echo fmt"    {res1.error}"
+          results.add(res1)
+        else:
+          echo "  Error in cached compilation:"
+          echo fmt"    {res2.error}"
+          results.add(res2)
+
+        # Show expected vs actual for failed tests
+        let failedRes = if not res1.passed: res1 else: res2
+        if failedRes.expected != failedRes.actual:
           echo "  Expected:"
-          for line in res.expected.splitLines:
+          for line in failedRes.expected.splitLines:
             echo fmt"    {line}"
-          echo "  Actual:"
-          for line in res.actual.splitLines:
+          echo "  Actual (fresh):"
+          for line in res1.actual.splitLines:
             echo fmt"    {line}"
+          if res1.actual != res2.actual:
+            echo "  Actual (cached):"
+            for line in res2.actual.splitLines:
+              echo fmt"    {line}"
         echo ""
 
     echo fmt"Test Summary: {passed} passed, {failed} failed, {testFiles.len} total"

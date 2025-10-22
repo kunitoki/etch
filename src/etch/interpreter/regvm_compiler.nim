@@ -1534,11 +1534,12 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
       # For now, store minimal info - the runtime will handle the actual FFI calls
       # The library and symbol info will be populated by the compiler.nim from the global registry
       compiler.prog.cffiInfo[fname] = regvm.CFFIInfo(
-        library: "",  # Will be filled by compiler.nim
+        library: "",       # Will be filled by compiler.nim
+        libraryPath: "",   # Will be filled by compiler.nim
         symbol: baseName,  # Use base name as symbol for now
         baseName: baseName,
-        paramTypes: @[],  # Will be filled by compiler.nim
-        returnType: ""    # Will be filled by compiler.nim
+        paramTypes: @[],   # Will be filled by compiler.nim
+        returnType: ""     # Will be filled by compiler.nim
       )
 
       log(verbose, fmt"Identified C FFI function: {fname} -> {baseName}")

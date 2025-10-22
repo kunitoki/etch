@@ -287,6 +287,10 @@ proc serializeToBinary*(prog: RegBytecodeProgram, sourceHash: string = "",
     stream.write(libLen)
     stream.write(cffi.library)
 
+    var libPathLen = uint32(cffi.libraryPath.len)
+    stream.write(libPathLen)
+    stream.write(cffi.libraryPath)
+
     var symLen = uint32(cffi.symbol.len)
     stream.write(symLen)
     stream.write(cffi.symbol)
@@ -445,6 +449,11 @@ proc deserializeFromBinary*(data: string): RegBytecodeProgram =
 
     let libLen = stream.readUint32()
     cffi.library = stream.readStr(int(libLen))
+
+    let libPathLen = stream.readUint32()
+    cffi.libraryPath = stream.readStr(int(libPathLen))
+    when defined(debugSerialization):
+      echo "Deserialized CFFI libraryPath: ", cffi.libraryPath
 
     let symLen = stream.readUint32()
     cffi.symbol = stream.readStr(int(symLen))
