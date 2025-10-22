@@ -189,7 +189,8 @@ proc compileAndRunCBackend(bytecode: RegBytecodeProgram, sourceFile: string, ver
   if verbose:
     echo "Running: ", exeFile
 
-  let (runOutput, runExitCode) = execCmdEx(exeFile)
+  var (runOutput, runExitCode) = execCmdEx(exeFile)
+  runOutput.stripLineEnd
   echo runOutput
   return runExitCode
 

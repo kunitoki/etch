@@ -29,6 +29,6 @@ task test, "Run all tests":
 
 task perf, "Run performance benchmarks":
   echo "===== Building etch binary in release mode ====="
-  exec "nim c -d:danger -o:etch src/etch.nim"
+  exec "nim c -d:danger -o:bin/etch src/etch.nim"
   echo "===== Running performance benchmarks ====="
-  exec "./etch --perf"
+  exec "./bin/etch --perf"
