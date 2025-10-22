@@ -7,7 +7,7 @@ import ./[compiler]
 import ./common/[types, constants, errors]
 import ./interpreter/[regvm, regvm_compiler, regvm_exec, regvm_debugserver]
 import ./frontend/[ast, parser, lexer]
-import ./typechecker/[core, types as tctypes, statements, inference]
+import ./typechecker/[core, types, statements, inference]
 
 # C-compatible types
 type
@@ -18,8 +18,10 @@ type
 
   # Host function callback type
   # Returns an EtchValue, takes array of arguments and user data pointer
-  EtchHostFunction* = proc(ctx: EtchContext, args: ptr ptr EtchValueObj,
-                            numArgs: cint, userData: pointer): EtchValue {.cdecl.}
+  EtchHostFunction* = proc(ctx: EtchContext,
+                           args: ptr ptr EtchValueObj,
+                           numArgs: cint,
+                           userData: pointer): EtchValue {.cdecl.}
 
   # Instruction callback type for debugging/inspection
   # Called before each instruction is executed
@@ -614,5 +616,3 @@ proc etch_free_string*(str: cstring) {.exportc, cdecl, dynlib.} =
   ## str: String to free
   if str != nil:
     dealloc(cast[pointer](str))
-
-
