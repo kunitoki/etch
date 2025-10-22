@@ -50,6 +50,7 @@ typedef struct EtchDebugServerObj* EtchDebugServer;
  * @param args Array of argument values
  * @param numArgs Number of arguments
  * @param userData User-defined data pointer passed during registration
+ *
  * @return Result value (must be created with etch_value_new_* functions)
  */
 typedef EtchValue (*EtchHostFunction)(EtchContext ctx, EtchValue* args, int numArgs, void* userData);
@@ -62,6 +63,7 @@ typedef EtchValue (*EtchHostFunction)(EtchContext ctx, EtchValue* args, int numA
  *
  * @param ctx Current Etch context
  * @param userData User-defined data pointer passed during registration
+ *
  * @return 0 to continue execution, non-zero to stop
  */
 typedef int (*EtchInstructionCallback)(EtchContext ctx, void* userData);
@@ -106,6 +108,7 @@ EtchContext etch_context_new(void);
  *
  * @param verbose Enable verbose logging (0 = off, non-zero = on)
  * @param debug Enable debug mode (0 = release/optimized, non-zero = debug)
+ *
  * @return New context or NULL on failure
  */
 EtchContext etch_context_new_with_options(int verbose, int debug);
@@ -142,7 +145,11 @@ void etch_context_set_debug(EtchContext ctx, int debug);
  * Get the last error message from the context
  *
  * @param ctx Context
- * @return Error string or NULL if no error (do not free this string)
+ *
+ * @return Error string or NULL if no error
+ *
+ * @note The returned string is owned by the context. Do NOT free it.
+ *       The string remains valid until the next error or etch_context_free().
  */
 const char* etch_get_error(EtchContext ctx);
 
@@ -164,6 +171,7 @@ void etch_clear_error(EtchContext ctx);
  * @param ctx Context
  * @param source Source code string
  * @param filename Filename for error messages (can be NULL)
+ *
  * @return 0 on success, non-zero on error
  */
 int etch_compile_string(EtchContext ctx, const char* source, const char* filename);
@@ -173,6 +181,7 @@ int etch_compile_string(EtchContext ctx, const char* source, const char* filenam
  *
  * @param ctx Context
  * @param path Path to source file
+ *
  * @return 0 on success, non-zero on error
  */
 int etch_compile_file(EtchContext ctx, const char* path);
@@ -186,6 +195,7 @@ int etch_compile_file(EtchContext ctx, const char* path);
  * Execute the compiled program (runs main function if it exists)
  *
  * @param ctx Context
+ *
  * @return Exit code (0 on success)
  */
 int etch_execute(EtchContext ctx);
@@ -197,6 +207,7 @@ int etch_execute(EtchContext ctx);
  * @param name Function name
  * @param args Array of argument values (can be NULL if numArgs is 0)
  * @param numArgs Number of arguments
+ *
  * @return Result value or NULL on error
  */
 EtchValue etch_call_function(EtchContext ctx, const char* name, EtchValue* args, int numArgs);
@@ -233,6 +244,7 @@ EtchValue etch_value_new_string(const char* v);
  * Get the type of a value
  *
  * @param v Value
+ *
  * @return Type enum or -1 on error
  */
 int etch_value_get_type(EtchValue v);
@@ -265,6 +277,7 @@ int etch_value_is_string(EtchValue v);
  *
  * @param v Value
  * @param outVal Pointer to store result (0 or 1)
+ *
  * @return 0 on success, non-zero if value is not a boolean
  */
 int etch_value_to_bool(EtchValue v, int* outVal);
@@ -274,6 +287,7 @@ int etch_value_to_bool(EtchValue v, int* outVal);
  *
  * @param v Value
  * @param outVal Pointer to store result
+ *
  * @return 0 on success, non-zero if value is not a character
  */
 int etch_value_to_char(EtchValue v, char* outVal);
@@ -283,6 +297,7 @@ int etch_value_to_char(EtchValue v, char* outVal);
  *
  * @param v Value
  * @param outVal Pointer to store result
+ *
  * @return 0 on success, non-zero if value is not an integer
  */
 int etch_value_to_int(EtchValue v, int64_t* outVal);
@@ -292,6 +307,7 @@ int etch_value_to_int(EtchValue v, int64_t* outVal);
  *
  * @param v Value
  * @param outVal Pointer to store result
+ *
  * @return 0 on success, non-zero if value is not a float
  */
 int etch_value_to_float(EtchValue v, double* outVal);
@@ -300,8 +316,11 @@ int etch_value_to_float(EtchValue v, double* outVal);
  * Extract string value
  *
  * @param v Value
+ *
  * @return String pointer or NULL if value is not a string
- *         (do not free - owned by the value)
+ *
+ * @note The returned string is owned by the value. Do NOT free it.
+ *       The string remains valid as long as the value exists.
  */
 const char* etch_value_to_string(EtchValue v);
 
@@ -336,6 +355,7 @@ void etch_set_global(EtchContext ctx, const char* name, EtchValue value);
  *
  * @param ctx Context
  * @param name Variable name
+ *
  * @return Value or NULL if not found (must be freed with etch_value_free)
  */
 EtchValue etch_get_global(EtchContext ctx, const char* name);
@@ -356,6 +376,7 @@ EtchValue etch_get_global(EtchContext ctx, const char* name);
  * @param name Function name (how it will be called from Etch)
  * @param callback Function pointer
  * @param userData User-defined data passed to callback (can be NULL)
+ *
  * @return 0 on success, non-zero on error
  *
  * @code
@@ -393,6 +414,7 @@ void etch_set_instruction_callback(EtchContext ctx, EtchInstructionCallback call
  * Get the current call stack depth
  *
  * @param ctx Context
+ *
  * @return Number of active stack frames, or -1 on error
  */
 int etch_get_call_stack_depth(EtchContext ctx);
@@ -401,6 +423,7 @@ int etch_get_call_stack_depth(EtchContext ctx);
  * Get the current program counter (instruction index)
  *
  * @param ctx Context
+ *
  * @return Current PC, or -1 on error
  */
 int etch_get_program_counter(EtchContext ctx);
@@ -409,6 +432,7 @@ int etch_get_program_counter(EtchContext ctx);
  * Get the number of registers in the current frame
  *
  * @param ctx Context
+ *
  * @return Always returns 256 (max registers), or -1 on error
  */
 int etch_get_register_count(EtchContext ctx);
@@ -418,6 +442,7 @@ int etch_get_register_count(EtchContext ctx);
  *
  * @param ctx Context
  * @param regIndex Register index (0-255)
+ *
  * @return Register value (must be freed with etch_value_free), or NULL on error
  */
 EtchValue etch_get_register(EtchContext ctx, int regIndex);
@@ -426,6 +451,7 @@ EtchValue etch_get_register(EtchContext ctx, int regIndex);
  * Get the total number of instructions in the program
  *
  * @param ctx Context
+ *
  * @return Instruction count, or -1 on error
  */
 int etch_get_instruction_count(EtchContext ctx);
@@ -434,7 +460,11 @@ int etch_get_instruction_count(EtchContext ctx);
  * Get the name of the currently executing function
  *
  * @param ctx Context
- * @return Function name (do not free - owned by context), or NULL on error
+ *
+ * @return Function name or NULL on error
+ *
+ * @note The returned string is owned by the program. Do NOT free it.
+ *       The string remains valid as long as the context exists.
  */
 const char* etch_get_current_function(EtchContext ctx);
 
@@ -451,6 +481,7 @@ const char* etch_get_current_function(EtchContext ctx);
  *
  * @param ctx Context with compiled program (after calling etch_compile_string or etch_compile_file)
  * @param sourceFile Source file path for debug info
+ *
  * @return Debug server handle or NULL on failure
  *
  * Example workflow:
@@ -494,6 +525,7 @@ void etch_debug_server_free(EtchDebugServer debugServer);
  * @param debugServer Debug server handle
  * @param requestJson JSON string containing the DAP request (null-terminated)
  * @param outResponseJson Pointer to store response JSON string (caller must free with etch_free_string)
+ *
  * @return 0 on success, non-zero on error
  *
  * Supported DAP commands:
@@ -511,14 +543,13 @@ void etch_debug_server_free(EtchDebugServer debugServer);
  * - threads: Get thread list
  * - disconnect: End debug session
  */
-int etch_debug_server_handle_request(EtchDebugServer debugServer,
-                                      const char* requestJson,
-                                      char** outResponseJson);
+int etch_debug_server_handle_request(EtchDebugServer debugServer, const char* requestJson, char** outResponseJson);
 
 /**
  * Check if the debug server is still running
  *
  * @param debugServer Debug server handle
+ *
  * @return 1 if running, 0 if stopped or NULL
  */
 int etch_debug_server_is_running(EtchDebugServer debugServer);
@@ -526,9 +557,16 @@ int etch_debug_server_is_running(EtchDebugServer debugServer);
 /**
  * Free a string allocated by the Etch library
  *
- * Use this to free strings returned by etch_debug_server_handle_request
- *
  * @param str String to free
+ *
+ * @note IMPORTANT: Only use this for strings where the documentation explicitly
+ *       states "caller must free". Currently, this applies ONLY to:
+ *       - etch_debug_server_handle_request() output parameter (outResponseJson)
+ *
+ *       Do NOT use this for strings returned by:
+ *       - etch_get_error() - owned by context
+ *       - etch_value_to_string() - owned by value
+ *       - etch_get_current_function() - owned by program
  */
 void etch_free_string(char* str);
 

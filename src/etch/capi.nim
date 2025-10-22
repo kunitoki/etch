@@ -118,8 +118,7 @@ proc etch_context_set_debug*(ctx: EtchContext, debug: cint) {.exportc, cdecl, dy
 # ============================================================================
 
 proc etch_get_error*(ctx: EtchContext): cstring {.exportc, cdecl, dynlib.} =
-  ## Get the last error message from the context
-  ## Returns: Error string or nil if no error
+  ## Get the last error message from the context (see etch.h for full docs)
   if ctx == nil:
     return nil
   if ctx.lastError == "":
@@ -242,6 +241,24 @@ proc etch_value_new_nil*(): EtchValue {.exportc, cdecl, dynlib.} =
   except Exception:
     return nil
 
+proc etch_value_new_char*(v: char): EtchValue {.exportc, cdecl, dynlib.} =
+  ## Create a new character value
+  try:
+    var val = cast[EtchValue](alloc0(sizeof(EtchValueObj)))
+    val.value = makeChar(v)
+    return val
+  except Exception:
+    return nil
+
+proc etch_value_new_bool*(v: cint): EtchValue {.exportc, cdecl, dynlib.} =
+  ## Create a new boolean value (0 = false, non-zero = true)
+  try:
+    var val = cast[EtchValue](alloc0(sizeof(EtchValueObj)))
+    val.value = makeBool(v != 0)
+    return val
+  except Exception:
+    return nil
+
 proc etch_value_new_int*(v: int64): EtchValue {.exportc, cdecl, dynlib.} =
   ## Create a new integer value
   try:
@@ -260,15 +277,6 @@ proc etch_value_new_float*(v: cdouble): EtchValue {.exportc, cdecl, dynlib.} =
   except Exception:
     return nil
 
-proc etch_value_new_bool*(v: cint): EtchValue {.exportc, cdecl, dynlib.} =
-  ## Create a new boolean value (0 = false, non-zero = true)
-  try:
-    var val = cast[EtchValue](alloc0(sizeof(EtchValueObj)))
-    val.value = makeBool(v != 0)
-    return val
-  except Exception:
-    return nil
-
 proc etch_value_new_string*(v: cstring): EtchValue {.exportc, cdecl, dynlib.} =
   ## Create a new string value (copies the string)
   if v == nil:
@@ -276,15 +284,6 @@ proc etch_value_new_string*(v: cstring): EtchValue {.exportc, cdecl, dynlib.} =
   try:
     var val = cast[EtchValue](alloc0(sizeof(EtchValueObj)))
     val.value = makeString($v)
-    return val
-  except Exception:
-    return nil
-
-proc etch_value_new_char*(v: char): EtchValue {.exportc, cdecl, dynlib.} =
-  ## Create a new character value
-  try:
-    var val = cast[EtchValue](alloc0(sizeof(EtchValueObj)))
-    val.value = makeChar(v)
     return val
   except Exception:
     return nil
@@ -342,6 +341,26 @@ proc etch_value_is_nil*(v: EtchValue): cint {.exportc, cdecl, dynlib.} =
 # Value Extraction
 # ============================================================================
 
+proc etch_value_to_bool*(v: EtchValue, outVal: ptr cint): cint {.exportc, cdecl, dynlib.} =
+  ## Extract boolean value
+  ## Returns: 0 on success, non-zero if value is not a boolean
+  if v == nil or outVal == nil:
+    return -1
+  if v.value.kind != vkBool:
+    return 1
+  outVal[] = cint(v.value.bval)
+  return 0
+
+proc etch_value_to_char*(v: EtchValue, outVal: ptr char): cint {.exportc, cdecl, dynlib.} =
+  ## Extract character value
+  ## Returns: 0 on success, non-zero if value is not a character
+  if v == nil or outVal == nil:
+    return -1
+  if v.value.kind != vkChar:
+    return 1
+  outVal[] = v.value.cval
+  return 0
+
 proc etch_value_to_int*(v: EtchValue, outVal: ptr int64): cint {.exportc, cdecl, dynlib.} =
   ## Extract integer value
   ## Returns: 0 on success, non-zero if value is not an integer
@@ -362,34 +381,13 @@ proc etch_value_to_float*(v: EtchValue, outVal: ptr cdouble): cint {.exportc, cd
   outVal[] = v.value.fval
   return 0
 
-proc etch_value_to_bool*(v: EtchValue, outVal: ptr cint): cint {.exportc, cdecl, dynlib.} =
-  ## Extract boolean value
-  ## Returns: 0 on success, non-zero if value is not a boolean
-  if v == nil or outVal == nil:
-    return -1
-  if v.value.kind != vkBool:
-    return 1
-  outVal[] = cint(v.value.bval)
-  return 0
-
 proc etch_value_to_string*(v: EtchValue): cstring {.exportc, cdecl, dynlib.} =
-  ## Extract string value (returned string is owned by the value, do not free)
-  ## Returns: String pointer or nil if value is not a string
+  ## Extract string value (see etch.h for full docs)
   if v == nil:
     return nil
   if v.value.kind != vkString:
     return nil
   return cstring(v.value.sval)
-
-proc etch_value_to_char*(v: EtchValue, outVal: ptr char): cint {.exportc, cdecl, dynlib.} =
-  ## Extract character value
-  ## Returns: 0 on success, non-zero if value is not a character
-  if v == nil or outVal == nil:
-    return -1
-  if v.value.kind != vkChar:
-    return 1
-  outVal[] = v.value.cval
-  return 0
 
 
 # ============================================================================
@@ -518,8 +516,7 @@ proc etch_get_instruction_count*(ctx: EtchContext): cint {.exportc, cdecl, dynli
   return cint(ctx.program.instructions.len)
 
 proc etch_get_current_function*(ctx: EtchContext): cstring {.exportc, cdecl, dynlib.} =
-  ## Get the name of the currently executing function
-  ## Returns: Function name (do not free), or nil on error
+  ## Get the name of the currently executing function (see etch.h for full docs)
   if ctx == nil or ctx.vm == nil or ctx.vm.currentFrame == nil:
     return nil
 
@@ -562,13 +559,9 @@ proc etch_debug_server_free*(debugServer: EtchDebugServer) {.exportc, cdecl, dyn
     dealloc(debugServer)
 
 proc etch_debug_server_handle_request*(debugServer: EtchDebugServer,
-                                        requestJson: cstring,
-                                        outResponseJson: ptr cstring): cint {.exportc, cdecl, dynlib.} =
-  ## Handle a debug adapter protocol request
-  ## debugServer: Debug server handle
-  ## requestJson: JSON string containing the DAP request
-  ## outResponseJson: Pointer to store response JSON string (caller must free with etch_free_string)
-  ## Returns: 0 on success, non-zero on error
+                                       requestJson: cstring,
+                                       outResponseJson: ptr cstring): cint {.exportc, cdecl, dynlib.} =
+  ## Handle a debug adapter protocol request (see etch.h for full docs)
   if debugServer == nil or requestJson == nil or outResponseJson == nil:
     return 1
 
@@ -612,7 +605,6 @@ proc etch_debug_server_is_running*(debugServer: EtchDebugServer): cint {.exportc
   return if debugServer.server.running: 1 else: 0
 
 proc etch_free_string*(str: cstring) {.exportc, cdecl, dynlib.} =
-  ## Free a string allocated by the Etch library
-  ## str: String to free
+  ## Free a string allocated by the Etch library (see etch.h for full docs)
   if str != nil:
     dealloc(cast[pointer](str))
