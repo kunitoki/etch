@@ -3,18 +3,28 @@ name: Tests
 on:
   push:
     branches: [ main ]
-    paths-ignore:
-        - 'docs/**'
-        - 'vscode/**'
-        - 'performance/**'
-        - '**/*.md'
+    paths:
+        - '!.github/workflows/test.yml'
+        - '!docs/**'
+        - '!vscode/**'
+        - '!performance/**'
+        - '!slides/**'
+        - '!**/.gitignore'
+        - '!**/*.md'
+        - '!justfile'
+        - '!LICENSE'
   pull_request:
     branches: [ main ]
-    paths-ignore:
-        - 'docs/**'
-        - 'vscode/**'
-        - 'performance/**'
-        - '**/*.md'
+    paths:
+        - '!.github/workflows/test.yml'
+        - '!docs/**'
+        - '!vscode/**'
+        - '!performance/**'
+        - '!slides/**'
+        - '!**/.gitignore'
+        - '!**/*.md'
+        - '!justfile'
+        - '!LICENSE'
 
 jobs:
   test:
