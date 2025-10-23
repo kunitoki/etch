@@ -829,12 +829,6 @@ proc isInlinableFunction(c: var RegCompiler, funcName: string): bool =
 
   let funcDecl = c.funInstances[funcName]
 
-  # Don't inline functions with complex names (generic instantiations, builtins, etc.)
-  # Be conservative - only inline simple user-defined functions
-  # Skip if name suggests it's a builtin or complex function
-  if funcName in ["print__I_v", "seed__i_v", "rand__ii_i", "rand__i_i"]:
-    return false
-
   # Only inline very simple functions (single return statement)
   if funcDecl.body.len != 1:
     return false
@@ -920,9 +914,10 @@ proc compileCall(c: var RegCompiler, e: Expr): uint8 =
           # This shouldn't happen if the type checker is correct
           log(c.verbose, &"Warning: Missing argument for parameter {i} with no default value")
 
-  log(c.verbose, &"compileCall: {e.fname} allocated reg {result}")
-  log(c.verbose, &"   original args.len = {e.args.len}")
-  log(c.verbose, &"   complete args.len = {completeArgs.len}")
+  if c.verbose:
+    log(c.verbose, &"compileCall: {e.fname} allocated reg {result}")
+    log(c.verbose, &"   original args.len = {e.args.len}")
+    log(c.verbose, &"   complete args.len = {completeArgs.len}")
 
   # Try to inline if optimization level >= 1
   if c.optimizeLevel >= 1 and c.isInlinableFunction(e.fname):
