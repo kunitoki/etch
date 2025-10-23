@@ -1061,16 +1061,16 @@
 
 						| Benchmark | C | VM | Python 3 | C vs Py | VM vs Py |
 						|-----------|---|-----|----------|---------|----------|
-						| 🧮 Arithmetic ops | <span style="color:lightgreen">5.5ms</span> | <span style="color:orange">124.2ms</span> | 118.0ms | **21.5x** | 0.95x |
-						| 📦 Array ops | <span style="color:lightgreen">7.0ms</span> | <span style="color:green">40.3ms</span> | 61.5ms | **8.8x** | **1.5x** |
-						| 🔁 For loops | <span style="color:lightgreen">10.5ms</span> | <span style="color:green">22.7ms</span> | 48.9ms | **4.7x** | **2.2x** |
-						| 📞 Function calls | <span style="color:lightgreen">20.1ms</span> | <span style="color:orangered">72.6ms</span> | 50.9ms | **2.5x** | 0.7x |
-						| 🔢 Math intensive | <span style="color:lightgreen">3.1ms</span> | <span style="color:green">33.3ms</span> | 39.6ms | **12.8x** | **1.2x** |
-						| 💾 Memory alloc | <span style="color:lightgreen">9.0ms</span> | <span style="color:green">18.1ms</span> | 41.9ms | **4.7x** | **2.3x** |
-						| 🔄 Nested loops | <span style="color:lightgreen">6.4ms</span> | <span style="color:orangered">74.7ms</span> | 57.0ms | **8.9x** | 0.76x |
-						| 📝 String ops | <span style="color:green">21.0ms</span> | <span style="color:lightgreen">12.1ms</span> | 35.4ms | **1.7x** | **2.9x** |
+						| 🧮 Arithmetic ops | <span style="color:lightgreen">6.3ms</span> | <span style="color:green">74.2ms</span> | 131.5ms | **20.9x** | **1.8x** |
+						| 📦 Array ops | <span style="color:lightgreen">7.5ms</span> | <span style="color:green">34.2ms</span> | 54.1ms | **7.2x** | **1.6x** |
+						| 🔁 For loops | <span style="color:lightgreen">11.3ms</span> | <span style="color:green">21.4ms</span> | 52.4ms | **4.6x** | **2.4x** |
+						| 📞 Function calls | <span style="color:lightgreen">8.3ms</span> | <span style="color:orangered">65.0ms</span> | 39.7ms | **4.8x** | 0.61x |
+						| 🔢 Math intensive | <span style="color:lightgreen">5.5ms</span> | <span style="color:green">33.0ms</span> | 39.7ms | **7.2x** | **1.2x** |
+						| 💾 Memory alloc | <span style="color:lightgreen">1.7ms</span> | <span style="color:green">12.0ms</span> | 30.1ms | **17.7x** | **2.5x** |
+						| 🔄 Nested loops | <span style="color:lightgreen">5.6ms</span> | <span style="color:orangered">70.8ms</span> | 52.0ms | **9.3x** | 0.73x |
+						| 📝 String ops | <span style="color:green">13.8ms</span> | <span style="color:lightgreen">9.8ms</span> | 32.3ms | **2.3x** | **3.3x** |
 
-						**Key Takeaway:** C backend ~1.7-21x faster than Python, VM competitive for many workloads
+						**Key Takeaway:** C backend ~2-21x faster than Python, VM competitive for many workloads
 
 						---
 

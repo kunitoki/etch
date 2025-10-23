@@ -65,7 +65,6 @@ test-capi:
 
 # Test performance
 perf:
-    @just build
     nimble perf
 
 # Clean build artifacts

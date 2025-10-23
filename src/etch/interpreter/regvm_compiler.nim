@@ -817,6 +817,85 @@ proc compileBinOp(c: var RegCompiler, op: BinOp, dest, left, right: uint8, debug
   of boIn: c.prog.emitABC(ropIn, dest, left, right, debug)
   of boNotIn: c.prog.emitABC(ropNotIn, dest, left, right, debug)
 
+proc isInlinableFunction(c: var RegCompiler, funcName: string): bool =
+  ## Check if a function is suitable for inlining
+  ## Criteria: very small, pure, non-recursive, simple control flow
+  if not c.funInstances.hasKey(funcName):
+    return false
+
+  let funcDecl = c.funInstances[funcName]
+
+  # Don't inline functions with complex names (generic instantiations, builtins, etc.)
+  # Be conservative - only inline simple user-defined functions
+  # Skip if name suggests it's a builtin or complex function
+  if funcName in ["print__I_v", "seed__i_v", "rand__ii_i", "rand__i_i"]:
+    return false
+
+  # Only inline very simple functions (single return statement)
+  if funcDecl.body.len != 1:
+    return false
+
+  # Must be a single return statement with a simple expression
+  let stmt = funcDecl.body[0]
+  if stmt.kind != skReturn:
+    return false
+
+  if not stmt.re.isSome():
+    return false
+
+  let retExpr = stmt.re.get()
+
+  # Only inline if the return expression is a simple binary operation or variable
+  # Don't inline if it contains calls, control flow, or complex operations
+  proc isSimpleExpr(e: Expr): bool =
+    case e.kind:
+    of ekVar, ekInt, ekFloat, ekString, ekBool, ekChar:
+      return true
+    of ekBin:
+      # Only simple arithmetic and comparison operations
+      return isSimpleExpr(e.lhs) and isSimpleExpr(e.rhs) and
+             e.bop in {boAdd, boSub, boMul, boDiv, boMod, boEq, boNe, boLt, boLe, boGt, boGe}
+    of ekUn:
+      return isSimpleExpr(e.ue)
+    else:
+      return false
+
+  if not isSimpleExpr(retExpr):
+    return false
+
+  return true
+
+proc inlineFunction(c: var RegCompiler, funcName: string, argRegs: seq[uint8], resultReg: uint8) =
+  ## Inline a function call by compiling its body with parameter substitution
+  let funcDecl = c.funInstances[funcName]
+  log(c.verbose, &"Inlining function {funcName} into register {resultReg}")
+
+  # Create a parameter mapping: param name -> arg register
+  var paramMap: Table[string, uint8]
+  for i, param in funcDecl.params:
+    if i < argRegs.len:
+      paramMap[param.name] = argRegs[i]
+      log(c.verbose, &"  Param '{param.name}' -> R{argRegs[i]}")
+
+  # Save current register map and replace it with parameter map
+  let savedRegMap = c.allocator.regMap
+  c.allocator.regMap = paramMap
+
+  # Compile function body
+  for stmt in funcDecl.body:
+    if stmt.kind == skReturn and stmt.re.isSome():
+      # For return statements, compile the expression directly to resultReg
+      let retExpr = stmt.re.get()
+      let tempReg = c.compileExpr(retExpr)
+      if tempReg != resultReg:
+        c.prog.emitABC(ropMove, resultReg, tempReg, 0)
+        c.allocator.freeReg(tempReg)
+    else:
+      c.compileStmt(stmt)
+
+  # Restore register map
+  c.allocator.regMap = savedRegMap
+
 proc compileCall(c: var RegCompiler, e: Expr): uint8 =
   ## Compile function call
   result = c.allocator.allocReg()
@@ -840,6 +919,26 @@ proc compileCall(c: var RegCompiler, e: Expr): uint8 =
   log(c.verbose, &"compileCall: {e.fname} allocated reg {result}")
   log(c.verbose, &"   original args.len = {e.args.len}")
   log(c.verbose, &"   complete args.len = {completeArgs.len}")
+
+  # Try to inline if optimization level >= 1
+  if c.optimizeLevel >= 1 and c.isInlinableFunction(e.fname):
+    log(c.verbose, &"Attempting to inline function {e.fname}")
+
+    # Compile arguments to registers
+    var argRegs: seq[uint8] = @[]
+    for arg in completeArgs:
+      let argReg = c.compileExpr(arg)
+      argRegs.add(argReg)
+
+    # Inline the function
+    c.inlineFunction(e.fname, argRegs, result)
+
+    # Free argument registers
+    for argReg in argRegs:
+      c.allocator.freeReg(argReg)
+
+    log(c.verbose, &"Successfully inlined {e.fname}")
+    return result
 
   # Get or create function index for direct calls
   let funcIdx = c.addFunctionIndex(e.fname)
@@ -1728,10 +1827,116 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
   return compiler.prog
 
 proc optimizeBytecode*(prog: var RegBytecodeProgram) =
-  ## Apply bytecode optimization passes (TODO)
+  ## Apply bytecode optimization passes
 
-  # Pass 1: Constant folding for consecutive LoadK followed by arithmetic
-  # Pattern: LoadK imm1 -> R0; LoadK imm2 -> R1; Add R2 = R0 + R1 => LoadK (imm1+imm2) -> R2
-  var i = 0
-  while i < prog.instructions.len:
-    inc i
+  var changed = true
+  var passes = 0
+  const maxPasses = 3
+
+  while changed and passes < maxPasses:
+    changed = false
+    inc passes
+
+    # Pass 1: Build optimized instruction sequence
+    var newInstructions: seq[RegInstruction] = @[]
+    var skipNext = false
+
+    var i = 0
+    while i < prog.instructions.len:
+      if skipNext:
+        skipNext = false
+        inc i
+        continue
+
+      let instr = prog.instructions[i]
+
+      # Skip dead moves (Move R1, R1)
+      if instr.op == ropMove and instr.opType == 0 and instr.a == instr.b:
+        changed = true
+        inc i
+        continue
+
+      # Check for redundant move pairs
+      if i < prog.instructions.len - 1:
+        let next = prog.instructions[i + 1]
+        if instr.op == ropMove and next.op == ropMove and instr.opType == 0 and next.opType == 0:
+          # Check if they're inverses (Move R1, R2; Move R2, R1)
+          if instr.a == next.b and instr.b == next.a:
+            newInstructions.add(instr)
+            skipNext = true
+            changed = true
+            inc i
+            continue
+
+      # Constant folding for LoadK, LoadK, BinOp pattern
+      if i < prog.instructions.len - 2:
+        let instr1 = instr
+        let instr2 = prog.instructions[i + 1]
+        let instr3 = prog.instructions[i + 2]
+
+        if instr1.op == ropLoadK and instr2.op == ropLoadK and instr1.opType == 1 and instr2.opType == 1:
+          let r1 = instr1.a
+          let r2 = instr2.a
+          let k1 = instr1.bx
+          let k2 = instr2.bx
+
+          # Check if next instruction uses both registers
+          if instr3.opType == 0 and instr3.b == r1 and instr3.c == r2:
+            if k1 < prog.constants.len.uint16 and k2 < prog.constants.len.uint16:
+              let c1 = prog.constants[k1]
+              let c2 = prog.constants[k2]
+
+              # Only fold integer operations
+              if c1.kind == vkInt and c2.kind == vkInt:
+                var foldedValue: Option[int64] = none(int64)
+
+                case instr3.op:
+                of ropAdd:
+                  foldedValue = some(c1.ival + c2.ival)
+                of ropSub:
+                  foldedValue = some(c1.ival - c2.ival)
+                of ropMul:
+                  foldedValue = some(c1.ival * c2.ival)
+                of ropDiv:
+                  if c2.ival != 0:
+                    foldedValue = some(c1.ival div c2.ival)
+                of ropMod:
+                  if c2.ival != 0:
+                    foldedValue = some(c1.ival mod c2.ival)
+                else:
+                  discard
+
+                if foldedValue.isSome():
+                  # Find or add constant
+                  var constIdx = 0'u16
+                  var found = false
+                  for j, c in prog.constants:
+                    if c.kind == vkInt and c.ival == foldedValue.get():
+                      constIdx = uint16(j)
+                      found = true
+                      break
+
+                  if not found:
+                    constIdx = uint16(prog.constants.len)
+                    prog.constants.add(regvm.makeInt(foldedValue.get()))
+
+                  # Create folded instruction
+                  var foldedInstr = RegInstruction(
+                    op: ropLoadK,
+                    a: instr3.a,
+                    opType: 1,
+                    bx: constIdx,
+                    debug: instr1.debug
+                  )
+                  newInstructions.add(foldedInstr)
+
+                  # Skip all three instructions
+                  i += 3
+                  changed = true
+                  continue
+
+      newInstructions.add(instr)
+      inc i
+
+    if changed:
+      prog.instructions = newInstructions

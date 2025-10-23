@@ -195,23 +195,41 @@ proc compileAndRunCBackend(bytecode: RegBytecodeProgram, sourceFile: string, ver
   return runExitCode
 
 
-proc runPerformanceBenchmarks(perfDir: string = "performance"): int =
+proc runPerformanceBenchmarks(perfPath: string = "performance"): int =
   echo "===== Running performance benchmarks ====="
+
+  var perfDir: string
+  var benchmarks: seq[string] = @[]
+  var singleFile = false
+
+  # Check if path is a file or directory
+  if fileExists(perfPath):
+    # Single file mode
+    singleFile = true
+    let (dir, name, ext) = splitFile(perfPath)
+    if ext != ".etch":
+      echo "Error: ", perfPath, " must be a .etch file"
+      return 1
+    perfDir = if dir == "": "." else: dir
+    benchmarks.add(name)
+    echo "Running single benchmark: ", name
+  elif dirExists(perfPath):
+    # Directory mode
+    perfDir = perfPath
+
+    # Discover all .etch files that have corresponding .py files
+    for file in walkFiles(perfDir / "*.etch"):
+      let (_, name, _) = splitFile(file)
+      let pyFile = perfDir / name & ".py"
+      if fileExists(pyFile):
+        benchmarks.add(name)
+  else:
+    echo "Error: ", perfPath, " not found (not a file or directory)"
+    return 1
+
   echo "Directory: ", perfDir
   echo "Generating markdown report: performance_report.md"
   echo ""
-
-  if not dirExists(perfDir):
-    echo "Error: ", perfDir, " directory not found"
-    return 1
-
-  # Discover all .etch files that have corresponding .py files
-  var benchmarks: seq[string] = @[]
-  for file in walkFiles(perfDir / "*.etch"):
-    let (_, name, _) = splitFile(file)
-    let pyFile = perfDir / name & ".py"
-    if fileExists(pyFile):
-      benchmarks.add(name)
 
   if benchmarks.len == 0:
     echo "No performance tests found!"
