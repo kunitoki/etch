@@ -885,7 +885,9 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
   of ropAddI:
     if instr.opType == 1:
       let regIdx = instr.bx and 0xFF
-      let imm = int8(instr.bx shr 8)
+      # Reinterpret unsigned 8-bit value as signed using two's complement
+      let imm8 = uint8((instr.bx shr 8) and 0xFF)
+      let imm = if imm8 < 128: int(imm8) else: int(imm8) - 256
       gen.emit(&"r[{a}] = etch_add(r[{regIdx}], etch_make_int({imm}));  // AddI")
     else:
       gen.emit(&"// TODO: AddI with opType {instr.opType}")
@@ -898,7 +900,9 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
   of ropSubI:
     if instr.opType == 1:
       let regIdx = instr.bx and 0xFF
-      let imm = int8(instr.bx shr 8)
+      # Reinterpret unsigned 8-bit value as signed using two's complement
+      let imm8 = uint8((instr.bx shr 8) and 0xFF)
+      let imm = if imm8 < 128: int(imm8) else: int(imm8) - 256
       gen.emit(&"r[{a}] = etch_sub(r[{regIdx}], etch_make_int({imm}));  // SubI")
     else:
       gen.emit(&"// TODO: SubI with opType {instr.opType}")
@@ -911,7 +915,9 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
   of ropMulI:
     if instr.opType == 1:
       let regIdx = instr.bx and 0xFF
-      let imm = int8(instr.bx shr 8)
+      # Reinterpret unsigned 8-bit value as signed using two's complement
+      let imm8 = uint8((instr.bx shr 8) and 0xFF)
+      let imm = if imm8 < 128: int(imm8) else: int(imm8) - 256
       gen.emit(&"r[{a}] = etch_mul(r[{regIdx}], etch_make_int({imm}));  // MulI")
     else:
       gen.emit(&"// TODO: MulI with opType {instr.opType}")

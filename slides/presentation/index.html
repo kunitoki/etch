@@ -1057,31 +1057,32 @@
 
 						## 📊 Benchmark Results
 
-						**Real benchmark data from `hyperfine` on an M3 (generated 2025-10-22)**
+						**Real benchmark data from `hyperfine` on an M3 (generated 2025-10-23)**
 
 						| Benchmark | C | VM | Python 3 | C vs Py | VM vs Py |
 						|-----------|---|-----|----------|---------|----------|
-						| 🧮 Arithmetic ops | <span style="color:lightgreen">6.5ms</span> | <span style="color:orange">115.8ms</span> | 103.5ms | **15.9x** | 0.9x |
-						| 📦 Array ops | <span style="color:lightgreen">6.9ms</span> | <span style="color:green">32.9ms</span> | 42.8ms | **6.2x** | **1.3x** |
-						| 🔁 For loops | <span style="color:lightgreen">10.7ms</span> | <span style="color:green">18.1ms</span> | 39.4ms | **3.7x** | **2.2x** |
-						| 📞 Function calls | <span style="color:lightgreen">14.2ms</span> | <span style="color:orangered">56.8ms</span> | 32.9ms | **2.3x** | 0.6x |
-						| 🔢 Math intensive | <span style="color:lightgreen">5.0ms</span> | <span style="color:green">26.8ms</span> | 31.2ms | **6.2x** | **1.2x** |
-						| 💾 Memory alloc | <span style="color:lightgreen">2.6ms</span> | <span style="color:green">11.3ms</span> | 23.6ms | **9.0x** | **2.1x** |
-						| 🔄 Nested loops | <span style="color:lightgreen">6.6ms</span> | <span style="color:orangered">66.0ms</span> | 40.3ms | **6.1x** | 0.6x |
-						| 📝 String ops | <span style="color:green">13.9ms</span> | <span style="color:lightgreen">10.3ms</span> | 25.2ms | **1.8x** | **2.4x** |
+						| 🧮 Arithmetic ops | <span style="color:lightgreen">5.5ms</span> | <span style="color:orange">124.2ms</span> | 118.0ms | **21.5x** | 0.95x |
+						| 📦 Array ops | <span style="color:lightgreen">7.0ms</span> | <span style="color:green">40.3ms</span> | 61.5ms | **8.8x** | **1.5x** |
+						| 🔁 For loops | <span style="color:lightgreen">10.5ms</span> | <span style="color:green">22.7ms</span> | 48.9ms | **4.7x** | **2.2x** |
+						| 📞 Function calls | <span style="color:lightgreen">20.1ms</span> | <span style="color:orangered">72.6ms</span> | 50.9ms | **2.5x** | 0.7x |
+						| 🔢 Math intensive | <span style="color:lightgreen">3.1ms</span> | <span style="color:green">33.3ms</span> | 39.6ms | **12.8x** | **1.2x** |
+						| 💾 Memory alloc | <span style="color:lightgreen">9.0ms</span> | <span style="color:green">18.1ms</span> | 41.9ms | **4.7x** | **2.3x** |
+						| 🔄 Nested loops | <span style="color:lightgreen">6.4ms</span> | <span style="color:orangered">74.7ms</span> | 57.0ms | **8.9x** | 0.76x |
+						| 📝 String ops | <span style="color:green">21.0ms</span> | <span style="color:lightgreen">12.1ms</span> | 35.4ms | **1.7x** | **2.9x** |
 
-						**Key Takeaway:** C backend ~1.8-15.9x faster than Python, VM competitive for many workloads
+						**Key Takeaway:** C backend ~1.7-21x faster than Python, VM competitive for many workloads
 
 						---
 
 						## 🚀 More Optimization Opportunities
 
 						**Current Optimizations:**
-						- ✅ Constant folding (partial)
+						- ✅ Constant folding (complete - integers, floats, bools, strings)
 						- ✅ Dead code elimination
 						- ✅ Range-based check elimination
 						- ✅ Fused instructions
 						- ✅ Bytecode caching
+						- ✅ Pure function compile-time evaluation
 
 						**Future Optimizations:**
 						- 🔄 Loop hoisting optimizations
@@ -1168,7 +1169,7 @@
 
 						**Phase 1: Bytecode optimization** 💾
 						- 🔧 Re-enable optimizer
-						- 📊 Enhanced constant folding
+						- ✅ Enhanced constant folding (COMPLETED!)
 						- 🛡️ Integrate prover data into compiler
 
 						**Phase 2: Instruction improvements** 🎯
