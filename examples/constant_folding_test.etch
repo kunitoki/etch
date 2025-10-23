@@ -1,0 +1,48 @@
+// Test: Constant folding should happen everywhere, not just in comptime blocks
+// This tests that basic arithmetic on constants is folded at compile time
+
+fn pureAdd(a: int, b: int) -> int {
+  return a + b;
+}
+
+fn main() -> void {
+  // Test 1: Direct constant arithmetic (binary operations)
+  // These should be folded to constants
+  let x1 = 10 + 20;
+  let x2 = 100 * 2;
+  let x3 = 500 - 200;
+  let x4 = 1000 / 10;
+
+  // Test 2: Pure function calls with constant arguments
+  // This should be folded by tryEvaluatePureFunction
+  let y1 = pureAdd(5, 10);
+  let y2 = pureAdd(100, 200);
+
+  // Test 3: Nested constant expressions
+  // These should all fold to constants
+  let z1 = (10 + 20) * 2;
+  let z2 = 100 + pureAdd(50, 50);
+
+  // Test 4: Same operations in comptime (for comparison)
+  let c1 = comptime(10 + 20);
+  let c2 = comptime(pureAdd(5, 10));
+
+  // Print results to verify correctness
+  print("Direct arithmetic:");
+  print("  x1 = " + toString(x1));  // Should be 30
+  print("  x2 = " + toString(x2));  // Should be 200
+  print("  x3 = " + toString(x3));  // Should be 300
+  print("  x4 = " + toString(x4));  // Should be 100
+
+  print("Pure function calls:");
+  print("  y1 = " + toString(y1));  // Should be 15
+  print("  y2 = " + toString(y2));  // Should be 300
+
+  print("Nested expressions:");
+  print("  z1 = " + toString(z1));  // Should be 60
+  print("  z2 = " + toString(z2));  // Should be 200
+
+  print("Comptime:");
+  print("  c1 = " + toString(c1));  // Should be 30
+  print("  c2 = " + toString(c2));  // Should be 15
+}

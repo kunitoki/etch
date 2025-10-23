@@ -238,13 +238,19 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
     if c.optimizeLevel >= 1 and e.rhs.kind == ekInt and
        e.rhs.ival >= -128 and e.rhs.ival <= 127:
       # Can use immediate version
+      # Properly encode signed 8-bit immediate value using two's complement
+      # For negative values, we need to convert to unsigned representation
+      let imm8 = if e.rhs.ival < 0:
+                   uint8(256 + e.rhs.ival)  # Two's complement: -1 becomes 255, -2 becomes 254, etc.
+                 else:
+                   uint8(e.rhs.ival)
       case e.bop:
       of boAdd:
-        c.prog.emitABx(ropAddI, result, uint16(leftReg) or (uint16(e.rhs.ival) shl 8), c.makeDebugInfo(e.pos))
+        c.prog.emitABx(ropAddI, result, uint16(leftReg) or (uint16(imm8) shl 8), c.makeDebugInfo(e.pos))
       of boSub:
-        c.prog.emitABx(ropSubI, result, uint16(leftReg) or (uint16(e.rhs.ival) shl 8), c.makeDebugInfo(e.pos))
+        c.prog.emitABx(ropSubI, result, uint16(leftReg) or (uint16(imm8) shl 8), c.makeDebugInfo(e.pos))
       of boMul:
-        c.prog.emitABx(ropMulI, result, uint16(leftReg) or (uint16(e.rhs.ival) shl 8), c.makeDebugInfo(e.pos))
+        c.prog.emitABx(ropMulI, result, uint16(leftReg) or (uint16(imm8) shl 8), c.makeDebugInfo(e.pos))
       else:
         # Fall back to regular instruction
         c.compileBinOp(e.bop, result, leftReg, rightReg, c.makeDebugInfo(e.pos))

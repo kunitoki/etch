@@ -90,8 +90,142 @@ proc foldExpr(prog: Program, e: var Expr) =
   case e.kind
   of ekBin:
     foldExpr(prog, e.lhs); foldExpr(prog, e.rhs)
+
+    # Constant fold binary operations on integer and float literals
+    if e.lhs.kind == ekInt and e.rhs.kind == ekInt:
+      # Both operands are integer constants - fold the operation
+      var foldedValue: Option[int64] = none[int64]()
+
+      case e.bop:
+      of boAdd:
+        # Check for overflow before folding
+        let a = e.lhs.ival
+        let b = e.rhs.ival
+        if (b > 0 and a > high(int64) - b) or (b < 0 and a < low(int64) - b):
+          discard  # Overflow would occur - don't fold, let prover catch it
+        else:
+          foldedValue = some(a + b)
+      of boSub:
+        let a = e.lhs.ival
+        let b = e.rhs.ival
+        if (b < 0 and a > high(int64) + b) or (b > 0 and a < low(int64) + b):
+          discard  # Overflow would occur - don't fold
+        else:
+          foldedValue = some(a - b)
+      of boMul:
+        let a = e.lhs.ival
+        let b = e.rhs.ival
+        # Check for multiplication overflow
+        if b != 0 and ((a > 0 and b > 0 and a > high(int64) div b) or
+                       (a > 0 and b < 0 and b < low(int64) div a) or
+                       (a < 0 and b > 0 and a < low(int64) div b) or
+                       (a < 0 and b < 0 and a != 0 and b < high(int64) div a)):
+          discard  # Overflow would occur - don't fold
+        else:
+          foldedValue = some(a * b)
+      of boDiv:
+        if e.rhs.ival == 0:
+          discard  # Division by zero - don't fold, let prover catch it
+        elif e.lhs.ival == low(int64) and e.rhs.ival == -1:
+          discard  # Overflow case: IMin / -1 - don't fold
+        else:
+          foldedValue = some(e.lhs.ival div e.rhs.ival)
+      of boMod:
+        if e.rhs.ival == 0:
+          discard  # Modulo by zero - don't fold
+        else:
+          foldedValue = some(e.lhs.ival mod e.rhs.ival)
+      of boEq:
+        e = Expr(kind: ekBool, bval: e.lhs.ival == e.rhs.ival, pos: e.pos)
+        return
+      of boNe:
+        e = Expr(kind: ekBool, bval: e.lhs.ival != e.rhs.ival, pos: e.pos)
+        return
+      of boLt:
+        e = Expr(kind: ekBool, bval: e.lhs.ival < e.rhs.ival, pos: e.pos)
+        return
+      of boLe:
+        e = Expr(kind: ekBool, bval: e.lhs.ival <= e.rhs.ival, pos: e.pos)
+        return
+      of boGt:
+        e = Expr(kind: ekBool, bval: e.lhs.ival > e.rhs.ival, pos: e.pos)
+        return
+      of boGe:
+        e = Expr(kind: ekBool, bval: e.lhs.ival >= e.rhs.ival, pos: e.pos)
+        return
+      else:
+        discard  # Other operations not foldable for integers
+
+      if foldedValue.isSome:
+        e = Expr(kind: ekInt, ival: foldedValue.get, pos: e.pos)
+
+    elif e.lhs.kind == ekFloat and e.rhs.kind == ekFloat:
+      # Both operands are float constants - fold the operation
+      case e.bop:
+      of boAdd:
+        e = Expr(kind: ekFloat, fval: e.lhs.fval + e.rhs.fval, pos: e.pos)
+      of boSub:
+        e = Expr(kind: ekFloat, fval: e.lhs.fval - e.rhs.fval, pos: e.pos)
+      of boMul:
+        e = Expr(kind: ekFloat, fval: e.lhs.fval * e.rhs.fval, pos: e.pos)
+      of boDiv:
+        if e.rhs.fval != 0.0:
+          e = Expr(kind: ekFloat, fval: e.lhs.fval / e.rhs.fval, pos: e.pos)
+      of boEq:
+        e = Expr(kind: ekBool, bval: e.lhs.fval == e.rhs.fval, pos: e.pos)
+      of boNe:
+        e = Expr(kind: ekBool, bval: e.lhs.fval != e.rhs.fval, pos: e.pos)
+      of boLt:
+        e = Expr(kind: ekBool, bval: e.lhs.fval < e.rhs.fval, pos: e.pos)
+      of boLe:
+        e = Expr(kind: ekBool, bval: e.lhs.fval <= e.rhs.fval, pos: e.pos)
+      of boGt:
+        e = Expr(kind: ekBool, bval: e.lhs.fval > e.rhs.fval, pos: e.pos)
+      of boGe:
+        e = Expr(kind: ekBool, bval: e.lhs.fval >= e.rhs.fval, pos: e.pos)
+      else:
+        discard  # Other operations not foldable for floats
+
+    elif e.lhs.kind == ekBool and e.rhs.kind == ekBool:
+      # Both operands are boolean constants - fold logical operations
+      case e.bop:
+      of boAnd:
+        e = Expr(kind: ekBool, bval: e.lhs.bval and e.rhs.bval, pos: e.pos)
+      of boOr:
+        e = Expr(kind: ekBool, bval: e.lhs.bval or e.rhs.bval, pos: e.pos)
+      of boEq:
+        e = Expr(kind: ekBool, bval: e.lhs.bval == e.rhs.bval, pos: e.pos)
+      of boNe:
+        e = Expr(kind: ekBool, bval: e.lhs.bval != e.rhs.bval, pos: e.pos)
+      else:
+        discard
+
+    elif e.lhs.kind == ekString and e.rhs.kind == ekString:
+      # Both operands are string constants - fold string concatenation
+      case e.bop:
+      of boAdd:  # String concatenation
+        e = Expr(kind: ekString, sval: e.lhs.sval & e.rhs.sval, pos: e.pos)
+      of boEq:
+        e = Expr(kind: ekBool, bval: e.lhs.sval == e.rhs.sval, pos: e.pos)
+      of boNe:
+        e = Expr(kind: ekBool, bval: e.lhs.sval != e.rhs.sval, pos: e.pos)
+      else:
+        discard
   of ekUn:
     foldExpr(prog, e.ue)
+
+    # Constant fold unary operations
+    case e.uop:
+    of uoNeg:
+      if e.ue.kind == ekInt:
+        # Check for overflow (negating IMin would overflow)
+        if e.ue.ival != low(int64):
+          e = Expr(kind: ekInt, ival: -e.ue.ival, pos: e.pos)
+      elif e.ue.kind == ekFloat:
+        e = Expr(kind: ekFloat, fval: -e.ue.fval, pos: e.pos)
+    of uoNot:
+      if e.ue.kind == ekBool:
+        e = Expr(kind: ekBool, bval: not e.ue.bval, pos: e.pos)
   of ekCall:
     for i in 0..<e.args.len: foldExpr(prog, e.args[i])
 
@@ -221,7 +355,7 @@ proc foldExpr(prog: Program, e: var Expr) =
         var subst = initTable[string, EtchType]()
         for stmt in e.compilesBlock:
           typecheckStmt(prog, dummyFd, isolatedScope, stmt, subst)
-      except Exception as ex:
+      except Exception:
         # If any exception occurs during typechecking, the code doesn't compile
         compiles = false
 
@@ -404,6 +538,7 @@ proc foldComptime*(prog: Program, root: var Program) =
   for fname, f in pairs(root.funInstances):
     for i in 0..<f.body.len:
       var s = f.body[i]; foldStmt(prog, s); f.body[i] = s
+
 
 # Helper to only process ekCompiles expressions (skip comptime blocks)
 proc foldCompilesInExpr(prog: Program, e: var Expr) =

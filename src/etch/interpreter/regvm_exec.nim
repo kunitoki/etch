@@ -454,15 +454,13 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
           flushOutput()
           return -1  # Special return code: paused for debugging
 
-    when defined(debugRegVM):
-      echo "[", pc, "] ", instr.op, " a=", instr.a,
-           (if instr.opType == 0: " b=" & $instr.b & " c=" & $instr.c
-            elif instr.opType == 1: " bx=" & $instr.bx
-            elif instr.opType == 2: " sbx=" & $instr.sbx
-            else: " ax=" & $instr.ax)
+    log(verbose, "[" & $pc & "] " & $instr.op & " a=" & $instr.a &
+          (if instr.opType == 0: " b=" & $instr.b & " c=" & $instr.c
+          elif instr.opType == 1: " bx=" & $instr.bx
+          elif instr.opType == 2: " sbx=" & $instr.sbx
+          else: " ax=" & $instr.ax))
 
-    if verbose:
-      log(verbose, "PC=" & $pc & " op=" & $instr.op)
+    log(verbose, "PC=" & $pc & " op=" & $instr.op)
 
     inc pc
 
@@ -541,24 +539,30 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
     # --- Immediate Arithmetic (Optimized) ---
     of ropAddI:
       let reg = getReg(vm, uint8(instr.bx and 0xFF))
-      let imm = int64(int8(instr.bx shr 8))
       if isInt(reg):
+        # Reinterpret unsigned 8-bit value as signed using two's complement
+        let imm8 = uint8((instr.bx shr 8) and 0xFF)
+        let imm = int64(if imm8 < 128: int(imm8) else: int(imm8) - 256)
         setReg(vm, instr.a, makeInt(getInt(reg) + imm))
       else:
         setReg(vm, instr.a, makeNil())
 
     of ropSubI:
       let reg = getReg(vm, uint8(instr.bx and 0xFF))
-      let imm = int64(int8(instr.bx shr 8))
       if isInt(reg):
+        # Reinterpret unsigned 8-bit value as signed using two's complement
+        let imm8 = uint8((instr.bx shr 8) and 0xFF)
+        let imm = int64(if imm8 < 128: int(imm8) else: int(imm8) - 256)
         setReg(vm, instr.a, makeInt(getInt(reg) - imm))
       else:
         setReg(vm, instr.a, makeNil())
 
     of ropMulI:
       let reg = getReg(vm, uint8(instr.bx and 0xFF))
-      let imm = int64(int8(instr.bx shr 8))
       if isInt(reg):
+        # Reinterpret unsigned 8-bit value as signed using two's complement
+        let imm8 = uint8((instr.bx shr 8) and 0xFF)
+        let imm = int64(if imm8 < 128: int(imm8) else: int(imm8) - 256)
         setReg(vm, instr.a, makeInt(getInt(reg) * imm))
       else:
         setReg(vm, instr.a, makeNil())
@@ -1019,14 +1023,13 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       let step = getReg(vm, instr.a + 2)
 
       # Debug output
-      when defined(debugRegVM):
-        echo "ForLoop: idx=", (if idx.isInt(): $idx.ival else: "nil/non-int"),
-             " limit=", (if limit.isInt(): $limit.ival else: "nil/non-int"),
-             " step=", (if step.isInt(): $step.ival else: "nil/non-int"),
-             " sbx=", instr.sbx
-        echo "  -> reg[", instr.a, "] type kind = ", idx.kind
-        echo "  -> reg[", instr.a+1, "] type kind = ", limit.kind
-        echo "  -> reg[", instr.a+2, "] type kind = ", step.kind
+      log(verbose, "ForLoop: idx=" & (if idx.isInt(): $idx.ival else: "nil/non-int") &
+             " limit=" & (if limit.isInt(): $limit.ival else: "nil/non-int") &
+             " step=" & (if step.isInt(): $step.ival else: "nil/non-int") &
+             " sbx=" & $instr.sbx)
+      log(verbose, "  -> reg[" & $instr.a & "] type kind = " & $idx.kind)
+      log(verbose, "  -> reg[" & $(instr.a + 1) & "] type kind = " & $limit.kind)
+      log(verbose, "  -> reg[" & $(instr.a + 2) & "] type kind = " & $step.kind)
 
       if idx.isInt() and limit.isInt() and step.isInt():
         let newIdx = idx.ival + step.ival
@@ -1046,11 +1049,11 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       let step = getReg(vm, instr.a + 2)
 
       # Debug output
-      when defined(debugRegVM):
-        echo "ForPrep: idx=", (if idx.isInt(): $idx.ival else: "?"),
-             " limit=", (if limit.isInt(): $limit.ival else: "?"),
-             " step=", (if step.isInt(): $step.ival else: "?"),
-             " sbx=", instr.sbx
+      log(verbose,
+        "ForPrep: idx=" & (if idx.isInt(): $idx.ival else: "?") &
+        " limit=" & (if limit.isInt(): $limit.ival else: "?") &
+        " step=" & (if step.isInt(): $step.ival else: "?") &
+        " sbx=" & $instr.sbx)
 
       if idx.isInt() and limit.isInt() and step.isInt():
         # Check if loop should run at all based on initial values
@@ -1058,8 +1061,7 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
         let idxVal = idx.ival
         let limitVal = limit.ival
 
-        when defined(debugRegVM):
-          echo "  -> Initial idx=", idxVal, " limit=", limitVal, " step=", stepVal
+        log(verbose, "  -> Initial idx=" & $idxVal & " limit=" & $limitVal & " step=" & $stepVal)
 
         if likely(stepVal > 0):
           if unlikely(idxVal >= limitVal):

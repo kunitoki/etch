@@ -1,0 +1,15 @@
+// Simple test to verify constant folding without string operations
+
+fn main() -> void {
+  // All of these should be folded to constants at compile time
+  let a = 10 + 20;        // Should fold to 30
+  let b = 100 * 2;        // Should fold to 200
+  let c = 500 - 200;      // Should fold to 300
+  let d = 1000 / 10;      // Should fold to 100
+  let e = (10 + 20) * 2;  // Should fold to 60
+  let f = 5 + 10 + 15;    // Should fold to 30
+
+  // Just return the sum to verify correctness
+  let sum = a + b + c + d + e + f;
+  print(sum);  // Should print 720
+}

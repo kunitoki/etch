@@ -1,0 +1,14 @@
+Direct arithmetic:
+  x1 = 30
+  x2 = 200
+  x3 = 300
+  x4 = 100
+Pure function calls:
+  y1 = 15
+  y2 = 300
+Nested expressions:
+  z1 = 60
+  z2 = 200
+Comptime:
+  c1 = 30
+  c2 = 15
