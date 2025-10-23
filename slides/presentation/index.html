@@ -17,42 +17,44 @@
 			/* Global reset and base styles */
 			.reveal h1, .reveal h2, .reveal h3 {
 				text-transform: none;
+				font-weight: 600;
 			}
 
-			/* Heading sizes - reduced for better fit */
+			/* Default heading sizes - balanced proportions */
 			.reveal h1 {
-				font-size: 1.7em;
-				margin-bottom: 0.3em;
-				line-height: 1.0;
+				font-size: 2.2em;
+				margin-bottom: 0.5em;
+				line-height: 1.1;
 			}
 			.reveal h2 {
-				font-size: 1.2em;
-				margin-bottom: 0.3em;
-				line-height: 1.1;
+				font-size: 1.5em;
+				margin-bottom: 0.4em;
+				line-height: 1.2;
 			}
 			.reveal h3 {
-				font-size: 1.0em;
-				margin-bottom: 0.25em;
-				line-height: 1.1;
+				font-size: 1.15em;
+				margin-bottom: 0.35em;
+				line-height: 1.2;
 			}
 
-			/* Body text and lists - smaller and tighter */
+			/* Body text and lists - proportional to headings */
 			.reveal p, .reveal li {
-				font-size: 0.7em;
-				line-height: 1.35;
-				margin-bottom: 0.4em;
+				font-size: 0.85em;
+				line-height: 1.5;
+				margin-bottom: 0.5em;
 			}
 			.reveal ul, .reveal ol {
-				margin-top: 0.4em;
-				margin-bottom: 0.4em;
+				margin-top: 0.5em;
+				margin-bottom: 0.5em;
 			}
 			.reveal li {
-				margin-bottom: 0.3em;
+				margin-bottom: 0.35em;
 			}
 
-			/* Strong text - ensure it's visible but not huge */
+			/* Strong text */
 			.reveal strong {
-				font-weight: bold;
+				font-weight: 700;
+				color: #64FFDA;
 			}
 
 			/* Images */
@@ -73,35 +75,35 @@
 				color: #64FFDA;
 			}
 
-			/* Code blocks - smaller for better fit */
+			/* Code blocks - proportional sizing */
 			.reveal pre {
-				margin: 0.4em 0;
-				font-size: 0.65em;
+				margin: 0.6em 0;
+				font-size: 0.7em;
 				width: 100%;
 			}
 			.reveal pre code {
-				max-height: 420px;
-				font-size: 0.65em;
-				line-height: 1.25;
-				padding: 0.6em;
+				max-height: 480px;
+				font-size: 0.7em;
+				line-height: 1.35;
+				padding: 0.8em;
 			}
 
-			/* Tables - compact */
+			/* Tables - balanced sizing */
 			.reveal table {
-				font-size: 0.65em;
-				line-height: 1.25;
-				margin: 0.4em auto;
+				font-size: 0.6em;
+				line-height: 1.2;
+				margin: 0.5em auto;
 			}
 			.reveal table th,
 			.reveal table td {
-				padding: 0.25em 0.4em;
+				padding: 0.3em 0.5em;
 			}
 
 			/* Blockquotes */
 			.reveal blockquote {
-				font-size: 0.7em;
-				padding: 0.4em 0.8em;
-				margin: 0.4em 0;
+				font-size: 0.85em;
+				padding: 0.6em 1em;
+				margin: 0.6em 0;
 			}
 
 			/* Slide alignment */
@@ -112,26 +114,54 @@
 				text-align: center;
 			}
 
-			/* Compact slide styling for content-heavy slides */
+			/* Compact slide styling for content-heavy slides - tighter spacing */
 			.reveal .compact h1 {
-				font-size: 1.3em;
+				font-size: 1.4em;
 				margin-bottom: 0.25em;
+				line-height: 1.0;
 			}
 			.reveal .compact h2 {
 				font-size: 1.1em;
-				margin-bottom: 0.25em;
+				margin-bottom: 0.2em;
+				line-height: 1.0;
 			}
 			.reveal .compact h3 {
 				font-size: 0.9em;
-				margin-bottom: 0.2em;
+				margin-bottom: 0.15em;
+				line-height: 0.8;
 			}
-			.reveal .compact p,
-			.reveal .compact li {
-				font-size: 0.52em;
+			.reveal .compact p {
+				font-size: 0.6em;
 				line-height: 1.2;
 				margin-bottom: 0.25em;
 			}
+			.reveal .compact li {
+				font-size: 0.58em;
+				line-height: 1.25;
+				margin-bottom: 0.15em;
+			}
+			.reveal .compact ul,
+			.reveal .compact ol {
+				margin-top: 0.25em;
+				margin-bottom: 0.25em;
+			}
+			.reveal .compact pre {
+				margin: 0.4em 0;
+				font-size: 0.68em;
+			}
+			.reveal .compact pre code {
+				max-height: 420px;
+				font-size: 0.68em;
+				line-height: 1.25;
+				padding: 0.6em;
+			}
+			.reveal .compact table {
+				font-size: 0.68em;
+				line-height: 1.25;
+			}
+		</style>
 
+		<style>
 			/* Custom syntax highlighting colors for Etch language */
 			.reveal .hljs table {
  			    margin: auto !important;
@@ -171,21 +201,74 @@
 				<!-- Slide: Title Slide -->
 				<section class="center compact" data-markdown>
 					<textarea data-template>
-						# ETCH
-						## Define Once, Etch Forever.
+						# **ETCH**
+						## Define **Once**, Etch **Forever**.
 
 						<img src="assets/matches.jpg" alt="Etch Matches" style="max-width: 40%; border-radius: 10px; margin: 20px auto;">
 
-						A safety-first programming language that proves correctness at compile-time, ready to etch your mind!
+						A language that *keeps you safe* before it even runs,<br>
+						yet feels like *you're just scripting* - **until it blows your mind!**
+					</textarea>
+				</section>
+
+				<!-- Slide: Why Etch? -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## Why Etch? 🤔
+
+						**The Origin Story Nobody Asked For (But You're Getting Anyway)**
+
+						The Endless Quest: 🔍
+
+						- Spent *years* hunting for the "perfect" scripting engine.
+
+						- Lua? *Too bare.* Python? *Too slow.* JavaScript? *Too... JavaScript.*
+
+						- Tried them all. They all lacked *something*.
+
+						- Performance ⚡ vs Safety 🛡️ vs Simplicity 📝. You can only **pick two**.
+
+						---
+
+						## Why Etch? 🤔
+
+						**The Origin Story Nobody Asked For (But You're Getting Anyway)**
+
+						The "Why Not?" Moment: 💡
+
+						- **Plot twist:** Compilers are actually **FUN** to build! 🎉
+
+						- Living in the age of AI: *"Make an app!"* 🤖
+
+						- Me: *"...What if I make a LANGUAGE instead?"* 🎯
+
+						- **YOLO Compiler Theory!**
+
+						---
+
+						## Why Etch? 🤔
+
+						**The Origin Story Nobody Asked For (But You're Getting Anyway)**
+
+						The Mad Experiment: 🚀
+
+						- Built Etch as a *playground* for compiler tech
+
+						- Prove correctness? *Why not!*
+
+						- Safety without complexity? *Challenge accepted!*
+
+						- **Etch: Because life's too short** 🔥
+
 					</textarea>
 				</section>
 
 				<!-- Slide: The Problem -->
 				<section class="center compact" data-markdown>
 					<textarea data-template>
-						## The Problem: Runtime Safety Bugs
+						## The Bugs That Haunt Your Dreams
 
-						Common bugs that appear at runtime, not compile-time:
+						Those sneaky runtime gremlins - the ones that compile just fine, only to explode right when you hit play.
 
 						**Numerical Safety Issues:**
 						- ❌ Division by zero crashes
@@ -231,7 +314,7 @@
 						}
 						```
 
-						📝 **C-like syntax** you already know-*simple, clean, familiar*.
+						**C-like syntax** you already know-*simple, clean, familiar*.
 
 						No need to learn *Klingon* to say hello! 🖖
 
@@ -252,7 +335,7 @@
 											🛡️ Safety Prover (Range Analysis + Symbolic Execution)
 												↓
 											⚡ Comptime Executor (AST Transformation)
-															↓
+														   ↓
 												┌──────────┴──────────┐
 												↓                     ↓
 											💾 Bytecode VM      🔧 C Code Generator
@@ -270,13 +353,13 @@
 
 						| Stage | Process | Output |
 						|-------|---------|--------|
-						| 1️⃣ | **Lexer** | Token stream (frontend/lexer.nim) |
-						| 2️⃣ | **Parser** | AST (frontend/ast.nim - frontend/parser.nim) |
+						| 1️⃣ | **Lexer** | Token stream (frontend/lexer) |
+						| 2️⃣ | **Parser** | AST (frontend/ast - frontend/parser) |
 						| 3️⃣ | **Type Checker** | Typed + Inferred AST (typechecker/) |
 						| 4️⃣ | **Safety Prover** | Proven AST (prover/) |
-						| 5️⃣ | **Comptime Executor** | Transformed AST (comptime.nim) |
+						| 5️⃣ | **Comptime Executor** | Transformed AST (comptime/) |
 						| 6️⃣ | **Bytecode Generator** | Register VM bytecode (interpreter/) |
-						| 7️⃣ | **Cache** | Disk (__etch__/ directory) |
+						| 7️⃣ | **Cache** | Disk (`__etch__/` directory) |
 						| 8️⃣ | **VM / C Backend** | Execution or native binary (backend/) |
 					</textarea>
 				</section>
@@ -304,16 +387,16 @@
 						## 🌳 AST Node Types
 
 						**Expression variants (20+ types):**
-						- 🔢 Literals: `ekInt`, `ekFloat`, `ekString`, `ekBool`, `ekChar`
-						- ➕ Operations: `ekBin`, `ekUn`, `ekCall`
-						- 📦 Collections: `ekArray`, `ekIndex`, `ekSlice`, `ekArrayLen`
-						- 🎭 Pattern matching: `ekMatch`, `ekOptionSome`, `ekResultOk`
-						- 🏗️ Objects: `ekObjectLiteral`, `ekFieldAccess`, `ekNew`
+						- 🔢 **Literals**: `ekInt`, `ekFloat`, `ekString`, `ekBool`, `ekChar`
+						- ➕ **Operations**: `ekBin`, `ekUn`, `ekCall`
+						- 📦 **Collections**: `ekArray`, `ekIndex`, `ekSlice`, `ekArrayLen`
+						- 🎭 **Pattern matching**: `ekMatch`, `ekOptionSome`, `ekResultOk`
+						- 🏗️ **Objects**: `ekObjectLiteral`, `ekFieldAccess`, `ekNew`
 
 						**Statement variants (15+ types):**
-						- 📌 Declarations: `skLet`, `skVar`, `skFun`, `skType`
-						- 🔀 Control flow: `skIf`, `skWhile`, `skFor`, `skReturn`
-						- ⚙️ Others: `skAssign`, `skDefer`, `skComptime`
+						- 📌 **Declarations**: `skLet`, `skVar`, `skFun`, `skType`
+						- 🔀 **Control flow**: `skIf`, `skWhile`, `skFor`, `skReturn`
+						- ⚙️ **Others**: `skAssign`, `skDefer`, `skComptime`
 
 						---
 
@@ -392,12 +475,11 @@
 						- known/unknown
 						- min/max range
 						- non-zero/non-null
-						- initialized
-						- used
+						- initialized/used/last use
 						- is array/string
 						- array/string size
 
-						Every variable has a proven state at every program point!
+						*Every variable has a proven state at every program point!*
 
 						---
 
@@ -473,30 +555,7 @@
 
 						**Unsafe Example:** divisor ranges [0, 5] → *COMPILE ERROR* ❌
 
-						Compiler tracks value ranges and proves divisor is non-zero.
-					</textarea>
-				</section>
-
-
-				<!-- Slide: Type System & Inference -->
-				<section class="center compact" data-markdown>
-					<textarea data-template>
-						## 🎨 Type System & Inference
-
-						```etch
-						fn main() -> void {
-						    let x: int = 42;           // Explicit type
-						    let y = 3.14;              // Inferred as float
-						    let name = "Etch";         // Inferred as string
-						    let numbers = [1, 2, 3];   // Inferred as array[int]
-						}
-						```
-
-						✨ **Strong static typing**
-						🔮 **Smart type inference**
-						✅ **No surprises**
-
-						Note: Types are checked at compile-time but you don't always have to write them
+						Compiler tracks value ranges and proves divisor should be non-zero.
 					</textarea>
 				</section>
 
@@ -505,7 +564,7 @@
 					<textarea data-template>
 						## 📦 Arrays with Safety Guarantees
 
-						```etch
+						```etch [1-7]
 						fn main() -> void {
 						    let numbers: array[int] = [10, 20, 30, 40, 50];
 
@@ -516,10 +575,8 @@
 						```
 
 						- ✅ Compile-time bounds checking when possible
-						- 🔍 Runtime checks when necessary
+						- 🔍 Compiler enforces insertion of runtime checks when necessary
 						- 📝 Clear error messages
-
-						Note: The prover eliminates bounds checks it can prove safe
 					</textarea>
 				</section>
 
@@ -539,16 +596,30 @@
 						  - 📈 Overflow: result within type bounds
 						  - 📦 Array: index within [0, length)
 
-						---
-
-						## 🧠 The Prover System
-
 						**🔍 Initialization Analysis**
 						- Track initialization state
 						- Flow-sensitive analysis
 						- Ensure all paths initialize
+					</textarea>
+				</section>
 
-						Note: This is the brain of Etch - mathematical proof of safety
+				<!-- Slide: Type System & Inference -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## 🎨 Type System & Inference
+
+						```etch [1-6]
+						fn main() -> void {
+						    let x: int = 42;           // Explicit type
+						    let y = 3.14;              // Inferred as float
+						    let name = "Etch";         // Inferred as string
+						    let numbers = [1, 2, 3];   // Inferred as array[int]
+						}
+						```
+
+						- ✨ **Strong static typing**
+						- 🔮 **Smart type inference**
+						- ✅ **No surprises**
 					</textarea>
 				</section>
 
@@ -557,12 +628,15 @@
 					<textarea data-template>
 						## 🏗️ Types and Objects
 
-						**Type Aliases and Object Definitions:**
+						**Type Aliases, Unions and Object Definitions:**
 
-						```etch [2|3|5-9|12-13]
+						```etch [2|3|6|8-12|15-16]
 						// Type aliases for clarity
 						type UserId = int;
 						type Email = distinct string;
+
+						// Union types for sum types
+						type IntOrString = int | string;
 
 						// Object types with fields
 						type Point = object {
@@ -600,7 +674,7 @@
 						  var y: int = 20;
 
 						  // Traditional call
-						  var result1 = add(x, y);
+						  discard add(x, y);
 
 						  // UFCS - first argument becomes receiver
 						  var result2: int = x.add(y);
@@ -716,11 +790,9 @@
 						## 📦 Import System: Modules & CFFI
 
 						**Module Imports (Etch code):**
-						```etch [1-4]
-						import math {
-						  fn sqrt(x: float) -> float;
-						  fn pow(base: float, exp: float) -> float;
-						}
+						```etch [1-2]
+						import math
+						import math { sqrt, pow }
 						```
 
 						**C FFI Imports (Native libraries):**
@@ -860,47 +932,13 @@
 						}
 						```
 
-						**Metaprogramming without macros**
-						- Generate code based on compile-time conditions
+						**Metaprogramming without macros**, generate code based on compile-time conditions
 					</textarea>
 				</section>
 
 				<!-- Slide: Register-Based VM Architecture -->
 				<section class="center compact" data-markdown>
 					<textarea data-template>
-						## 🎛️ Register-Based VM Architecture
-
-						⚡ **RegVM: Lua-inspired register machine** ⚡
-
-						| Stack VM | Register VM |
-						|----------|-------------|
-						| PUSH 5<br>PUSH 3<br>ADD<br>POP r0 | LoadK r0, 5<br>LoadK r1, 3<br>Add r2, r0, r1 |
-
-						**Architecture Details:**
-
-						- 📟 256 registers per function frame (8-bit addressing)
-						- 💾 65536 constants per function (16-bit index)
-						- 🎯 3-address instruction format (A = B op C)
-						- 🔧 Multiple instruction encodings: ABC, ABx, AsBx, Ax
-						- ⚡ Fused instructions for common patterns
-
-						---
-
-						## 💾 Bytecode Instructions
-
-						**Instruction Categories:**
-
-						| Category | Instructions |
-						|----------|--------------|
-						| 📦 **Load/Store** | LoadK, Move, GetGlobal, SetGlobal |
-						| 🧮 **Arithmetic** | Add, Sub, Mul, Div, Mod, Neg |
-						| 🔢 **Comparison** | Eq, Lt, Le, Gt, Ge, Ne |
-						| 🎯 **Control Flow** | Jump, JumpIf, JumpIfNot, TestJump |
-						| 📞 **Function Calls** | Call, Return |
-						| ⚡ **Fused Instructions** | AddAdd, MulAdd, LoadAddStore, EqStore |
-
-						---
-
 						## 🔀 Two Execution Modes
 
 						**Single source, dual execution paths:**
@@ -945,6 +983,39 @@
 						- 🔧 System calling conventions
 						- 🔗 FFI to C libraries (linktime)
 						- 📦 Standalone executable
+
+						---
+
+						## 🎛️ Register-Based VM Architecture
+
+						⚡ **RegVM: Lua-inspired register machine** ⚡
+
+						| Stack VM | Register VM |
+						|----------|-------------|
+						| PUSH 5<br>PUSH 3<br>ADD<br>POP r0 | LoadK r0, 5<br>LoadK r1, 3<br>Add r2, r0, r1 |
+
+						**Architecture Details:**
+
+						- 📟 256 registers per function frame (8-bit addressing)
+						- 💾 65536 constants per function (16-bit index)
+						- 🎯 3-address instruction format (A = B op C)
+						- 🔧 Multiple instruction encodings: ABC, ABx, AsBx, Ax
+						- ⚡ Fused instructions for common patterns
+
+						---
+
+						## 💾 Bytecode Instructions
+
+						**Instruction Categories:**
+
+						| Category | Instructions |
+						|----------|--------------|
+						| 📦 **Load/Store** | LoadK, Move, GetGlobal, SetGlobal |
+						| 🧮 **Arithmetic** | Add, Sub, Mul, Div, Mod, Neg |
+						| 🔢 **Comparison** | Eq, Lt, Le, Gt, Ge, Ne |
+						| 🎯 **Control Flow** | Jump, JumpIf, JumpIfNot, TestJump |
+						| 📞 **Function Calls** | Call, Return |
+						| ⚡ **Fused Instructions** | AddAdd, MulAdd, LoadAddStore, EqStore |
 
 						---
 
@@ -1016,6 +1087,12 @@
 
 						**Real benchmark data from `hyperfine` on an M3 (generated 2025-10-22)**
 
+						---
+
+						## 📊 Benchmark Results
+
+						**Real benchmark data from `hyperfine` on an M3 (generated 2025-10-22)**
+
 						| Benchmark | C | VM | Python 3 | C vs Py | VM vs Py |
 						|-----------|---|-----|----------|---------|----------|
 						| 🧮 Arithmetic ops | <span style="color:lightgreen">6.5ms</span> | <span style="color:orange">115.8ms</span> | 103.5ms | **15.9x** | 0.9x |
@@ -1031,7 +1108,7 @@
 
 						---
 
-						## 🚀 Optimization Opportunities
+						## 🚀 More Optimization Opportunities
 
 						**Current Optimizations:**
 						- ✅ Constant folding (partial)
@@ -1075,27 +1152,6 @@
 						- 🛡️ Study prover analysis output
 						- 📄 Compare generated C code
 						- 🚀 Understand optimization passes
-
-						Note: Designed for both practical use and compiler learning
-					</textarea>
-				</section>
-
-				<!-- Slide: Language Comparisons -->
-				<section class="center compact" data-markdown>
-					<textarea data-template>
-						## 📊 Language Comparisons
-
-						|  | Etch | Rust | Zig | Python | Go |
-						|--|------|------|-----|--------|-----|
-						| 🛡️ Safety | ✅ | ✅ | ⚠️ | ❌ | ⚠️ |
-						| 🔬 Proofs | ✅ | ⚠️ | ❌ | ❌ | ❌ |
-						| ⚡ Comptime | ✅ | ❌ | ✅ | ❌ | ❌ |
-						| 📝 Simple Syntax | ✅ | ⚠️ | ✅ | ✅ | ✅ |
-						| ⏱️ Fast Compile | ✅ | ❌ | ✅ | ✅ | ✅ |
-						| 🚫 No GC | ✅ | ✅ | ✅ | ❌ | ❌ |
-						| 🎓 Easy to Learn | ✅ | ❌ | ⚠️ | ✅ | ✅ |
-
-						### Etch = 🛡️ Safety + 📝 Simplicity + 🚀 Speed
 					</textarea>
 				</section>
 
@@ -1136,24 +1192,18 @@
 						**Production ready?** Not yet! ⚠️
 
 						**Great for:** 🧪 Experiments · 📚 Learning · 🔬 Research
-
-						Note: Etch is actively evolving
 					</textarea>
 				</section>
 
 				<!-- Slide : Roadmap -->
 				<section class="center compact" data-markdown>
 					<textarea data-template>
-						## 🗺️ Roadmap
+						## 🗺️ Optimization Roadmap
 
 						**Phase 1: Bytecode optimization** 💾
 						- 🔧 Re-enable optimizer
-						- 🛡️ Integrate prover data
 						- 📊 Enhanced constant folding
-
-						---
-
-						## 🗺️ Roadmap
+						- 🛡️ Integrate prover data into compiler
 
 						**Phase 2: Instruction improvements** 🎯
 						- 🔖 Jump target tables
@@ -1168,10 +1218,6 @@
 						- 🔬 Peephole optimization
 						- 🧮 Common subexpression elimination
 						- 🔄 Loop optimizations
-
-						---
-
-						## 🗺️ Roadmap
 
 						**Phase 4: Type-aware optimization** 🎨
 						- 🎯 Static type specialization
@@ -1200,7 +1246,9 @@
 					<textarea data-template>
 						# Questions?
 
-						## "Define once, Etch forever."
+						---
+
+						## **"Define once, Etch forever."**
 
 						### Thank you! 🚀
 					</textarea>
