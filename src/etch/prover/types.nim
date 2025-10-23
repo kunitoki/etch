@@ -44,14 +44,37 @@ type Env* = ref object
 type ConditionResult* = enum
   crUnknown, crAlwaysTrue, crAlwaysFalse
 
+type
+  ConstraintKind* = enum
+    ckRange      # minv <= param <= maxv
+    ckNonZero    # param != 0
+    ckNonNil     # param != nil
+    ckPositive   # param > 0
+    ckNegative   # param < 0
+    ckEquals     # param == value
+
+  Constraint* = object
+    kind*: ConstraintKind
+    paramIndex*: int        # Which parameter this constrains (-1 for return value)
+    paramName*: string      # Parameter name for error messages
+    minv*, maxv*: int64     # For ckRange
+    value*: int64           # For ckEquals
+
+  FunctionContract* = object
+    funcName*: string
+    preconditions*: seq[Constraint]   # Requirements on parameters at call site
+    postconditions*: seq[Constraint]  # Guarantees about return value and effects
+    returnRange*: tuple[minv: int64, maxv: int64]  # Range of possible return values
+
 type ProverContext* = ref object
   fnContext*: string  # Current function context for error messages
   options*: CompilerOptions  # Compiler options (includes verbose mode)
   prog*: Program  # Program being analyzed (can be nil)
   callStack*: seq[string]  # Track function call stack to prevent infinite recursion
+  contracts*: Table[string, FunctionContract]  # Cache of inferred function contracts
 
 proc newProverContext*(fnContext: string = "", options: CompilerOptions, prog: Program = nil): ProverContext =
-  ProverContext(fnContext: fnContext, options: options, prog: prog, callStack: @[])
+  ProverContext(fnContext: fnContext, options: options, prog: prog, callStack: @[], contracts: initTable[string, FunctionContract]())
 
 proc infoConst*(v: int64): Info =
   Info(known: true, cval: v, minv: v, maxv: v, nonZero: v != 0, isBool: false, initialized: true, used: false)
@@ -236,3 +259,105 @@ proc union*(a, b: Info): Info =
     # For union, if sizes/lengths differ, we don't know the size
     result.arraySizeKnown = a.arraySizeKnown and b.arraySizeKnown and a.arraySize == b.arraySize
     result.arraySize = (if result.arraySizeKnown: a.arraySize else: -1)
+
+
+# ============================================================================
+# Function Contract Operations
+# ============================================================================
+
+proc checkConstraint*(constraint: Constraint, info: Info, paramName: string): bool =
+  ## Check if Info satisfies a constraint
+  case constraint.kind
+  of ckRange:
+    return info.minv >= constraint.minv and info.maxv <= constraint.maxv
+  of ckNonZero:
+    return info.nonZero
+  of ckNonNil:
+    return info.nonNil
+  of ckPositive:
+    return info.minv > 0
+  of ckNegative:
+    return info.maxv < 0
+  of ckEquals:
+    return info.known and info.cval == constraint.value
+
+proc applyConstraintToInfo*(constraint: Constraint, info: Info): Info =
+  ## Apply a constraint to refine an Info value
+  result = info
+  case constraint.kind
+  of ckRange:
+    result.minv = max(result.minv, constraint.minv)
+    result.maxv = min(result.maxv, constraint.maxv)
+    if result.minv == result.maxv:
+      result.known = true
+      result.cval = result.minv
+  of ckNonZero:
+    result.nonZero = true
+    # If we know it's nonzero and range is [-inf, inf], we can't narrow much
+    # But if range includes 0, we could split into disjunctive intervals
+  of ckNonNil:
+    result.nonNil = true
+  of ckPositive:
+    result.minv = max(result.minv, 1)
+  of ckNegative:
+    result.maxv = min(result.maxv, -1)
+  of ckEquals:
+    result.known = true
+    result.cval = constraint.value
+    result.minv = constraint.value
+    result.maxv = constraint.value
+
+proc inferConstraintFromInfo*(info: Info, paramIndex: int, paramName: string): seq[Constraint] =
+  ## Infer constraints from an Info value
+  result = @[]
+
+  # Infer range constraint if bounded
+  if info.minv > IMin or info.maxv < IMax:
+    result.add(Constraint(
+      kind: ckRange,
+      paramIndex: paramIndex,
+      paramName: paramName,
+      minv: info.minv,
+      maxv: info.maxv
+    ))
+
+  # Infer nonZero constraint
+  if info.nonZero:
+    result.add(Constraint(
+      kind: ckNonZero,
+      paramIndex: paramIndex,
+      paramName: paramName
+    ))
+
+  # Infer nonNil constraint
+  if info.nonNil:
+    result.add(Constraint(
+      kind: ckNonNil,
+      paramIndex: paramIndex,
+      paramName: paramName
+    ))
+
+  # Infer positive constraint
+  if info.minv > 0:
+    result.add(Constraint(
+      kind: ckPositive,
+      paramIndex: paramIndex,
+      paramName: paramName
+    ))
+
+  # Infer negative constraint
+  if info.maxv < 0:
+    result.add(Constraint(
+      kind: ckNegative,
+      paramIndex: paramIndex,
+      paramName: paramName
+    ))
+
+  # Infer equals constraint
+  if info.known:
+    result.add(Constraint(
+      kind: ckEquals,
+      paramIndex: paramIndex,
+      paramName: paramName,
+      value: info.cval
+    ))

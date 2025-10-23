@@ -1,0 +1,5 @@
+examples/overflow_division_imin_by_minus_one.etch:7:44: error: subtraction overflow
+  6 |   let x = rand(10);  // [0, 10]
+  7 |   let might_be_imin = -9223372036854775807 - x;  // Range includes IMin if x >= 1
+                                                 ^
+  8 |

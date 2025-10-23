@@ -1,0 +1,16 @@
+// Test: Division edge case - IMin / -1 would overflow
+// IMin / -1 would produce IMax + 1, which doesn't exist
+
+fn testDivision() -> int {
+  // Create a value that might be IMin
+  let x = rand(10);  // [0, 10]
+  let might_be_imin = -9223372036854775807 - x;  // Range includes IMin if x >= 1
+
+  // Divide by -1 - if x is IMin, this overflows!
+  return might_be_imin / -1;
+}
+
+fn main() -> void {
+  let result = testDivision();
+  print("Result: " + toString(result));
+}

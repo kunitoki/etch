@@ -1,0 +1,5 @@
+examples/overflow_if_branches.etch:13:20: error: addition overflow
+  12 |     let large = rand(9000000000000000000);  // [0, 9E18]
+  13 |     result = large + 1000000000000000000;   // Could overflow
+                          ^
+  14 |   }

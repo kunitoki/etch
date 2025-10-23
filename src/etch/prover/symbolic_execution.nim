@@ -2,8 +2,8 @@
 # Integrated symbolic execution for enhanced precision in safety analysis
 
 import std/[tables, options]
+import ../common/[constants, errors]
 import ../frontend/ast
-import ../common/constants
 import types
 
 
@@ -79,45 +79,129 @@ proc symStringConcat*(a, b: Info): Info =
     return infoString(-1, sizeKnown = false)
 
 
-proc symAdd*(a, b: Info): Info =
+proc symAdd*(a, b: Info, expr: Expr): Info =
   if a.known and b.known:
+    # Check for overflow BEFORE performing the addition
+    if (b.cval > 0 and a.cval > IMax - b.cval) or (b.cval < 0 and a.cval < IMin - b.cval):
+      raise newProverError(expr.pos, "addition overflow")
     let res = a.cval + b.cval
-    # Check for overflow
-    if (a.cval > 0 and b.cval > 0 and res < a.cval) or
-       (a.cval < 0 and b.cval < 0 and res > a.cval):
-      return symUnknown()  # Overflow - become unknown
     return symConst(res)
   else:
-    # At least one unknown - compute range
-    let minResult = a.minv + b.minv
-    let maxResult = a.maxv + b.maxv
+    # At least one unknown - compute range with overflow checking
+    var minResult = IMin
+    var maxResult = IMax
+
+    # Check min overflow
+    if not ((b.minv > 0 and a.minv > IMax - b.minv) or (b.minv < 0 and a.minv < IMin - b.minv)):
+      minResult = a.minv + b.minv
+
+    # Check max overflow
+    if not ((b.maxv > 0 and a.maxv > IMax - b.maxv) or (b.maxv < 0 and a.maxv < IMin - b.maxv)):
+      maxResult = a.maxv + b.maxv
+
     return symUnknown(minResult, maxResult)
 
 
-proc symSub*(a, b: Info): Info =
+proc symSub*(a, b: Info, expr: Expr): Info =
   if a.known and b.known:
+    # Check for overflow BEFORE performing the subtraction
+    if (b.cval < 0 and a.cval > IMax + b.cval) or (b.cval > 0 and a.cval < IMin + b.cval):
+      raise newProverError(expr.pos, "subtraction overflow")
     let res = a.cval - b.cval
-    # Check for overflow
-    if (a.cval >= 0 and b.cval < 0 and res < a.cval) or
-       (a.cval < 0 and b.cval > 0 and res > a.cval):
-      return symUnknown()  # Overflow - become unknown
     return symConst(res)
   else:
-    let minResult = a.minv - b.maxv
-    let maxResult = a.maxv - b.minv
+    var minResult = IMin
+    var maxResult = IMax
+
+    # Check min overflow: a.minv - b.maxv
+    if not ((b.maxv < 0 and a.minv > IMax + b.maxv) or (b.maxv > 0 and a.minv < IMin + b.maxv)):
+      minResult = a.minv - b.maxv
+
+    # Check max overflow: a.maxv - b.minv
+    if not ((b.minv < 0 and a.maxv > IMax + b.minv) or (b.minv > 0 and a.maxv < IMin + b.minv)):
+      maxResult = a.maxv - b.minv
+
     return symUnknown(minResult, maxResult)
 
 
-proc symMul*(a, b: Info): Info =
+proc symMul*(a, b: Info, expr: Expr): Info =
   if a.known and b.known:
+    # Check for overflow BEFORE performing the multiplication
+    if a.cval != 0 and b.cval != 0:
+      let absA = if a.cval == IMin: IMax else: (if a.cval < 0: -a.cval else: a.cval)
+      let absB = if b.cval == IMin: IMax else: (if b.cval < 0: -b.cval else: b.cval)
+      if absB > 0 and absA > IMax div absB:
+        raise newProverError(expr.pos, "multiplication overflow")
     let res = a.cval * b.cval
-    # Check for overflow (simplified)
-    if a.cval != 0 and res div a.cval != b.cval:
-      return symUnknown()  # Overflow - become unknown
     return symConst(res)
   else:
-    # Range multiplication is complex, use conservative approach
-    return symUnknown()
+    # Range multiplication - compute all four corner products
+    # Result range is: [min(corners), max(corners)]
+
+    proc mulWithOverflowCheck(x, y: int64): tuple[value: int64, overflowed: bool] =
+      # Check for multiplication overflow
+      if x == 0 or y == 0:
+        return (0'i64, false)
+
+      let absX = if x == IMin: IMax else: (if x < 0: -x else: x)
+      let absY = if y == IMin: IMax else: (if y < 0: -y else: y)
+
+      if absY > 0 and absX > IMax div absY:
+        return (0'i64, true)  # Overflowed
+
+      return (x * y, false)
+
+    var candidates: seq[int64] = @[]
+
+    # Try all four corner combinations
+    let (v1, o1) = mulWithOverflowCheck(a.minv, b.minv)
+    if not o1:
+      candidates.add(v1)
+    else:
+      # Overflow: determine sign and add appropriate bound
+      if (a.minv > 0 and b.minv > 0) or (a.minv < 0 and b.minv < 0):
+        candidates.add(IMax)  # Both same sign = positive overflow
+      else:
+        candidates.add(IMin)  # Different signs = negative overflow
+
+    let (v2, o2) = mulWithOverflowCheck(a.minv, b.maxv)
+    if not o2:
+      candidates.add(v2)
+    else:
+      if (a.minv > 0 and b.maxv > 0) or (a.minv < 0 and b.maxv < 0):
+        candidates.add(IMax)
+      else:
+        candidates.add(IMin)
+
+    let (v3, o3) = mulWithOverflowCheck(a.maxv, b.minv)
+    if not o3:
+      candidates.add(v3)
+    else:
+      if (a.maxv > 0 and b.minv > 0) or (a.maxv < 0 and b.minv < 0):
+        candidates.add(IMax)
+      else:
+        candidates.add(IMin)
+
+    let (v4, o4) = mulWithOverflowCheck(a.maxv, b.maxv)
+    if not o4:
+      candidates.add(v4)
+    else:
+      if (a.maxv > 0 and b.maxv > 0) or (a.maxv < 0 and b.maxv < 0):
+        candidates.add(IMax)
+      else:
+        candidates.add(IMin)
+
+    # Find min and max from candidates
+    if candidates.len == 0:
+      return symUnknown(IMin, IMax)
+
+    var minResult = candidates[0]
+    var maxResult = candidates[0]
+    for val in candidates:
+      if val < minResult: minResult = val
+      if val > maxResult: maxResult = val
+
+    return symUnknown(minResult, maxResult)
 
 
 proc symDiv*(a, b: Info): Info =
@@ -252,9 +336,9 @@ proc symbolicEvaluateExpr*(expr: Expr, state: SymbolicState, prog: Program = nil
     let lhs = symbolicEvaluateExpr(expr.lhs, state, prog)
     let rhs = symbolicEvaluateExpr(expr.rhs, state, prog)
     case expr.bop
-    of boAdd: return symAdd(lhs, rhs)
-    of boSub: return symSub(lhs, rhs)
-    of boMul: return symMul(lhs, rhs)
+    of boAdd: return symAdd(lhs, rhs, expr)
+    of boSub: return symSub(lhs, rhs, expr)
+    of boMul: return symMul(lhs, rhs, expr)
     of boDiv: return symDiv(lhs, rhs)
     of boMod: return symMod(lhs, rhs)
     of boLt: return symLt(lhs, rhs)

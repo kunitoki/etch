@@ -1,0 +1,5 @@
+examples/prover_wp_fail_division.etch:6:12: error: division by zero in function unsafeDivide
+  5 |   // WP should infer: requires b != 0
+  6 |   return a / b;
+                 ^
+  7 | }

@@ -43,37 +43,37 @@ suite "For Loop Debugging":
 
     # Check initial position (seq 3)
     let line1 = getLineFromTrace(output, 3)
-    echo fmt"Initial position: line {line1}"
+    echo &"Initial position: line {line1}"
     check line1 == 3  # Should start at first line with code (var nums)
 
     # After first step (seq 5)
     let line2 = getLineFromTrace(output, 5)
-    echo fmt"After step 1: line {line2}"
+    echo &"After step 1: line {line2}"
     check line2 == 5  # Should be at print("Testing...")
 
     # After second step (seq 7) - first time at for statement
     let line3 = getLineFromTrace(output, 7)
-    echo fmt"After step 2: line {line3}"
+    echo &"After step 2: line {line3}"
     check line3 == 7  # Should be at for statement (1st iteration)
 
     # After third step (seq 9) - loop body, 1st iteration
     let line4 = getLineFromTrace(output, 9)
-    echo fmt"After step 3: line {line4}"
+    echo &"After step 3: line {line4}"
     check line4 == 8  # Should be at print(x) in loop body
 
     # After fourth step (seq 11) - back to for statement, 2nd iteration
     let line5 = getLineFromTrace(output, 11)
-    echo fmt"After step 4: line {line5}"
+    echo &"After step 4: line {line5}"
     check line5 == 7  # Should be at for statement (2nd iteration)
 
     # After fifth step (seq 13) - loop body, 2nd iteration
     let line6 = getLineFromTrace(output, 13)
-    echo fmt"After step 5: line {line6}"
+    echo &"After step 5: line {line6}"
     check line6 == 8  # Should be at print(x) in loop body
 
     # After sixth step (seq 15) - back to for statement, 3rd iteration
     let line7 = getLineFromTrace(output, 15)
-    echo fmt"After step 6: line {line7}"
+    echo &"After step 6: line {line7}"
     check line7 == 7  # Should be at for statement (3rd iteration)
 
     echo "✓ For loop correctly alternates between for statement and body"

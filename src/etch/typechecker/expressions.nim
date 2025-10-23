@@ -83,7 +83,7 @@ proc resolveOverload(prog: Program; sc: Scope; e: Expr; subst: var TySubst): Fun
         if j > 0: availableSignatures.add(", ")
         availableSignatures.add($param.typ)
       availableSignatures.add(")")
-    raise newTypecheckError(e.pos, &"no matching overload for {e.fname} with arguments ({argTypes.join(\", \")}). Available: {availableSignatures}")
+    raise newTypecheckError(e.pos, "no matching overload for " & e.fname & " with arguments (" & argTypes.join(", ") & "). Available: " & availableSignatures)
 
 
 proc inferCall(prog: Program; sc: Scope; e: Expr; subst: var TySubst): EtchType =

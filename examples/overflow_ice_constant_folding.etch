@@ -1,0 +1,14 @@
+// Test: ICE in constant folding
+// This should show proper prover error, not "Internal compiler error"
+
+fn testConstantAdditionOverflow() -> int {
+  // Direct constant overflow - should give proper error
+  let x = 9223372036854775000 + 1000;  // Near IMax + 1000
+  let y = x + 1000;  // This will overflow in constant folding
+  return y;
+}
+
+fn main() -> void {
+  let result = testConstantAdditionOverflow();
+  print("Result: " + toString(result));
+}

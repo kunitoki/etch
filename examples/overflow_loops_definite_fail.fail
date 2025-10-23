@@ -1,0 +1,5 @@
+examples/overflow_loops_definite_fail.etch:10:15: error: addition overflow
+  9 |   while i < 2 {
+  10 |     acc = acc + 4611686018427387904;  // IMax / 2
+                     ^
+  11 |     i = i + 1;

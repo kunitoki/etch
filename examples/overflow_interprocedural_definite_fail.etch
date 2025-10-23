@@ -1,0 +1,14 @@
+// Test: Definite overflow in function call
+// This MUST be caught by the prover
+
+fn addThousand(x: int) -> int {
+  return x + 1000;
+}
+
+fn main() -> void {
+  // Pass a value that will definitely overflow
+  let large = 9223372036854774807;  // IMax - 1000
+  let evenLarger = large + 1000;     // Now at IMax
+  let result = addThousand(evenLarger);  // This WILL overflow!
+  print("Result: " + toString(result));
+}

@@ -258,43 +258,285 @@ proc analyzeBuiltinCall*(e: Expr, env: Env, ctx: ProverContext): Info =
   return infoUnknown()
 
 
+proc extractPreconditionsFromExpr*(expr: Expr, paramNames: seq[string], paramMap: Table[string, int], abstractEnv: Env, ctx: ProverContext): seq[Constraint] =
+  ## Extract weakest preconditions from an expression
+  ## Returns constraints on parameters that must hold for the expression to be safe
+  result = @[]
+
+  case expr.kind
+  of ekIndex:
+    # Array access: requires index in bounds
+    result.add extractPreconditionsFromExpr(expr.arrayExpr, paramNames, paramMap, abstractEnv, ctx)
+    result.add extractPreconditionsFromExpr(expr.indexExpr, paramNames, paramMap, abstractEnv, ctx)
+
+    # Check if index is a parameter
+    if expr.indexExpr.kind == ekVar and paramMap.hasKey(expr.indexExpr.vname):
+      let paramIdx = paramMap[expr.indexExpr.vname]
+      let paramName = expr.indexExpr.vname
+
+      # Get array size if known
+      let arrayInfo = analyzeExpr(expr.arrayExpr, abstractEnv, ctx)
+      if arrayInfo.isArray and arrayInfo.arraySizeKnown:
+        # Require: 0 <= param < arraySize
+        result.add(Constraint(
+          kind: ckRange,
+          paramIndex: paramIdx,
+          paramName: paramName,
+          minv: 0,
+          maxv: arrayInfo.arraySize - 1
+        ))
+
+  of ekBin:
+    # Recursive extraction from operands
+    result.add extractPreconditionsFromExpr(expr.lhs, paramNames, paramMap, abstractEnv, ctx)
+    result.add extractPreconditionsFromExpr(expr.rhs, paramNames, paramMap, abstractEnv, ctx)
+
+    # Division and modulo require non-zero divisor
+    if expr.bop in {boDiv, boMod}:
+      if expr.rhs.kind == ekVar and paramMap.hasKey(expr.rhs.vname):
+        let paramIdx = paramMap[expr.rhs.vname]
+        result.add(Constraint(
+          kind: ckNonZero,
+          paramIndex: paramIdx,
+          paramName: expr.rhs.vname
+        ))
+
+  of ekDeref:
+    # Dereference requires non-nil
+    result.add extractPreconditionsFromExpr(expr.refExpr, paramNames, paramMap, abstractEnv, ctx)
+
+    if expr.refExpr.kind == ekVar and paramMap.hasKey(expr.refExpr.vname):
+      let paramIdx = paramMap[expr.refExpr.vname]
+      result.add(Constraint(
+        kind: ckNonNil,
+        paramIndex: paramIdx,
+        paramName: expr.refExpr.vname
+      ))
+
+  of ekCall:
+    # Function call - extract preconditions from arguments
+    for arg in expr.args:
+      result.add extractPreconditionsFromExpr(arg, paramNames, paramMap, abstractEnv, ctx)
+
+  of ekUn:
+    result.add extractPreconditionsFromExpr(expr.ue, paramNames, paramMap, abstractEnv, ctx)
+
+  else:
+    # Other expression types don't require special preconditions
+    discard
+
+
+proc extractPreconditionsFromStmt*(stmt: Stmt, paramNames: seq[string], paramMap: Table[string, int], abstractEnv: Env, ctx: ProverContext): seq[Constraint] =
+  ## Extract weakest preconditions from a statement
+  result = @[]
+
+  case stmt.kind
+  of skExpr:
+    result.add extractPreconditionsFromExpr(stmt.sexpr, paramNames, paramMap, abstractEnv, ctx)
+
+  of skReturn:
+    if stmt.re.isSome:
+      result.add extractPreconditionsFromExpr(stmt.re.get, paramNames, paramMap, abstractEnv, ctx)
+
+  of skVar:
+    if stmt.vinit.isSome:
+      result.add extractPreconditionsFromExpr(stmt.vinit.get, paramNames, paramMap, abstractEnv, ctx)
+
+  of skAssign:
+    result.add extractPreconditionsFromExpr(stmt.aval, paramNames, paramMap, abstractEnv, ctx)
+
+  of skIf:
+    # Extract from condition
+    result.add extractPreconditionsFromExpr(stmt.cond, paramNames, paramMap, abstractEnv, ctx)
+
+    # Extract from both branches
+    for s in stmt.thenBody:
+      result.add extractPreconditionsFromStmt(s, paramNames, paramMap, abstractEnv, ctx)
+
+    for elif_branch in stmt.elifChain:
+      result.add extractPreconditionsFromExpr(elif_branch.cond, paramNames, paramMap, abstractEnv, ctx)
+      for s in elif_branch.body:
+        result.add extractPreconditionsFromStmt(s, paramNames, paramMap, abstractEnv, ctx)
+
+    if stmt.elseBody.len > 0:
+      for s in stmt.elseBody:
+        result.add extractPreconditionsFromStmt(s, paramNames, paramMap, abstractEnv, ctx)
+
+  of skWhile:
+    result.add extractPreconditionsFromExpr(stmt.wcond, paramNames, paramMap, abstractEnv, ctx)
+    for s in stmt.wbody:
+      result.add extractPreconditionsFromStmt(s, paramNames, paramMap, abstractEnv, ctx)
+
+  of skFor:
+    for s in stmt.fbody:
+      result.add extractPreconditionsFromStmt(s, paramNames, paramMap, abstractEnv, ctx)
+
+  else:
+    discard
+
+
+proc inferFunctionContract*(fn: FunDecl, fname: string, ctx: ProverContext): FunctionContract =
+  ## Infer preconditions and postconditions from a function body
+  ## Uses weakest precondition calculation to determine parameter requirements
+  logProver(ctx.options.verbose, &"Inferring contract for function: {fname}")
+
+  result = FunctionContract(funcName: fname)
+
+  # Create symbolic environment for abstract analysis
+  # Parameters start with unknown but initialized values
+  var abstractEnv = Env(vals: initTable[string, Info](), nils: initTable[string, bool](), exprs: initTable[string, Expr]())
+
+  # Build parameter mapping
+  var paramNames: seq[string] = @[]
+  var paramMap: Table[string, int] = initTable[string, int]()
+
+  for i, param in fn.params:
+    paramNames.add(param.name)
+    paramMap[param.name] = i
+    # Start with completely unknown values
+    abstractEnv.vals[param.name] = infoUnknown()
+    abstractEnv.nils[param.name] = false
+
+  # Extract preconditions using weakest precondition calculation
+  logProver(ctx.options.verbose, "Extracting preconditions from function body...")
+
+  var allPreconditions: seq[Constraint] = @[]
+  for stmt in fn.body:
+    let stmtPreconditions = extractPreconditionsFromStmt(stmt, paramNames, paramMap, abstractEnv, ctx)
+    allPreconditions.add stmtPreconditions
+
+  # Merge and deduplicate constraints
+  var constraintMap: Table[(int, ConstraintKind), Constraint] = initTable[(int, ConstraintKind), Constraint]()
+
+  for constraint in allPreconditions:
+    let key = (constraint.paramIndex, constraint.kind)
+
+    if constraint.kind == ckRange:
+      # For range constraints, take the intersection (most restrictive)
+      if constraintMap.hasKey(key):
+        var existing = constraintMap[key]
+        existing.minv = max(existing.minv, constraint.minv)
+        existing.maxv = min(existing.maxv, constraint.maxv)
+        constraintMap[key] = existing
+      else:
+        constraintMap[key] = constraint
+    else:
+      # For other constraints, just keep one instance
+      if not constraintMap.hasKey(key):
+        constraintMap[key] = constraint
+
+  # Convert to sequence
+  for constraint in constraintMap.values:
+    result.preconditions.add(constraint)
+
+  logProver(ctx.options.verbose, &"Extracted {result.preconditions.len} preconditions")
+
+  # Try to infer postconditions by analyzing return statements
+  proc findReturnInfo(stmt: Stmt): Option[Info] =
+    case stmt.kind
+    of skReturn:
+      if stmt.re.isSome:
+        let tmpCtx = newProverContext(&"function {fname}", ctx.options, ctx.prog)
+        return some(analyzeExpr(stmt.re.get, abstractEnv, tmpCtx))
+    of skIf:
+      # Check both branches
+      let thenResult = block:
+        var found: Option[Info] = none(Info)
+        for s in stmt.thenBody:
+          let r = findReturnInfo(s)
+          if r.isSome:
+            found = r
+            break
+        found
+      if thenResult.isSome:
+        return thenResult
+      if stmt.elseBody.len > 0:
+        for s in stmt.elseBody:
+          let r = findReturnInfo(s)
+          if r.isSome:
+            return r
+    else:
+      discard
+    return none(Info)
+
+  # Find return value info
+  for stmt in fn.body:
+    let returnInfo = findReturnInfo(stmt)
+    if returnInfo.isSome:
+      let info = returnInfo.get
+      result.returnRange = (info.minv, info.maxv)
+      # Infer postconditions about return value
+      result.postconditions = inferConstraintFromInfo(info, -1, "return")
+      break
+
+  # If no return info found, assume unknown range
+  if result.returnRange == (0'i64, 0'i64):
+    result.returnRange = (IMin, IMax)
+
+  logProver(ctx.options.verbose, &"Inferred contract for {fname}: {result.preconditions.len} preconditions, {result.postconditions.len} postconditions")
+
+
 proc analyzeUserDefinedCall*(e: Expr, env: Env, ctx: ProverContext): Info =
-  # User-defined function call - comprehensive call-site safety analysis
+  # User-defined function call - can use contracts or full analysis
   let fn = ctx.prog.funInstances[e.fname]
 
   logProver(ctx.options.verbose, &"Analyzing user-defined function call: {e.fname}")
 
-  # Check for recursion to prevent infinite analysis loops
-  if e.fname in ctx.callStack:
-    logProver(ctx.options.verbose, &"Recursive call detected for {e.fname}, using conservative analysis")
-    # Still analyze arguments to mark variables as used
-    for arg in e.args:
-      discard analyzeExpr(arg, env, ctx)
-    return Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
-
-  if ctx.callStack.len >= MAX_RECURSION_DEPTH:
-    logProver(ctx.options.verbose, &"Maximum recursion depth reached, using conservative analysis for {e.fname}")
-    # Still analyze arguments to mark variables as used
-    for arg in e.args:
-      discard analyzeExpr(arg, env, ctx)
-    return Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
-
-  # Analyze arguments to get their safety information
+  # Analyze arguments first to get their safety information
   var argInfos: seq[Info] = @[]
   for i, arg in e.args:
     let argInfo = analyzeExpr(arg, env, ctx)
     argInfos.add argInfo
-    logProver(ctx.options.verbose, &"Argument {i}: {(if argInfo.known: $argInfo.cval else: \"[\" & $argInfo.minv & \"..\" & $argInfo.maxv & \"]\")}")
+    logProver(ctx.options.verbose, "Argument " & $i & ": " & (if argInfo.known: $argInfo.cval else: "[" & $argInfo.minv & ".." & $argInfo.maxv & "]"))
 
   # Add default parameter information
   for i in e.args.len..<fn.params.len:
     if fn.params[i].defaultValue.isSome:
       let defaultInfo = analyzeExpr(fn.params[i].defaultValue.get, env, ctx)
       argInfos.add defaultInfo
-      logProver(ctx.options.verbose, &"Default param {i}: {(if defaultInfo.known: $defaultInfo.cval else: \"[\" & $defaultInfo.minv & \"..\" & $defaultInfo.maxv & \"]\")}")
+      logProver(ctx.options.verbose, "Default param " & $i & ": " & (if defaultInfo.known: $defaultInfo.cval else: "[" & $defaultInfo.minv & ".." & $defaultInfo.maxv & "]"))
     else:
-      # This shouldn't happen if type checking is correct
       argInfos.add infoUnknown()
+
+  # Check for recursion - use contracts for recursive calls
+  let isRecursive = e.fname in ctx.callStack
+  if isRecursive:
+    logProver(ctx.options.verbose, &"Recursive call detected for {e.fname}, using contract-based analysis")
+
+    # Get or infer contract for this function
+    var contract: FunctionContract
+    if ctx.contracts.hasKey(e.fname):
+      contract = ctx.contracts[e.fname]
+      logProver(ctx.options.verbose, &"Using cached contract for {e.fname}")
+    else:
+      # Infer contract from function definition
+      contract = inferFunctionContract(fn, e.fname, ctx)
+      ctx.contracts[e.fname] = contract
+      logProver(ctx.options.verbose, &"Inferred and cached contract for {e.fname}")
+
+    # Check preconditions at call site
+    for precond in contract.preconditions:
+      if precond.paramIndex >= 0 and precond.paramIndex < argInfos.len:
+        let argInfo = argInfos[precond.paramIndex]
+        if not checkConstraint(precond, argInfo, fn.params[precond.paramIndex].name):
+          raise newProverError(e.pos, &"precondition violated for parameter '{precond.paramName}' in call to {e.fname}")
+
+    # Apply postconditions to get return value info
+    var returnInfo = infoRange(contract.returnRange.minv, contract.returnRange.maxv)
+    for postcond in contract.postconditions:
+      returnInfo = applyConstraintToInfo(postcond, returnInfo)
+
+    logProver(ctx.options.verbose, &"Contract-based analysis complete for {e.fname}, return: [{returnInfo.minv}..{returnInfo.maxv}]")
+    return returnInfo
+
+  # Check for recursion depth limit with old behavior
+  if e.fname in ctx.callStack:
+    logProver(ctx.options.verbose, &"Recursive call detected for {e.fname}, using conservative analysis")
+    return Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
+
+  if ctx.callStack.len >= MAX_RECURSION_DEPTH:
+    logProver(ctx.options.verbose, &"Maximum recursion depth reached, using conservative analysis for {e.fname}")
+    return Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
 
   # Check if all arguments are compile-time constants for potential constant folding
   var allArgsConstant = true
@@ -347,7 +589,7 @@ proc analyzeUserDefinedCall*(e: Expr, env: Env, ctx: ProverContext): Info =
     # Store the original argument expression if it's simple enough
     if i < e.args.len:
       callEnv.exprs[paramName] = e.args[i]
-    logProver(newCtx.options.verbose, &"Parameter '{paramName}' mapped to: {(if argInfos[i].known: $argInfos[i].cval else: \"[\" & $argInfos[i].minv & \"..\" & $argInfos[i].maxv & \"]\")}")
+    logProver(newCtx.options.verbose, "Parameter '" & paramName & "' mapped to: " & (if argInfos[i].known: $argInfos[i].cval else: "[" & $argInfos[i].minv & ".." & $argInfos[i].maxv & "]"))
 
   # Perform comprehensive safety analysis on function body
   let fnContext = &"function {functionNameFromSignature(e.fname)}"
@@ -865,6 +1107,92 @@ proc analyzeMatchExpr(e: Expr, env: Env, ctx: ProverContext): Info =
   return infoUnknown()  # match result is unknown without deeper analysis
 
 
+proc analyzeObjectLiteralExpr(e: Expr, env: Env, ctx: ProverContext): Info =
+  # Object literals are properly initialized values
+  # Analyze all field initializations for safety
+  for field in e.fieldInits:
+    discard analyzeExpr(field.value, env, ctx)
+  return Info(known: false, initialized: true, nonNil: true)
+
+
+proc analyzeFieldAccessExpr(e: Expr, env: Env, ctx: ProverContext): Info =
+  # Analyze the object being accessed for safety
+  discard analyzeExpr(e.objectExpr, env, ctx)
+
+  # Check if accessing field on a potentially nil reference
+  if e.objectExpr.kind == ekVar and env.nils.hasKey(e.objectExpr.vname) and env.nils[e.objectExpr.vname]:
+    raise newProverError(e.pos, &"potential null dereference: field access on variable '{e.objectExpr.vname}' that may be nil")
+  elif e.objectExpr.kind == ekDeref:
+    # Check dereferencing of potentially nil reference
+    if e.objectExpr.refExpr.kind == ekVar and env.nils.hasKey(e.objectExpr.refExpr.vname) and env.nils[e.objectExpr.refExpr.vname]:
+      raise newProverError(e.pos, &"potential null dereference: dereferencing variable '{e.objectExpr.refExpr.vname}' that may be nil")
+
+  # Field access result is unknown for now but considered initialized
+  return Info(known: false, cval: 0, initialized: true)
+
+
+proc analyzeNewExpr(e: Expr, env: Env, ctx: ProverContext): Info =
+  # new(value) or new[Type]{value} - analyze initialization expression if present
+  if e.initExpr.isSome:
+    discard analyzeExpr(e.initExpr.get, env, ctx)
+  # new always returns an initialized, non-nil reference
+  return Info(known: false, nonNil: true, initialized: true)
+
+
+proc analyzeIfExpr(e: Expr, env: Env, ctx: ProverContext): Info =
+  # Analyze if-expression: evaluate condition and return appropriate branch
+  let condInfo = analyzeExpr(e.ifCond, env, ctx)
+
+  # Helper to extract expression from a single-statement branch
+  proc getBranchValue(stmts: seq[Stmt]): Info =
+    if stmts.len == 1 and stmts[0].kind == skExpr:
+      # Single expression statement - analyze the expression
+      return analyzeExpr(stmts[0].sexpr, env, ctx)
+    else:
+      # Complex branch - analyze all statements but can't determine value
+      for stmt in stmts:
+        proveStmt(stmt, env, ctx)
+      return Info(known: false, initialized: true)
+
+  # If condition is known at compile time, return the appropriate branch
+  if condInfo.known:
+    if condInfo.cval != 0:
+      # Condition is true - return then branch value
+      return getBranchValue(e.ifThen)
+    else:
+      # Condition is false - check elif/else branches
+      for elifCase in e.ifElifChain:
+        let elifCondInfo = analyzeExpr(elifCase.cond, env, ctx)
+        if elifCondInfo.known and elifCondInfo.cval != 0:
+          return getBranchValue(elifCase.body)
+
+      # All elif conditions false or no elif - use else branch
+      return getBranchValue(e.ifElse)
+
+  # Condition is unknown - need to merge results from all branches
+  var branchInfos: seq[Info] = @[]
+
+  # Analyze then branch
+  branchInfos.add(getBranchValue(e.ifThen))
+
+  # Analyze elif branches
+  for elifCase in e.ifElifChain:
+    discard analyzeExpr(elifCase.cond, env, ctx)
+    branchInfos.add(getBranchValue(elifCase.body))
+
+  # Analyze else branch
+  branchInfos.add(getBranchValue(e.ifElse))
+
+  # Merge all branch results
+  if branchInfos.len > 0:
+    var mergedInfo = branchInfos[0]
+    for i in 1..<branchInfos.len:
+      mergedInfo = union(mergedInfo, branchInfos[i])
+    return mergedInfo
+
+  return Info(known: false, initialized: true)
+
+
 proc analyzeExpr*(e: Expr; env: Env, ctx: ProverContext): Info =
   logProver(ctx.options.verbose, "Analyzing " & $e.kind & (if e.kind == ekVar: " '" & e.vname & "'" else: ""))
 
@@ -891,86 +1219,10 @@ proc analyzeExpr*(e: Expr; env: Env, ctx: ProverContext): Info =
   of ekResultOk: return analyzeResultOkExpr(e, env, ctx)
   of ekResultErr: return analyzeResultErrExpr(e, env, ctx)
   of ekMatch: return analyzeMatchExpr(e, env, ctx)
-  of ekObjectLiteral:
-    # Object literals are properly initialized values
-    # Analyze all field initializations for safety
-    for field in e.fieldInits:
-      discard analyzeExpr(field.value, env, ctx)
-    return Info(known: false, initialized: true, nonNil: true)
-  of ekFieldAccess:
-    # Analyze the object being accessed for safety
-    discard analyzeExpr(e.objectExpr, env, ctx)
-
-    # Check if accessing field on a potentially nil reference
-    if e.objectExpr.kind == ekVar and env.nils.hasKey(e.objectExpr.vname) and env.nils[e.objectExpr.vname]:
-      raise newProverError(e.pos, &"potential null dereference: field access on variable '{e.objectExpr.vname}' that may be nil")
-    elif e.objectExpr.kind == ekDeref:
-      # Check dereferencing of potentially nil reference
-      if e.objectExpr.refExpr.kind == ekVar and env.nils.hasKey(e.objectExpr.refExpr.vname) and env.nils[e.objectExpr.refExpr.vname]:
-        raise newProverError(e.pos, &"potential null dereference: dereferencing variable '{e.objectExpr.refExpr.vname}' that may be nil")
-
-    # Field access result is unknown for now but considered initialized
-    return Info(known: false, cval: 0, initialized: true)
-  of ekNew:
-    # new(value) or new[Type]{value} - analyze initialization expression if present
-    if e.initExpr.isSome:
-      discard analyzeExpr(e.initExpr.get, env, ctx)
-    # new always returns an initialized, non-nil reference
-    Info(known: false, nonNil: true, initialized: true)
-
-  of ekIf:
-    # Analyze if-expression: evaluate condition and return appropriate branch
-    let condInfo = analyzeExpr(e.ifCond, env, ctx)
-
-    # Helper to extract expression from a single-statement branch
-    proc getBranchValue(stmts: seq[Stmt]): Info =
-      if stmts.len == 1 and stmts[0].kind == skExpr:
-        # Single expression statement - analyze the expression
-        return analyzeExpr(stmts[0].sexpr, env, ctx)
-      else:
-        # Complex branch - analyze all statements but can't determine value
-        for stmt in stmts:
-          proveStmt(stmt, env, ctx)
-        return Info(known: false, initialized: true)
-
-    # If condition is known at compile time, return the appropriate branch
-    if condInfo.known:
-      if condInfo.cval != 0:
-        # Condition is true - return then branch value
-        return getBranchValue(e.ifThen)
-      else:
-        # Condition is false - check elif/else branches
-        for elifCase in e.ifElifChain:
-          let elifCondInfo = analyzeExpr(elifCase.cond, env, ctx)
-          if elifCondInfo.known and elifCondInfo.cval != 0:
-            return getBranchValue(elifCase.body)
-
-        # All elif conditions false or no elif - use else branch
-        return getBranchValue(e.ifElse)
-
-    # Condition is unknown - need to merge results from all branches
-    var branchInfos: seq[Info] = @[]
-
-    # Analyze then branch
-    branchInfos.add(getBranchValue(e.ifThen))
-
-    # Analyze elif branches
-    for elifCase in e.ifElifChain:
-      discard analyzeExpr(elifCase.cond, env, ctx)
-      branchInfos.add(getBranchValue(elifCase.body))
-
-    # Analyze else branch
-    branchInfos.add(getBranchValue(e.ifElse))
-
-    # Merge all branch results
-    if branchInfos.len > 0:
-      var mergedInfo = branchInfos[0]
-      for i in 1..<branchInfos.len:
-        mergedInfo = union(mergedInfo, branchInfos[i])
-      return mergedInfo
-
-    return Info(known: false, initialized: true)
-
+  of ekObjectLiteral: return analyzeObjectLiteralExpr(e, env, ctx)
+  of ekFieldAccess: return analyzeFieldAccessExpr(e, env, ctx)
+  of ekNew: return analyzeNewExpr(e, env, ctx)
+  of ekIf: return analyzeIfExpr(e, env, ctx)
   of ekComptime:
     # Analyze the compile-time expression
     # Since this is evaluated at compile-time, we analyze it as a normal expression

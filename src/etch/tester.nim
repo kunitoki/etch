@@ -152,7 +152,7 @@ proc runSingleTest*(testFile: string, verbose: bool = false, release: bool = fal
   if verbose: flags &= " --verbose"
   # Register VM is now the default
   if release: flags &= " --release"
-  let cmd = fmt"{etchExe} {flags} {testFile}"
+  let cmd = &"{etchExe} {flags} {testFile}"
   let execResult = executeWithSeparateStreams(cmd)
 
   # Handle different types of outcomes
@@ -167,9 +167,9 @@ proc runSingleTest*(testFile: string, verbose: bool = false, release: bool = fal
     else:
       # Unexpected failure
       if execResult.isCompilerError:
-        result.error = fmt"Unexpected compilation failure: {normalizeOutput(execResult.stderr)}"
+        result.error = &"Unexpected compilation failure: {normalizeOutput(execResult.stderr)}"
       else:
-        result.error = fmt"Unexpected runtime error (exit code {execResult.exitCode})"
+        result.error = &"Unexpected runtime error (exit code {execResult.exitCode})"
       result.actual = smartFilterOutput(execResult)
   else:
     # Test succeeded - check if this was expected
@@ -234,7 +234,7 @@ proc findTestFiles*(directory: string): seq[string] =
   result = @[]
 
   if not dirExists(directory):
-    echo fmt"Test directory '{directory}' does not exist"
+    echo &"Test directory '{directory}' does not exist"
     return
 
   for file in walkFiles(directory / "*.etch"):
@@ -252,8 +252,8 @@ proc runTests*(path: string = "examples", verbose: bool = false, release: bool =
   # Check if path is a file or directory
   if fileExists(path):
     # Single file test
-    echo fmt"Running single test: {path}"
-    if verbose: echo fmt"  verbose: {verbose}, release: {release}, backend: {backend}"
+    echo &"Running single test: {path}"
+    if verbose: echo &"  verbose: {verbose}, release: {release}, backend: {backend}"
 
     let res = runSingleTest(path, verbose, release, backend)
 
@@ -262,20 +262,20 @@ proc runTests*(path: string = "examples", verbose: bool = false, release: bool =
       return 0
     else:
       echo "✗ FAILED"
-      echo fmt"  Error: {res.error}"
+      echo &"  Error: {res.error}"
       if res.expected != res.actual:
         echo "  Expected:"
         for line in res.expected.splitLines:
-          echo fmt"    {line}"
+          echo &"    {line}"
         echo "  Actual:"
         for line in res.actual.splitLines:
-          echo fmt"    {line}"
+          echo &"    {line}"
       return 1
 
   elif dirExists(path):
     # Directory test - run each test twice: without and with cached bytecode
-    let backendMsg = if backend != "": fmt" with {backend} backend" else: ""
-    echo fmt"Running tests in directory: {path}{backendMsg}"
+    let backendMsg = if backend != "": &" with {backend} backend" else: ""
+    echo &"Running tests in directory: {path}{backendMsg}"
     echo "Each test runs twice: without cached bytecode, then with cached bytecode"
 
     let testFiles = findTestFiles(path)
@@ -283,7 +283,7 @@ proc runTests*(path: string = "examples", verbose: bool = false, release: bool =
       echo "No test files found (looking for .etch files with corresponding .pass or .fail files)"
       return 1
 
-    echo fmt"Found {testFiles.len} test files"
+    echo &"Found {testFiles.len} test files"
     echo ""
 
     var passed = 0
@@ -292,7 +292,7 @@ proc runTests*(path: string = "examples", verbose: bool = false, release: bool =
 
     for testFile in testFiles:
       let testName = testFile.splitFile.name
-      echo fmt"Running {testName}... "
+      echo &"Running {testName}... "
 
       # Clear all cached files before first run (bytecode, C code, C executable)
       clearCachedFiles(testFile)
@@ -316,16 +316,16 @@ proc runTests*(path: string = "examples", verbose: bool = false, release: bool =
         # Show which run(s) failed
         if not res1.passed and not res2.passed:
           echo "  Error in both fresh and cached compilation:"
-          echo fmt"    Fresh: {res1.error}"
-          echo fmt"    Cached: {res2.error}"
+          echo &"    Fresh: {res1.error}"
+          echo &"    Cached: {res2.error}"
           results.add(res1)
         elif not res1.passed:
           echo "  Error in fresh compilation:"
-          echo fmt"    {res1.error}"
+          echo &"    {res1.error}"
           results.add(res1)
         else:
           echo "  Error in cached compilation:"
-          echo fmt"    {res2.error}"
+          echo &"    {res2.error}"
           results.add(res2)
 
         # Show expected vs actual for failed tests
@@ -333,28 +333,28 @@ proc runTests*(path: string = "examples", verbose: bool = false, release: bool =
         if failedRes.expected != failedRes.actual:
           echo "  Expected:"
           for line in failedRes.expected.splitLines:
-            echo fmt"    {line}"
+            echo &"    {line}"
           echo "  Actual (fresh):"
           for line in res1.actual.splitLines:
-            echo fmt"    {line}"
+            echo &"    {line}"
           if res1.actual != res2.actual:
             echo "  Actual (cached):"
             for line in res2.actual.splitLines:
-              echo fmt"    {line}"
+              echo &"    {line}"
         echo ""
 
-    echo fmt"Test Summary: {passed} passed, {failed} failed, {testFiles.len} total"
+    echo &"Test Summary: {passed} passed, {failed} failed, {testFiles.len} total"
 
     if failed > 0:
       echo ""
       echo "Failed tests:"
       for r in results:
         if not r.passed:
-          echo fmt"  - {r.name}: {r.error}"
+          echo &"  - {r.name}: {r.error}"
       return 1
 
     return 0
 
   else:
-    echo fmt"Error: Path '{path}' does not exist"
+    echo &"Error: Path '{path}' does not exist"
     return 1

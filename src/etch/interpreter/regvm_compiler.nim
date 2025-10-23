@@ -65,13 +65,13 @@ proc addConst*(c: var RegCompiler, val: regvm.V): uint16 =
 
 proc addStringConst*(c: var RegCompiler, s: string): uint16 =
   if c.constMap.hasKey(s):
-    log(c.verbose, fmt"String '{s}' already in const pool at index {c.constMap[s]}")
+    log(c.verbose, &"String '{s}' already in const pool at index {c.constMap[s]}")
     return c.constMap[s]
 
   let v = regvm.makeString(s)
   result = c.addConst(v)
   c.constMap[s] = result
-  log(c.verbose, fmt"Added string '{s}' to const pool at index {result}")
+  log(c.verbose, &"Added string '{s}' to const pool at index {result}")
 
 proc addFunctionIndex*(c: var RegCompiler, funcName: string): uint16 =
   ## Add function name to function table and return its index
@@ -82,7 +82,7 @@ proc addFunctionIndex*(c: var RegCompiler, funcName: string): uint16 =
 
   let idx = uint16(c.prog.functionTable.len)
   c.prog.functionTable.add(funcName)
-  log(c.verbose, fmt"Added function '{funcName}' to function table at index {idx}")
+  log(c.verbose, &"Added function '{funcName}' to function table at index {idx}")
   return idx
 
 # Forward declarations
@@ -159,7 +159,7 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
   case e.kind:
   of ekInt:
     result = c.allocator.allocReg()
-    log(c.verbose, fmt"Compiling integer {e.ival} to reg {result}")
+    log(c.verbose, &"Compiling integer {e.ival} to reg {result}")
     if e.ival >= -32768 and e.ival <= 32767:
       # Small integer - can use immediate encoding
       c.prog.emitAsBx(ropLoadK, result, int16(e.ival), c.makeDebugInfo(e.pos))
@@ -175,10 +175,10 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
 
   of ekString:
     result = c.allocator.allocReg()
-    log(c.verbose, fmt"Compiling string expression: '{e.sval}'")
+    log(c.verbose, &"Compiling string expression: '{e.sval}'")
     let constIdx = c.addStringConst(e.sval)
     c.prog.emitABx(ropLoadK, result, constIdx, c.makeDebugInfo(e.pos))
-    log(c.verbose, fmt"  Loaded to register {result} from const[{constIdx}]")
+    log(c.verbose, &"  Loaded to register {result} from const[{constIdx}]")
 
   of ekBool:
     result = c.allocator.allocReg()
@@ -219,11 +219,11 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
 
     # Check if variable already in register
     if c.allocator.regMap.hasKey(e.vname):
-      log(c.verbose, fmt"Variable '{e.vname}' found in register {c.allocator.regMap[e.vname]}")
+      log(c.verbose, &"Variable '{e.vname}' found in register {c.allocator.regMap[e.vname]}")
       return c.allocator.regMap[e.vname]
     else:
       # Load from global
-      log(c.verbose, fmt"Variable '{e.vname}' not in regMap, loading from global")
+      log(c.verbose, &"Variable '{e.vname}' not in regMap, loading from global")
       result = c.allocator.allocReg(e.vname)
       let nameIdx = c.addStringConst(e.vname)
       c.prog.emitABx(ropGetGlobal, result, nameIdx, c.makeDebugInfo(e.pos))
@@ -232,7 +232,7 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
     let leftReg = c.compileExpr(e.lhs)
     let rightReg = c.compileExpr(e.rhs)
     result = c.allocator.allocReg()
-    log(c.verbose, fmt"Binary op: leftReg={leftReg} rightReg={rightReg} resultReg={result}")
+    log(c.verbose, &"Binary op: leftReg={leftReg} rightReg={rightReg} resultReg={result}")
 
     # Check for immediate optimizations
     if c.optimizeLevel >= 1 and e.rhs.kind == ekInt and
@@ -273,7 +273,7 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
 
   of ekArray:
     result = c.allocator.allocReg()
-    log(c.verbose, fmt"Array expression allocated reg {result}")
+    log(c.verbose, &"Array expression allocated reg {result}")
     c.prog.emitABx(ropNewArray, result, uint16(e.elements.len), c.makeDebugInfo(e.pos))
 
     # Set array elements
@@ -491,7 +491,7 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
 
     # Compile each case
     for i, matchCase in e.cases:
-      log(c.verbose, fmt"  Compiling match case {i} pattern: {matchCase.pattern.kind}")
+      log(c.verbose, &"  Compiling match case {i} pattern: {matchCase.pattern.kind}")
 
       # Pattern matching - simplified version
       var shouldJumpToNext = -1
@@ -503,7 +503,7 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
         # So if tag is some, skip the jump and execute case body
         # If tag is not some, execute jump to next case
         c.prog.emitABC(ropTestTag, matchReg, uint8(vkSome), 0, c.makeDebugInfo(e.pos))  # Test if tag is some
-        log(c.verbose, fmt"  Emitted ropTestTag for some at PC={c.prog.instructions.len - 1}")
+        log(c.verbose, &"  Emitted ropTestTag for some at PC={c.prog.instructions.len - 1}")
         shouldJumpToNext = c.prog.instructions.len
         c.prog.emitAsBx(ropJmp, 0, 0, c.makeDebugInfo(e.pos))  # Jump to next case if not some
 
@@ -513,15 +513,15 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
           let unwrappedReg = c.allocator.allocReg()
           c.prog.emitABC(ropUnwrapOption, unwrappedReg, matchReg, 0, c.makeDebugInfo(e.pos))
           c.allocator.regMap[matchCase.pattern.bindName] = unwrappedReg
-          log(c.verbose, fmt"  Bound some pattern variable '{matchCase.pattern.bindName}' to unwrapped reg {unwrappedReg}")
+          log(c.verbose, &"  Bound some pattern variable '{matchCase.pattern.bindName}' to unwrapped reg {unwrappedReg}")
 
       of pkNone:
         # Check if it's none
         c.prog.emitABC(ropTestTag, matchReg, uint8(vkNone), 0, c.makeDebugInfo(e.pos))  # Test if tag is none
-        log(c.verbose, fmt"  Emitted ropTestTag for none at PC={c.prog.instructions.len - 1}")
+        log(c.verbose, &"  Emitted ropTestTag for none at PC={c.prog.instructions.len - 1}")
         shouldJumpToNext = c.prog.instructions.len
         c.prog.emitAsBx(ropJmp, 0, 0, c.makeDebugInfo(e.pos))  # Jump to next case if not none
-        log(c.verbose, fmt"  Emitted ropJmp at PC={c.prog.instructions.len - 1} (will be patched)");
+        log(c.verbose, &"  Emitted ropJmp at PC={c.prog.instructions.len - 1} (will be patched)");
 
       of pkOk:
         # Check if it's an ovalue
@@ -554,7 +554,7 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
       of pkType:
         # Type pattern matching (for union types)
         # Check if the value has the correct type tag
-        log(c.verbose, fmt"  Type pattern: {matchCase.pattern.typePattern.kind} bind: {matchCase.pattern.typeBind}")
+        log(c.verbose, &"  Type pattern: {matchCase.pattern.typePattern.kind} bind: {matchCase.pattern.typeBind}")
 
         # Determine the VKind for the type
         let expectedKind = case matchCase.pattern.typePattern.kind:
@@ -567,7 +567,7 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
           of tkObject: vkTable
           of tkUserDefined: vkTable  # User-defined types are objects (tables)
           else:
-            log(c.verbose, fmt"  Warning: Unsupported type for pattern matching: {matchCase.pattern.typePattern.kind}")
+            log(c.verbose, &"  Warning: Unsupported type for pattern matching: {matchCase.pattern.typePattern.kind}")
             vkNil
 
         # Test if the kind matches
@@ -579,11 +579,11 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
         if matchCase.pattern.typeBind != "":
           # The value is already in matchReg, just bind it
           c.allocator.regMap[matchCase.pattern.typeBind] = matchReg
-          log(c.verbose, fmt"  Bound type pattern variable '{matchCase.pattern.typeBind}' to reg {matchReg}")
+          log(c.verbose, &"  Bound type pattern variable '{matchCase.pattern.typeBind}' to reg {matchReg}")
 
       # Compile the case body
       if matchCase.body.len > 0:
-        log(c.verbose, fmt"  Match case body has {matchCase.body.len} statements")
+        log(c.verbose, &"  Match case body has {matchCase.body.len} statements")
         if c.verbose:
           for idx, stmt in matchCase.body:
             echo "[REGCOMPILER]     Body stmt ", idx, " kind: ", stmt.kind
@@ -594,12 +594,12 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
         # that should be the result of the match
         if matchCase.body.len == 1 and matchCase.body[0].kind == skExpr:
           # Single expression - this is the result
-          log(c.verbose, fmt"  Case body starts at PC={c.prog.instructions.len}")
+          log(c.verbose, &"  Case body starts at PC={c.prog.instructions.len}")
           let exprReg = c.compileExpr(matchCase.body[0].sexpr)
-          log(c.verbose, fmt"  Match case body expr compiled to reg {exprReg} result reg is {result}")
+          log(c.verbose, &"  Match case body expr compiled to reg {exprReg} result reg is {result}")
           if exprReg != result:
             c.prog.emitABC(ropMove, result, exprReg, 0)
-            log(c.verbose, fmt"  Emitted ropMove from {exprReg} to {result} at PC={c.prog.instructions.len - 1}")
+            log(c.verbose, &"  Emitted ropMove from {exprReg} to {result} at PC={c.prog.instructions.len - 1}")
             c.allocator.freeReg(exprReg)
         else:
           # Multiple statements - compile all but last, then last is result
@@ -636,7 +636,7 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
 
   of ekObjectLiteral:
     # Handle object literal creation
-    log(c.verbose, fmt"Compiling ekObjectLiteral expression with {e.fieldInits.len} fields")
+    log(c.verbose, &"Compiling ekObjectLiteral expression with {e.fieldInits.len} fields")
     result = c.allocator.allocReg()
 
     # Create a new table
@@ -663,13 +663,13 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
       # Free the value register
       c.allocator.freeReg(valueReg)
 
-      log(c.verbose, fmt"Set field '{fieldName}' (const[{fieldConstIdx}]) = reg {valueReg}")
+      log(c.verbose, &"Set field '{fieldName}' (const[{fieldConstIdx}]) = reg {valueReg}")
 
     # Add default values for missing fields
     if e.objectType != nil and e.objectType.kind == tkObject:
       for field in e.objectType.fields:
         if field.name notin providedFields and field.defaultValue.isSome:
-          log(c.verbose, fmt"Adding default value for field '{field.name}'")
+          log(c.verbose, &"Adding default value for field '{field.name}'")
 
           # Compile the default value expression
           let defaultExpr = field.defaultValue.get
@@ -684,11 +684,11 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
           # Free the value register
           c.allocator.freeReg(valueReg)
 
-          log(c.verbose, fmt"Set default field '{field.name}' (const[{fieldConstIdx}]) = reg {valueReg}")
+          log(c.verbose, &"Set default field '{field.name}' (const[{fieldConstIdx}]) = reg {valueReg}")
 
   of ekFieldAccess:
     # Handle field access on objects
-    log(c.verbose, fmt"Compiling ekFieldAccess expression: field '{e.fieldName}'")
+    log(c.verbose, &"Compiling ekFieldAccess expression: field '{e.fieldName}'")
 
     # Compile the object expression
     let objReg = c.compileExpr(e.objectExpr)
@@ -703,7 +703,7 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
     # Free the object register
     c.allocator.freeReg(objReg)
 
-    log(c.verbose, fmt"Get field '{e.fieldName}' (const[{fieldConstIdx}]) from reg {objReg} to reg {result}")
+    log(c.verbose, &"Get field '{e.fieldName}' (const[{fieldConstIdx}]) from reg {objReg} to reg {result}")
 
   of ekIf:
     # Handle if-expressions
@@ -822,15 +822,15 @@ proc compileCall(c: var RegCompiler, e: Expr): uint8 =
           completeArgs.add(funcDecl.params[i].defaultValue.get())
         else:
           # This shouldn't happen if the type checker is correct
-          log(c.verbose, fmt"Warning: Missing argument for parameter {i} with no default value")
+          log(c.verbose, &"Warning: Missing argument for parameter {i} with no default value")
 
-  log(c.verbose, fmt"compileCall: {e.fname} allocated reg {result}")
-  log(c.verbose, fmt"   original args.len = {e.args.len}")
-  log(c.verbose, fmt"   complete args.len = {completeArgs.len}")
+  log(c.verbose, &"compileCall: {e.fname} allocated reg {result}")
+  log(c.verbose, &"   original args.len = {e.args.len}")
+  log(c.verbose, &"   complete args.len = {completeArgs.len}")
 
   # Get or create function index for direct calls
   let funcIdx = c.addFunctionIndex(e.fname)
-  log(c.verbose, fmt"Function '{e.fname}' has index {funcIdx} in function table")
+  log(c.verbose, &"Function '{e.fname}' has index {funcIdx} in function table")
 
   # Reserve registers for arguments first
   let numArgs = completeArgs.len
@@ -843,8 +843,8 @@ proc compileCall(c: var RegCompiler, e: Expr): uint8 =
   # Then compile arguments
   var argRegs: seq[uint8] = @[]
   for i, arg in completeArgs:
-    log(c.verbose, fmt"Compiling argument {i} for function {e.fname}")
-    log(c.verbose and arg.kind == ekString, fmt"   String argument: '{arg.sval}'")
+    log(c.verbose, &"Compiling argument {i} for function {e.fname}")
+    log(c.verbose and arg.kind == ekString, &"   String argument: '{arg.sval}'")
 
     let targetReg = result + uint8(i) + 1
 
@@ -853,16 +853,16 @@ proc compileCall(c: var RegCompiler, e: Expr): uint8 =
       let sourceReg = c.allocator.regMap[arg.vname]
       if sourceReg != targetReg:
         c.prog.emitABC(ropMove, targetReg, sourceReg, 0)
-        log(c.verbose, fmt"  Moving var '{arg.vname}' from reg {sourceReg} to reg {targetReg}")
+        log(c.verbose, &"  Moving var '{arg.vname}' from reg {sourceReg} to reg {targetReg}")
     else:
       # For other expressions, compile them to a temporary register then move
       let tempReg = c.compileExpr(arg)
       if tempReg != targetReg:
         c.prog.emitABC(ropMove, targetReg, tempReg, 0)
-        log(c.verbose, fmt"  Moving arg {i} from reg {tempReg} to reg {targetReg}")
+        log(c.verbose, &"  Moving arg {i} from reg {tempReg} to reg {targetReg}")
         c.allocator.freeReg(tempReg)
       else:
-        log(c.verbose, fmt"  Arg {i} already in correct position: reg {tempReg}")
+        log(c.verbose, &"  Arg {i} already in correct position: reg {tempReg}")
 
     argRegs.add(targetReg)
 
@@ -879,7 +879,7 @@ proc compileCall(c: var RegCompiler, e: Expr): uint8 =
     debug: callDebug
   )
   c.prog.instructions.add(instr)
-  log(c.verbose, fmt"Emitted ropCall for {e.fname} (index {funcIdx}) at reg {result} with {completeArgs.len} args at PC={c.prog.instructions.len - 1}")
+  log(c.verbose, &"Emitted ropCall for {e.fname} (index {funcIdx}) at reg {result} with {completeArgs.len} args at PC={c.prog.instructions.len - 1}")
 
 proc compileForLoop(c: var RegCompiler, s: Stmt) =
   ## Compile optimized for loop
@@ -1017,7 +1017,7 @@ proc compileForLoop(c: var RegCompiler, s: Stmt) =
   # Compile loop body - DON'T reset allocator between statements!
   # Only reset at the start of each loop iteration (handled by runtime)
   for stmt in s.fbody:
-    log(c.verbose, fmt"Loop body statement, nextReg = {c.allocator.nextReg}")
+    log(c.verbose, &"Loop body statement, nextReg = {c.allocator.nextReg}")
     c.compileStmt(stmt)
 
   # Restore allocator after loop body
@@ -1051,20 +1051,20 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
   case s.kind:
   of skExpr:
     # Compile expression and free its register if not used
-    log(c.verbose, fmt"Compiling expression statement at line {s.pos.line} expr kind = {s.sexpr.kind} expr pos = {s.sexpr.pos.line}")
+    log(c.verbose, &"Compiling expression statement at line {s.pos.line} expr kind = {s.sexpr.kind} expr pos = {s.sexpr.pos.line}")
     let reg = c.compileExpr(s.sexpr)
     c.allocator.freeReg(reg)
 
   of skVar:
     # Variable declaration (let or var) - allocate register for the new variable
     let stmtType = if s.vflag == vfLet: "let" else: "var"
-    log(c.verbose, fmt"Compiling {stmtType} statement for variable: {s.vname} at line {s.pos.line}")
+    log(c.verbose, &"Compiling {stmtType} statement for variable: {s.vname} at line {s.pos.line}")
 
     # Track variable declaration in lifetime tracker
     let currentPC = c.prog.instructions.len
 
     if s.vinit.isSome:
-      log(c.verbose, fmt"Compiling init expression for {s.vname} expr kind: {s.vinit.get.kind}")
+      log(c.verbose, &"Compiling init expression for {s.vname} expr kind: {s.vinit.get.kind}")
       let valReg = c.compileExpr(s.vinit.get)
       c.allocator.regMap[s.vname] = valReg
 
@@ -1072,7 +1072,7 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
       c.lifetimeTracker.declareVariable(s.vname, valReg, currentPC)
       c.lifetimeTracker.defineVariable(s.vname, currentPC)
 
-      log(c.verbose, fmt"Variable {s.vname} allocated to reg {valReg} with initialization")
+      log(c.verbose, &"Variable {s.vname} allocated to reg {valReg} with initialization")
     else:
       # Uninitialized variable - allocate register with nil
       let reg = c.allocator.allocReg(s.vname)
@@ -1081,7 +1081,7 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
       # Variable is declared but not yet defined (holds nil)
       c.lifetimeTracker.declareVariable(s.vname, reg, currentPC)
 
-      log(c.verbose, fmt"Variable {s.vname} allocated to reg {reg} (uninitialized)")
+      log(c.verbose, &"Variable {s.vname} allocated to reg {reg} (uninitialized)")
 
   of skAssign:
     # Check if variable already has a register
@@ -1112,10 +1112,10 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
   of skIf:
     log(c.verbose, "Compiling if statement")
     if c.verbose:
-      log(c.verbose, fmt"   Then body len = {s.thenBody.len}")
-      log(c.verbose, fmt"   Else body len = {s.elseBody.len}")
+      log(c.verbose, &"   Then body len = {s.thenBody.len}")
+      log(c.verbose, &"   Else body len = {s.elseBody.len}")
       if s.elseBody.len > 0:
-        log(c.verbose, fmt"   First else body statement: {s.elseBody[0].kind}")
+        log(c.verbose, &"   First else body statement: {s.elseBody[0].kind}")
         if s.elseBody[0].kind == skIf:
           log(c.verbose, "   Detected elif chain")
     var jmpPos: int
@@ -1225,9 +1225,9 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
 
     # Compile else branch if present
     if s.elseBody.len > 0:
-      log(c.verbose, fmt"Compiling else branch with {s.elseBody.len} statements")
+      log(c.verbose, &"Compiling else branch with {s.elseBody.len} statements")
       for stmt in s.elseBody:
-        log(c.verbose, fmt"  Else body statement: {stmt.kind}")
+        log(c.verbose, &"  Else body statement: {stmt.kind}")
         c.compileStmt(stmt)
 
     # Patch all jumps to end
@@ -1340,13 +1340,13 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
 
   of skComptime:
     # Comptime blocks should contain injected variables after foldComptime
-    log(c.verbose, fmt"Processing comptime block with {s.cbody.len} statements")
+    log(c.verbose, &"Processing comptime block with {s.cbody.len} statements")
     for stmt in s.cbody:
       c.compileStmt(stmt)
 
   of skDefer:
     # Defer statement - compile defer body and emit registration instruction
-    log(c.verbose, fmt"Compiling defer block with {s.deferBody.len} statements")
+    log(c.verbose, &"Compiling defer block with {s.deferBody.len} statements")
 
     # Emit jump over defer body (we'll patch this later)
     let jumpOverPos = c.prog.instructions.len
@@ -1371,7 +1371,7 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
     let offsetToDefer = deferBodyStart - deferBodyEnd
     c.prog.emitAsBx(ropPushDefer, 0, int16(offsetToDefer), c.makeDebugInfo(s.pos))
 
-    log(c.verbose, fmt"Defer body at PC {deferBodyStart}..{deferBodyEnd - 1} registration at PC {deferBodyEnd}")
+    log(c.verbose, &"Defer body at PC {deferBodyStart}..{deferBodyEnd - 1} registration at PC {deferBodyEnd}")
 
   of skTypeDecl:
     # Type declarations - these are handled during type checking
@@ -1383,7 +1383,7 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
 
   of skDiscard:
     # Discard statement - compile expressions and free their registers
-    log(c.verbose, fmt"Compiling discard statement with {s.dexprs.len} expressions")
+    log(c.verbose, &"Compiling discard statement with {s.dexprs.len} expressions")
     for expr in s.dexprs:
       let reg = c.compileExpr(expr)
       c.allocator.freeReg(reg)
@@ -1417,7 +1417,7 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
       # Emit ropSetField to set object field: R[objReg][K[fieldConst]] = R[valReg]
       c.prog.emitABC(ropSetField, valReg, objReg, uint8(fieldConst), c.makeDebugInfo(s.pos))
 
-      log(c.verbose, fmt"Set field '{s.faTarget.fieldName}' (const[{fieldConst}]) in object at reg {objReg} to value at reg {valReg}")
+      log(c.verbose, &"Set field '{s.faTarget.fieldName}' (const[{fieldConst}]) in object at reg {objReg} to value at reg {valReg}")
 
       c.allocator.freeReg(valReg)
 
@@ -1498,9 +1498,9 @@ proc compileFunDecl*(c: var RegCompiler, name: string, params: seq[Param], retTy
 proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = false, debug: bool = true): RegBytecodeProgram =
   ## Compile AST to register-based bytecode with optimizations
   if verbose:
-    log(verbose, fmt"Starting compilation, funInstances count: {p.funInstances.len}")
+    log(verbose, &"Starting compilation, funInstances count: {p.funInstances.len}")
     for fname, _ in p.funInstances:
-      log(verbose, fmt"   Function available: {fname}")
+      log(verbose, &"   Function available: {fname}")
 
   var compiler = RegCompiler(
     prog: RegBytecodeProgram(
@@ -1542,19 +1542,19 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
         returnType: ""     # Will be filled by compiler.nim
       )
 
-      log(verbose, fmt"Identified C FFI function: {fname} -> {baseName}")
+      log(verbose, &"Identified C FFI function: {fname} -> {baseName}")
 
   # Compile all functions except main first
   for fname, funcDecl in p.funInstances:
     let isBuiltin = funcDecl.body.len == 0  # Builtin functions have no body
     let isCFFI = compiler.prog.cffiInfo.hasKey(fname)
 
-    log(verbose, fmt"Processing function: {fname} isBuiltin={isBuiltin} isCFFI={isCFFI} body.len={funcDecl.body.len}")
+    log(verbose, &"Processing function: {fname} isBuiltin={isBuiltin} isCFFI={isCFFI} body.len={funcDecl.body.len}")
 
     if fname != MAIN_FUNCTION_NAME and not isBuiltin and not isCFFI:  # Skip builtin and C FFI functions
       let startPos = compiler.prog.instructions.len
 
-      log(verbose, fmt"Compiling function {fname}")
+      log(verbose, &"Compiling function {fname}")
 
       # Reset allocator for new function
       compiler.allocator = RegAllocator(
@@ -1573,7 +1573,7 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
         # Track parameter as declared and defined at function entry
         compiler.lifetimeTracker.declareVariable(param.name, paramReg, startPos)
         compiler.lifetimeTracker.defineVariable(param.name, startPos)
-        log(verbose, fmt"Allocated parameter '{param.name}' to register {paramReg}")
+        log(verbose, &"Allocated parameter '{param.name}' to register {paramReg}")
 
       # Compile function body
       for stmt in funcDecl.body:
@@ -1618,11 +1618,11 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
         numLocals: 0  # TODO: Calculate actual locals
       )
 
-      log(verbose, fmt"Compiled function {fname} at {startPos}..{endPos}")
+      log(verbose, &"Compiled function {fname} at {startPos}..{endPos}")
 
   # Compile global initialization if needed
   if p.globals.len > 0:
-    log(verbose, fmt"Compiling {p.globals.len} global variables")
+    log(verbose, &"Compiling {p.globals.len} global variables")
 
     # Save position for global init
     let globalInitStart = compiler.prog.instructions.len
@@ -1664,7 +1664,7 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
 
     # Set entry point to global initialization
     compiler.prog.entryPoint = globalInitStart
-    log(verbose, fmt"Entry point set to PC {globalInitStart} ({GLOBAL_INIT_FUNCTION_NAME} function)")
+    log(verbose, &"Entry point set to PC {globalInitStart} ({GLOBAL_INIT_FUNCTION_NAME} function)")
 
     # Register the global initialization code as a special function for debugging
     let globalInitEnd = compiler.prog.instructions.len - 1
@@ -1676,7 +1676,7 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
       numLocals: 0
     )
 
-    log(verbose, fmt"Registered {GLOBAL_INIT_FUNCTION_NAME} initialization function at PC {globalInitStart}..{globalInitEnd}")
+    log(verbose, &"Registered {GLOBAL_INIT_FUNCTION_NAME} initialization function at PC {globalInitStart}..{globalInitEnd}")
   else:
     # Set entry point to main (will be compiled next)
     compiler.prog.entryPoint = compiler.prog.instructions.len
@@ -1705,7 +1705,7 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
       numLocals: 0
     )
 
-    log(verbose, fmt"Compiled main function at {mainStartPos}..{mainEndPos}")
+    log(verbose, &"Compiled main function at {mainStartPos}..{mainEndPos}")
 
   # Apply optimization passes
   # Enable with only Pass 1 and 2 (disable Pass 3 which seems buggy)

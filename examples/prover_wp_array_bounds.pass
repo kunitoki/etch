@@ -1,0 +1,7 @@
+Test safe call:
+Result: 60
+
+Test with check:
+Result: 10
+
+✅ WP array bounds tests passed!

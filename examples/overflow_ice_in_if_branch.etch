@@ -1,0 +1,22 @@
+// Test: ICE when overflow happens in if branch
+// Should give proper prover error with source location
+
+fn testIfBranchOverflow(flag: bool) -> int {
+  var result = 0;
+
+  if flag {
+    // This branch has constant overflow
+    let huge1 = 9223372036854775000;
+    let huge2 = 2000;
+    result = huge1 + huge2;  // Overflow!
+  } else {
+    result = 100;
+  }
+
+  return result;
+}
+
+fn main() -> void {
+  let r = testIfBranchOverflow(true);
+  print("Result: " + toString(r));
+}

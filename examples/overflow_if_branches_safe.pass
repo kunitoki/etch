@@ -1,0 +1,7 @@
+Test if condition refinement:
+Result: 10412790330
+Test nested if:
+Result: 1846421620
+Test disjoint ranges:
+Result: 4000000000
+✅ If branch tests passed!

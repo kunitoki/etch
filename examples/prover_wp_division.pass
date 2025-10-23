@@ -1,0 +1,10 @@
+Test safe division:
+Result: 20
+
+Test safe modulo:
+Result: 2
+
+Test with check:
+Result: -1
+
+✅ WP division tests passed!

@@ -1,0 +1,12 @@
+// Test: Negation that might hit IMin
+// Uses rand to create a value that could be IMin
+
+fn main() -> void {
+  // Create a value that might be very negative
+  let x = rand(100);  // [0, 100]
+  let very_negative = -9223372036854775807 - x;  // Could be close to or at IMin
+
+  // Try to negate it - if x=1, then very_negative = IMin
+  let negated = -very_negative;  // Might overflow!
+  print("Result: " + toString(negated));
+}

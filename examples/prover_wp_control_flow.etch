@@ -1,0 +1,85 @@
+// Test: Weakest precondition - complex control flow
+// The prover should handle multiple paths and merge constraints
+
+fn accessWithBranches(idx: int, useFirstHalf: bool) -> int {
+  // WP should infer: requires idx >= 0 and idx < 10
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+  if useFirstHalf {
+    if idx < 5 {
+      return arr[idx] * 2;
+    } else {
+      return arr[idx];
+    }
+  } else {
+    if idx >= 5 {
+      return arr[idx] + 10;
+    } else {
+      return arr[idx] + 5;
+    }
+  }
+}
+
+fn testMultiplePaths() -> int {
+  let result1 = accessWithBranches(2, true);   // 2 * 2 = 4
+  let result2 = accessWithBranches(7, false);  // 7 + 10 = 17
+  print("Result1: " + toString(result1));
+  print("Result2: " + toString(result2));
+  return 0;  // Avoid overflow
+}
+
+fn divideWithGuards(a: int, b: int) -> int {
+  // WP should infer: requires b != 0
+  if b == 0 {
+    return 0;  // Early return, but WP should still require b != 0 for the else branch
+  } else {
+    return a / b;
+  }
+}
+
+fn testDivisionWithGuards() -> int {
+  let result1 = divideWithGuards(20, 4);
+  let result2 = divideWithGuards(15, 3);
+  print("Division1: " + toString(result1));
+  print("Division2: " + toString(result2));
+  return 0;  // Avoid overflow
+}
+
+fn arrayAccessInLoop(count: int) -> int {
+  // WP should infer: requires count >= 0 and count <= 5
+  let arr: array[int] = [10, 20, 30, 40, 50];
+  var sum = 0;
+
+  if count >= 0 and count <= 5 {
+    var i = 0;
+    while i < count {
+      if i < 5 {
+        sum = sum + arr[i];
+      }
+      i = i + 1;
+    }
+  }
+
+  return sum;
+}
+
+fn testLoopAccess() -> int {
+  return arrayAccessInLoop(3);  // Sum of first 3 elements: 10 + 20 + 30 = 60
+}
+
+fn main() -> void {
+  print("Test multiple paths:");
+  discard testMultiplePaths();
+  print("");
+
+  print("Test division with guards:");
+  discard testDivisionWithGuards();
+  print("");
+
+  print("Test loop access:");
+  let result3 = testLoopAccess();
+  print("Loop result: " + toString(result3));
+  print("");
+
+  print("✅ WP control flow tests passed!");
+}

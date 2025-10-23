@@ -1,0 +1,15 @@
+// Test: Inter-procedural overflow that should be caught
+// The function parameter has no bounds, so overflow should be caught at call site
+
+fn addLarge(x: int) -> int {
+  // Without preconditions, this function accepts any x
+  // Adding 1001 could overflow if x is near IMax
+  return x + 1001;
+}
+
+fn main() -> void {
+  // Call with a value very close to max
+  let large = rand(9223372036854774807);  // Range: [0, IMax - 1000]
+  let result = addLarge(large);  // This could overflow!
+  print("Result: " + toString(result));
+}

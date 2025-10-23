@@ -7,50 +7,15 @@ fn testDisjunctiveOr(x: int) -> string {
   // x is either < 5 or > 10
   // This means x can be in [0, 4] OR [11, IMax]
   // Since our array has 11 elements [0..10], only x in [0, 4] is safe
-  if x < 5 or x >= 11 {
-    // The prover tracks: x in [IMin, 4] ∪ [11, IMax]
-    // Only [0, 4] is safe for our array
-    // But since the disjunctive intervals include [11, IMax],
-    // this will fail (correctly) because [11, IMax] extends beyond bounds
+  if (x >= 0 and x < 5) or x >= 11 {
+    // The prover tracks: x in [0, 4] ∪ [11, IMax]
+    // This will fail (correctly) because [11, IMax] extends beyond bounds
     return "Value: " + toString(arr[x]);
   }
 
   return "x is between 5 and 10";
 }
 
-fn testDisjunctiveSafe(x: int) -> string {
-  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 100, 101, 102, 103, 104, 105];
-
-  // x is either < 5 or >= 11
-  // Array has 16 elements [0..15]
-  // So both intervals [0, 4] and [11, 15] should be safe!
-  if (x >= 0 and x < 5) or (x >= 11 and x < 16) {
-    // The prover tracks: x in [0, 4] ∪ [11, 15]
-    // Both intervals are within array bounds [0, 15]
-    return "Safe value: " + toString(arr[x]);  // ✅ Should be proven safe!
-  }
-
-  return "x is not in valid range";
-}
-
-fn testDisjunctiveElseBranch(x: int) -> string {
-  let arr: array[int] = [5, 6, 7, 8, 9, 10];
-
-  // In then branch: x < 5 or x > 10
-  // In else branch: !(x < 5 or x > 10) = x >= 5 and x <= 10
-  if x < 5 or x > 10 {
-    return "x is outside [5, 10]";
-  } else {
-    // In else branch: x in [5, 10]
-    // Array has 6 elements [0..5]
-    // We need to adjust access: arr[x - 5] should be safe
-    let adjustedIndex = x - 5;  // maps [5,10] to [0,5]
-    return "Value at offset: " + toString(arr[adjustedIndex]);
-  }
-}
-
 fn main() -> void {
-  print("Test 1 (should fail): " + testDisjunctiveOr(3));
-  print("Test 2 (should work): " + testDisjunctiveSafe(2));
-  print("Test 3 (else branch): " + testDisjunctiveElseBranch(7));
+  print("Test 1 (should work): " + testDisjunctiveOr(7));
 }

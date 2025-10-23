@@ -39,10 +39,10 @@ proc analyzeBinaryAddition*(e: Expr, a: Info, b: Info): Info =
 
   # Integer addition
   if a.known and b.known:
-    let s = a.cval + b.cval
-    # overflow check at compile-time must not overflow Nim; use bigints? assume safe here with int64
+    # Check for overflow BEFORE performing the addition to avoid Nim's OverflowDefect
     if ( (b.cval > 0 and a.cval > IMax - b.cval) or (b.cval < 0 and a.cval < IMin - b.cval) ):
-      raise newProverError(e.pos, "addition overflow on constants")
+      raise newProverError(e.pos, "addition overflow")
+    let s = a.cval + b.cval
     return infoConst(s)
 
   # Range addition - check for overflow strictly
@@ -68,9 +68,10 @@ proc analyzeBinarySubtraction*(e: Expr, a: Info, b: Info): Info =
 
   # Check constant subtraction
   if a.known and b.known:
-    let d = a.cval - b.cval
+    # Check for overflow BEFORE performing the subtraction to avoid Nim's OverflowDefect
     if ( (b.cval < 0 and a.cval > IMax + b.cval) or (b.cval > 0 and a.cval < IMin + b.cval) ):
-      raise newProverError(e.pos, "subtraction overflow on constants")
+      raise newProverError(e.pos, "subtraction overflow")
+    let d = a.cval - b.cval
     return infoConst(d)
 
   # Range subtraction - check for overflow strictly
@@ -96,10 +97,13 @@ proc analyzeBinaryMultiplication*(e: Expr, a: Info, b: Info): Info =
 
   # Handle constant multiplication first
   if a.known and b.known:
+    # Check for overflow BEFORE performing the multiplication to avoid Nim's OverflowDefect
+    if a.cval != 0 and b.cval != 0:
+      let absA = if a.cval == IMin: IMax else: (if a.cval < 0: -a.cval else: a.cval)
+      let absB = if b.cval == IMin: IMax else: (if b.cval < 0: -b.cval else: b.cval)
+      if absB > 0 and absA > IMax div absB:
+        raise newProverError(e.pos, "multiplication overflow")
     let m = a.cval * b.cval
-    # Conservative overflow check using division test
-    if a.cval != 0 and m div a.cval != b.cval:
-      raise newProverError(e.pos, "multiplication overflow on constants")
     return infoConst(m)
 
   # Handle multiplication by zero (always results in zero)

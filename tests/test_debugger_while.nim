@@ -45,37 +45,37 @@ suite "While Loop Debugging":
 
     # Check initial position (seq 3)
     let line1 = getLineFromTrace(output, 3)
-    echo fmt"Initial position: line {line1}"
+    echo &"Initial position: line {line1}"
     check line1 == 3  # Should start at print statement
 
     # After first step (seq 5)
     let line2 = getLineFromTrace(output, 5)
-    echo fmt"After step 1: line {line2}"
+    echo &"After step 1: line {line2}"
     check line2 == 5  # Should be at var i = 0
 
     # After second step (seq 7) - SHOULD BE AT WHILE CONDITION
     let line3 = getLineFromTrace(output, 7)
-    echo fmt"After step 2: line {line3}"
+    echo &"After step 2: line {line3}"
     check line3 == 6  # Should be at while i < 10 (FIRST TIME)
 
     # After third step (seq 9) - inside while body
     let line4 = getLineFromTrace(output, 9)
-    echo fmt"After step 3: line {line4}"
+    echo &"After step 3: line {line4}"
     check line4 == 7  # Should be at if statement
 
     # After fourth step (seq 11) - skip if, go to print
     let line5 = getLineFromTrace(output, 11)
-    echo fmt"After step 4: line {line5}"
+    echo &"After step 4: line {line5}"
     check line5 == 10  # Should be at print(i)
 
     # After fifth step (seq 13) - increment
     let line6 = getLineFromTrace(output, 13)
-    echo fmt"After step 5: line {line6}"
+    echo &"After step 5: line {line6}"
     check line6 == 11  # Should be at i = i + 1
 
     # After sixth step (seq 15) - BACK TO WHILE CONDITION (2nd iteration)
     let line7 = getLineFromTrace(output, 15)
-    echo fmt"After step 6: line {line7}"
+    echo &"After step 6: line {line7}"
     check line7 == 6  # Should be back at while i < 10 (SECOND TIME)
 
     echo "✓ While loop correctly shows condition on each iteration"

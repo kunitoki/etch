@@ -1,0 +1,101 @@
+// Test: Overflow in match expressions
+// Tests if the prover tracks overflow through pattern matching
+
+fn testMatchOption() -> int {
+  let input = readFile("examples/data/input.txt");
+  let maybeN = input.parseInt();
+
+  let result = match maybeN {
+    some(value) => {
+      // value is an int, could be anything
+      // Try to square it - might overflow
+      let squared = if value < 10000 {
+        value * value
+      } else {
+        value
+      };
+      squared
+    };
+    none => 0;
+  };
+
+  return result;
+}
+
+fn testMatchWithLargeValues() -> int {
+  let x = rand(3);  // [0, 2]
+
+  // Each branch returns different range
+  let result = match x {
+    0 => 1000000000;      // 1B
+    1 => 2000000000;      // 2B
+    2 => 3000000000;      // 3B
+    _ => 0;
+  };
+
+  // After match, result is in [0, 3B]
+  // Doubling is [0, 6B] - safe
+  return result * 2;
+}
+
+fn testMatchNested() -> int {
+  let input1 = readFile("examples/data/input.txt");
+  let maybe1 = input1.parseInt();
+
+  let result = match maybe1 {
+    some(a) => {
+      // Nested computation
+      if a < 1000 {
+        let squared = a * a;  // max: 998001
+        squared + 1000        // safe
+      } else {
+        a
+      }
+    };
+    none => -1;
+  };
+
+  return result;
+}
+
+fn testMatchDisjointRanges() -> int {
+  let choice = rand(4);  // [0, 3]
+
+  let value = match choice {
+    0 => 100;
+    1 => 1000;
+    2 => 10000;
+    3 => 100000;
+    _ => 1;
+  };
+
+  // value is in {1, 100, 1000, 10000, 100000}
+  // These are very disjoint ranges
+  let multiplied = value * 1000000;  // max: 100B - safe
+
+  return multiplied;
+}
+
+fn main() -> void {
+  print("Test match option:");
+  let r1 = testMatchOption();
+  print("Result: " + toString(r1));
+  print("");
+
+  print("Test match with large values:");
+  let r2 = testMatchWithLargeValues();
+  print("Result: " + toString(r2));
+  print("");
+
+  print("Test match nested:");
+  let r3 = testMatchNested();
+  print("Result: " + toString(r3));
+  print("");
+
+  print("Test match disjoint ranges:");
+  let r4 = testMatchDisjointRanges();
+  print("Result: " + toString(r4));
+  print("");
+
+  print("✅ Match expression tests passed!");
+}

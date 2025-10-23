@@ -1,0 +1,43 @@
+// Test: Range widening through operations
+// Tests if the prover properly tracks how ranges expand
+
+fn testRangeWidening() -> int {
+  // Start with modest ranges
+  var x = rand(1000);  // [0, 1000]
+
+  // Each operation widens the range
+  x = x * 1000;  // [0, 1,000,000]
+  x = x * 1000;  // [0, 1,000,000,000]
+  x = x * 1000;  // [0, 1,000,000,000,000]
+
+  // This should still be safe (1E12 < IMax)
+  return x;
+}
+
+fn testRangeNarrowing() -> int {
+  // Start with large range
+  let large = rand(1000000000);  // [0, 1B]
+
+  // Narrow it down with conditions
+  if large < 1000 {
+    // Here large is [0, 999]
+    let squared = large * large;  // [0, 998,001] - safe
+    return squared;
+  }
+
+  return 0;
+}
+
+fn main() -> void {
+  print("Test range widening:");
+  let r1 = testRangeWidening();
+  print("Result: " + toString(r1));
+  print("");
+
+  print("Test range narrowing:");
+  let r2 = testRangeNarrowing();
+  print("Result: " + toString(r2));
+  print("");
+
+  print("✅ Range tracking tests passed!");
+}

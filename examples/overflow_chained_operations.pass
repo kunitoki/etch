@@ -1,0 +1,10 @@
+Test chained addition:
+Result: 2052816785
+
+Test mixed operations:
+Result: 5440594066849364985
+
+Test accumulation:
+Result: 1629861765
+
+✅ Chained operations tests passed!

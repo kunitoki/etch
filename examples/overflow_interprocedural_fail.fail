@@ -1,0 +1,5 @@
+examples/overflow_interprocedural_fail.etch:7:12: error: addition overflow
+  6 |   // Adding 1001 could overflow if x is near IMax
+  7 |   return x + 1001;
+                 ^
+  8 | }

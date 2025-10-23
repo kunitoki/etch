@@ -1,0 +1,5 @@
+examples/prover_wp_fail_modulo.etch:6:12: error: modulo by zero in function unsafeModulo
+  5 |   // WP should infer: requires b != 0
+  6 |   return a % b;
+                 ^
+  7 | }

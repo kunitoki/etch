@@ -1,0 +1,82 @@
+// Test: Overflow in loop accumulation
+// Tests if the prover tracks overflow through loop iterations
+
+fn testWhileLoopAccumulation() -> int {
+  var acc = 0;
+  var i = 0;
+
+  // Add 1 billion, 10 times = 10 billion (safe)
+  while i < 10 {
+    acc = acc + 1000000000;
+    i = i + 1;
+  }
+
+  return acc;
+}
+
+fn testWhileLoopOverflow() -> int {
+  var acc = 0;
+  var i = 0;
+
+  // Add 2 billion, 10 times = 20 billion - still safe for int64
+  while i < 10 {
+    acc = acc + 2000000000;
+    i = i + 1;
+  }
+
+  return acc;
+}
+
+fn testUnboundedLoop() -> int {
+  var acc = 0;
+  let n = rand(100);  // Unknown bound
+  var i = 0;
+
+  // Each iteration adds 100 billion
+  // If n is large, this could overflow
+  while i < n {
+    acc = acc + 100000000000;
+    i = i + 1;
+  }
+
+  return acc;
+}
+
+fn testLoopWithLargeStep() -> int {
+  var sum = 0;
+  var i = 0;
+
+  // Large increments
+  while i < 5 {
+    let large = rand(2000000000);  // [0, 2B]
+    sum = sum + large;
+    i = i + 1;
+  }
+
+  // sum could be [0, 10B] - safe
+  return sum;
+}
+
+fn main() -> void {
+  print("Test while loop accumulation:");
+  let r1 = testWhileLoopAccumulation();
+  print("Result: " + toString(r1));
+  print("");
+
+  print("Test while loop large values:");
+  let r2 = testWhileLoopOverflow();
+  print("Result: " + toString(r2));
+  print("");
+
+  print("Test unbounded loop:");
+  let r3 = testUnboundedLoop();
+  print("Result: " + toString(r3));
+  print("");
+
+  print("Test loop with large step:");
+  let r4 = testLoopWithLargeStep();
+  print("Result: " + toString(r4));
+  print("");
+
+  print("✅ Loop accumulation tests passed!");
+}

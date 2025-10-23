@@ -3,10 +3,41 @@
 
 import std/[tables, options]
 import ../frontend/ast
+import ../common/constants
 import types
 
 
-const MAX_ITERATIONS = 1000
+proc evalBinaryOp(bop: BinOp, a: int64, b: int64): Option[int64] =
+  ## Evaluate a binary operation on two int64 values with overflow checking
+  case bop
+  of boAdd:
+    if (b > 0 and a > high(int64) - b) or (b < 0 and a < low(int64) - b):
+      return none(int64)
+    return some(a + b)
+  of boSub:
+    if (b < 0 and a > high(int64) + b) or (b > 0 and a < low(int64) + b):
+      return none(int64)
+    return some(a - b)
+  of boMul:
+    if a != 0 and b != 0:
+      let absA = if a == low(int64): high(int64) else: (if a < 0: -a else: a)
+      let absB = if b == low(int64): high(int64) else: (if b < 0: -b else: b)
+      if absB > 0 and absA > high(int64) div absB:
+        return none(int64)
+    return some(a * b)
+  of boDiv:
+    if b != 0: return some(a div b)
+    else: return none(int64)
+  of boMod:
+    if b != 0: return some(a mod b)
+    else: return none(int64)
+  of boLt: return some(if a < b: 1'i64 else: 0'i64)
+  of boLe: return some(if a <= b: 1'i64 else: 0'i64)
+  of boGt: return some(if a > b: 1'i64 else: 0'i64)
+  of boGe: return some(if a >= b: 1'i64 else: 0'i64)
+  of boEq: return some(if a == b: 1'i64 else: 0'i64)
+  of boNe: return some(if a != b: 1'i64 else: 0'i64)
+  else: return none(int64)
 
 
 proc tryEvaluateComplexFunction*(body: seq[Stmt], paramEnv: Table[string, int64]): Option[int64] =
@@ -29,23 +60,7 @@ proc tryEvaluateComplexFunction*(body: seq[Stmt], paramEnv: Table[string, int64]
       let lhs = evalExprLocal(expr.lhs)
       let rhs = evalExprLocal(expr.rhs)
       if lhs.isSome and rhs.isSome:
-        case expr.bop
-        of boAdd: return some(lhs.get + rhs.get)
-        of boSub: return some(lhs.get - rhs.get)
-        of boMul: return some(lhs.get * rhs.get)
-        of boDiv:
-          if rhs.get != 0: return some(lhs.get div rhs.get)
-          else: return none(int64)
-        of boMod:
-          if rhs.get != 0: return some(lhs.get mod rhs.get)
-          else: return none(int64)
-        of boLt: return some(if lhs.get < rhs.get: 1'i64 else: 0'i64)
-        of boLe: return some(if lhs.get <= rhs.get: 1'i64 else: 0'i64)
-        of boGt: return some(if lhs.get > rhs.get: 1'i64 else: 0'i64)
-        of boGe: return some(if lhs.get >= rhs.get: 1'i64 else: 0'i64)
-        of boEq: return some(if lhs.get == rhs.get: 1'i64 else: 0'i64)
-        of boNe: return some(if lhs.get != rhs.get: 1'i64 else: 0'i64)
-        else: return none(int64)
+        return evalBinaryOp(expr.bop, lhs.get, rhs.get)
       return none(int64)
     else:
       return none(int64)
@@ -80,7 +95,7 @@ proc tryEvaluateComplexFunction*(body: seq[Stmt], paramEnv: Table[string, int64]
     of skWhile:
       # Simple loop evaluation with maximum iterations to prevent infinite loops
       var iterations = 0
-      while iterations < MAX_ITERATIONS:
+      while iterations < MAX_LOOP_ITERATIONS:
         let condVal = evalExprLocal(stmt.wcond)
         if not condVal.isSome:
           return none(int64)  # Cannot evaluate condition
@@ -90,6 +105,18 @@ proc tryEvaluateComplexFunction*(body: seq[Stmt], paramEnv: Table[string, int64]
         # Execute loop body
         for bodyStmt in stmt.wbody:
           case bodyStmt.kind
+          of skVar:
+            if bodyStmt.vinit.isSome:
+              let val = evalExprLocal(bodyStmt.vinit.get)
+              if val.isSome:
+                localVars[bodyStmt.vname] = val.get
+                let idx = uninitializedVars.find(bodyStmt.vname)
+                if idx >= 0:
+                  uninitializedVars.delete(idx)
+              else:
+                return none(int64)
+            else:
+              uninitializedVars.add(bodyStmt.vname)
           of skAssign:
             let val = evalExprLocal(bodyStmt.aval)
             if val.isSome:
@@ -105,7 +132,7 @@ proc tryEvaluateComplexFunction*(body: seq[Stmt], paramEnv: Table[string, int64]
 
         iterations += 1
 
-      if iterations >= MAX_ITERATIONS:
+      if iterations >= MAX_LOOP_ITERATIONS:
         return none(int64)  # Potential infinite loop
     of skReturn:
       if stmt.re.isSome:
@@ -134,148 +161,135 @@ proc tryEvaluatePureFunction*(call: Expr, argInfos: seq[Info], fn: FunDecl, prog
 
   # Forward declaration for mutual recursion
   proc evalStmt(stmt: Stmt): Option[int64]
+  proc evalExpr(expr: Expr): Option[int64]
 
-  # Simple recursive expression evaluator
-  proc evalExpr(expr: Expr): Option[int64] =
-    case expr.kind
-    of ekInt:
-      return some(expr.ival)
-    of ekVar:
-      # Check if variable is uninitialized
-      if expr.vname in uninitializedVars:
-        return none(int64)  # Cannot evaluate - variable is uninitialized
-      if paramEnv.hasKey(expr.vname):
-        return some(paramEnv[expr.vname])
+  proc evalVarExpr(expr: Expr): Option[int64] =
+    if expr.vname in uninitializedVars:
       return none(int64)
-    of ekBin:
-      let lhs = evalExpr(expr.lhs)
-      let rhs = evalExpr(expr.rhs)
-      if lhs.isSome and rhs.isSome:
-        case expr.bop
-        of boAdd: return some(lhs.get + rhs.get)
-        of boSub: return some(lhs.get - rhs.get)
-        of boMul: return some(lhs.get * rhs.get)
-        of boDiv:
-          if rhs.get != 0: return some(lhs.get div rhs.get)
-          else: return none(int64)
-        of boMod:
-          if rhs.get != 0: return some(lhs.get mod rhs.get)
-          else: return none(int64)
-        of boEq: return some(if lhs.get == rhs.get: 1'i64 else: 0'i64)
-        of boNe: return some(if lhs.get != rhs.get: 1'i64 else: 0'i64)
-        of boLt: return some(if lhs.get < rhs.get: 1'i64 else: 0'i64)
-        of boLe: return some(if lhs.get <= rhs.get: 1'i64 else: 0'i64)
-        of boGt: return some(if lhs.get > rhs.get: 1'i64 else: 0'i64)
-        of boGe: return some(if lhs.get >= rhs.get: 1'i64 else: 0'i64)
-        else: return none(int64)
+    if paramEnv.hasKey(expr.vname):
+      return some(paramEnv[expr.vname])
+    return none(int64)
+
+  proc evalBinExpr(expr: Expr): Option[int64] =
+    let lhs = evalExpr(expr.lhs)
+    let rhs = evalExpr(expr.rhs)
+    if lhs.isSome and rhs.isSome:
+      return evalBinaryOp(expr.bop, lhs.get, rhs.get)
+    return none(int64)
+
+  proc evalCallExpr(expr: Expr): Option[int64] =
+    if prog != nil and expr.fname == fn.name:
+      var recursiveArgs: seq[int64] = @[]
+      for arg in expr.args:
+        let argResult = evalExpr(arg)
+        if argResult.isSome:
+          recursiveArgs.add(argResult.get)
+        else:
+          return none(int64)
+
+      var newParamEnv: Table[string, int64] = initTable[string, int64]()
+      for i, arg in recursiveArgs:
+        if i < fn.params.len:
+          newParamEnv[fn.params[i].name] = arg
+
+      let oldParamEnv = paramEnv
+      paramEnv = newParamEnv
+
+      for stmt in fn.body:
+        let res = evalStmt(stmt)
+        if res.isSome:
+          paramEnv = oldParamEnv
+          return res
+
+      paramEnv = oldParamEnv
       return none(int64)
-    of ekCall:
-      # Support recursive function calls
-      if prog != nil and expr.fname == fn.name:
-        # Recursive call to the same function - evaluate arguments and call recursively
-        var recursiveArgs: seq[int64] = @[]
-        for arg in expr.args:
-          let argResult = evalExpr(arg)
-          if argResult.isSome:
-            recursiveArgs.add(argResult.get)
-          else:
-            return none(int64)
-
-        # Create new parameter environment for recursive call
-        var newParamEnv: Table[string, int64] = initTable[string, int64]()
-        for i, arg in recursiveArgs:
-          if i < fn.params.len:
-            newParamEnv[fn.params[i].name] = arg
-
-        # Temporarily swap parameter environments
-        let oldParamEnv = paramEnv
-        paramEnv = newParamEnv
-
-        # Evaluate the function body with new parameters
-        for stmt in fn.body:
-          let res = evalStmt(stmt)
-          if res.isSome:
-            paramEnv = oldParamEnv  # Restore environment
-            return res
-
-        paramEnv = oldParamEnv  # Restore environment
-        return none(int64)
-      else:
-        # For now, don't support calls to other functions
-        return none(int64)
     else:
       return none(int64)
 
-  # Simple statement evaluator for function body
-  proc evalStmt(stmt: Stmt): Option[int64] =
-    case stmt.kind
-    of skVar:
-      if stmt.vinit.isSome:
-        let val = evalExpr(stmt.vinit.get)
-        if val.isSome:
-          paramEnv[stmt.vname] = val.get
-          # Remove from uninitialized list if it was there
-          let idx = uninitializedVars.find(stmt.vname)
-          if idx >= 0:
-            uninitializedVars.delete(idx)
-        else:
-          return none(int64)  # Cannot evaluate initializer
-      else:
-        # Variable declared without initializer - mark as uninitialized
-        uninitializedVars.add(stmt.vname)
-      return none(int64)  # Variable declaration doesn't return a value
-    of skAssign:
-      let val = evalExpr(stmt.aval)
+  proc evalExpr(expr: Expr): Option[int64] =
+    case expr.kind
+    of ekInt: return some(expr.ival)
+    of ekVar: return evalVarExpr(expr)
+    of ekBin: return evalBinExpr(expr)
+    of ekCall: return evalCallExpr(expr)
+    else: return none(int64)
+
+  proc evalVarStmt(stmt: Stmt): Option[int64] =
+    if stmt.vinit.isSome:
+      let val = evalExpr(stmt.vinit.get)
       if val.isSome:
-        paramEnv[stmt.aname] = val.get
-        # Assignment initializes the variable
-        let idx = uninitializedVars.find(stmt.aname)
+        paramEnv[stmt.vname] = val.get
+        let idx = uninitializedVars.find(stmt.vname)
         if idx >= 0:
           uninitializedVars.delete(idx)
       else:
-        return none(int64)  # Cannot evaluate assignment
-      return none(int64)  # Assignment doesn't return a value
-    of skReturn:
-      if stmt.re.isSome:
-        return evalExpr(stmt.re.get)
-      return some(0'i64)  # void return
-    of skIf:
-      # Handle if-else statements
-      let condResult = evalExpr(stmt.cond)
-      if condResult.isSome:
-        if condResult.get != 0:
-          # Condition is true - execute then branch
-          for thenStmt in stmt.thenBody:
-            let res = evalStmt(thenStmt)
-            if res.isSome:
-              return res
-        else:
-          # Condition is false - execute else branch
-          for elseStmt in stmt.elseBody:
-            let res = evalStmt(elseStmt)
-            if res.isSome:
-              return res
-      return none(int64)
+        return none(int64)
     else:
-      return none(int64)  # Unsupported statement type
+      uninitializedVars.add(stmt.vname)
+    return some(0'i64)
+
+  proc evalAssignStmt(stmt: Stmt): Option[int64] =
+    let val = evalExpr(stmt.aval)
+    if val.isSome:
+      paramEnv[stmt.aname] = val.get
+      let idx = uninitializedVars.find(stmt.aname)
+      if idx >= 0:
+        uninitializedVars.delete(idx)
+    else:
+      return none(int64)
+    return some(0'i64)
+
+  proc evalReturnStmt(stmt: Stmt): Option[int64] =
+    if stmt.re.isSome:
+      return evalExpr(stmt.re.get)
+    return some(0'i64)
+
+  proc evalIfStmt(stmt: Stmt): Option[int64] =
+    let condResult = evalExpr(stmt.cond)
+    if not condResult.isSome:
+      return none(int64)
+    if condResult.get != 0:
+      for thenStmt in stmt.thenBody:
+        let res = evalStmt(thenStmt)
+        if thenStmt.kind == skReturn and res.isSome:
+          return res
+        elif not res.isSome:
+          return none(int64)
+    else:
+      for elseStmt in stmt.elseBody:
+        let res = evalStmt(elseStmt)
+        if elseStmt.kind == skReturn and res.isSome:
+          return res
+        elif not res.isSome:
+          return none(int64)
+    return some(0'i64)
+
+  proc evalStmt(stmt: Stmt): Option[int64] =
+    case stmt.kind
+    of skVar: return evalVarStmt(stmt)
+    of skAssign: return evalAssignStmt(stmt)
+    of skReturn: return evalReturnStmt(stmt)
+    of skIf: return evalIfStmt(stmt)
+    else: return none(int64)
 
   # Try to evaluate the function body
   if fn.body.len == 1 and (fn.body[0].kind == skReturn or fn.body[0].kind == skIf):
     # Simple case: single return statement or single if statement
-    return evalStmt(fn.body[0])
+    let res = evalStmt(fn.body[0])
+    if fn.body[0].kind == skReturn:
+      return res
+    elif res.isSome and res.get == 0:
+      return some(0'i64)
+    else:
+      return res
   elif fn.body.len > 1:
     # Process multiple statements in sequence
     for stmt in fn.body:
-      case stmt.kind
-      of skVar, skAssign:
-        # Process variable declaration or assignment but continue
-        discard evalStmt(stmt)
-      of skReturn:
-        return evalStmt(stmt)
-      else:
-        let res = evalStmt(stmt)
-        if res.isSome:
-          return res
+      let res = evalStmt(stmt)
+      if stmt.kind == skReturn:
+        return res
+      elif not res.isSome:
+        return none(int64)
     # Try to handle more complex function bodies with loops and variables
     return tryEvaluateComplexFunction(fn.body, paramEnv)
   else:

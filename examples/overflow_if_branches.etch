@@ -1,0 +1,95 @@
+// Test: Overflow in different if branches
+// Tests if the prover tracks overflow through conditional branches
+
+fn testIfBranchOverflow(choice: bool) -> int {
+  var result = 0;
+
+  if choice {
+    // Branch 1: safe addition
+    result = 1000000000 + 1000000000;  // 2B - safe
+  } else {
+    // Branch 2: potential overflow
+    let large = rand(9000000000000000000);  // [0, 9E18]
+    result = large + 1000000000000000000;   // Could overflow
+  }
+
+  return result;
+}
+
+fn testIfConditionRefinement() -> int {
+  let x = rand(10000000000);  // [0, 10B]
+
+  if x < 1000 {
+    // x is now [0, 999]
+    // This should be safe
+    let squared = x * x;  // max: 998001 - safe
+    return squared;
+  } else {
+    // x is now [1000, 10B]
+    // This could overflow
+    let doubled = x * 2;  // max: 20B - safe for int64
+    return doubled;
+  }
+}
+
+fn testNestedIfOverflow() -> int {
+  let a = rand(1000000000);  // [0, 1B]
+  let b = rand(1000000000);  // [0, 1B]
+
+  var result = 0;
+
+  if a > 500000000 {
+    if b > 500000000 {
+      // Both large, addition might approach 2B
+      result = a + b;  // max: 2B - safe
+    } else {
+      result = a;
+    }
+  } else {
+    result = b;
+  }
+
+  return result;
+}
+
+fn testIfElseOverflowMerge() -> int {
+  let choice = rand(2);  // [0, 1]
+
+  var x = 0;
+
+  if choice == 0 {
+    x = 9000000000000000000;  // Near IMax
+  } else {
+    x = 1000;
+  }
+
+  // After merge, x is in a disjoint range
+  // Adding to it could overflow depending on which branch was taken
+  let result = x + 1000000000000000000;
+
+  return result;
+}
+
+fn main() -> void {
+  print("Test if branch overflow:");
+  let r1 = testIfBranchOverflow(false);
+  print("Result: " + toString(r1));
+  print("");
+
+  print("Test if condition refinement:");
+  let r2 = testIfConditionRefinement();
+  print("Result: " + toString(r2));
+  print("");
+
+  print("Test nested if:");
+  let r3 = testNestedIfOverflow();
+  print("Result: " + toString(r3));
+  print("");
+
+  print("Test if-else merge:");
+  let r4 = testIfElseOverflowMerge();
+  print("Result: " + toString(r4));
+  print("");
+
+  print("✅ If branch tests passed!");
+}

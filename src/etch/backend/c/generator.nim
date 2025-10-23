@@ -1217,7 +1217,7 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
           if numArgs == 1:
             let argReg = resultReg + 1
             gen.emit(&"etch_print_value(r[{argReg}]);  // Call print")
-            gen.emit(&"printf(\"\\n\");")
+            gen.emit("printf(\"\\n\");")
             gen.emit(&"r[{resultReg}] = etch_make_nil();  // print returns nil")
           else:
             gen.emit(&"// TODO: print with {numArgs} args")

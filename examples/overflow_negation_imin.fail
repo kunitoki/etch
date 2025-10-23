@@ -1,0 +1,5 @@
+examples/overflow_negation_imin.etch:7:17: error: negation overflow: cannot negate minimum integer
+  6 |   let min_val = -9223372036854775807 - 1;  // IMin
+  7 |   let negated = -min_val;  // This should fail!
+                      ^
+  8 |   print("Result: " + toString(negated));

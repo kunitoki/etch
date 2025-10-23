@@ -1,0 +1,72 @@
+// Test: Simple inter-procedural constraint example
+
+fn countdown(n: int) -> int {
+  // Simple recursive function
+  // Requires: n >= 0
+  // Ensures: result >= 0
+
+  if n <= 0 {
+    return 0;
+  } else {
+    return countdown(n - 1);  // Recursive call should use contracts
+  }
+}
+
+fn helper(x: int) -> int {
+  // Helper that requires positive x
+  let arr: array[int] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+  // Requires x to be in valid range
+  if x >= 0 and x < 10 {
+    return arr[x];
+  }
+  return -1;
+}
+
+fn callHelper() -> int {
+  let input = readFile("examples/data/input.txt");
+  let maybeN = input.parseInt();
+
+  let n = match maybeN {
+    some(value) => value;
+    none => 5;
+  };
+
+  // Check constraint before calling
+  if n >= 0 and n < 10 {
+    return helper(n);  // Should be safe
+  }
+
+  return -1;
+}
+
+fn testCountdown() -> int {
+  let input = readFile("examples/data/input.txt");
+  let maybeN = input.parseInt();
+
+  let n = match maybeN {
+    some(value) => value;
+    none => 3;
+  };
+
+  if n >= 0 and n < 10 {
+    let result = countdown(n);
+    print("Countdown from " + toString(n) + " = " + toString(result));
+    return result;
+  }
+
+  return -1;
+}
+
+fn main() -> void {
+  print("Test countdown:");
+  discard testCountdown();
+  print("");
+
+  print("Test helper:");
+  let h = callHelper();
+  print("Helper result: " + toString(h));
+  print("");
+
+  print("✅ Simple inter-procedural tests completed!");
+}
