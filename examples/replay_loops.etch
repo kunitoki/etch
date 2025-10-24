@@ -14,11 +14,7 @@ fn main() -> int {
     var i = 0;
     while i < 8 {
         let fib = fibonacci(i);
-        print("fib(");
-        print(i);
-        print(") = ");
-        print(fib);
-        print("\n");
+        print("fib(" + toString(i) + ") = " + toString(fib));
         i = i + 1;
     }
 
