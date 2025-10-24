@@ -153,6 +153,7 @@ proc tryEvaluatePureFunction*(call: Expr, argInfos: seq[Info], fn: FunDecl, prog
   var paramEnv: Table[string, int64] = initTable[string, int64]()
   var uninitializedVars: seq[string] = @[]  # Track uninitialized variables
   var recursionDepth = 0  # Track recursion depth to prevent infinite evaluation
+  var executedReturn = false  # Track whether a return statement was executed
 
   for i, arg in argInfos:
     if i < fn.params.len and arg.known:
@@ -201,16 +202,25 @@ proc tryEvaluatePureFunction*(call: Expr, argInfos: seq[Info], fn: FunDecl, prog
           newParamEnv[fn.params[i].name] = arg
 
       let oldParamEnv = paramEnv
+      let oldExecutedReturn = executedReturn
       paramEnv = newParamEnv
+      executedReturn = false
 
       for stmt in fn.body:
         let res = evalStmt(stmt)
-        if res.isSome:
+        if executedReturn:
           paramEnv = oldParamEnv
+          executedReturn = oldExecutedReturn
           recursionDepth -= 1
           return res
+        elif not res.isSome:
+          paramEnv = oldParamEnv
+          executedReturn = oldExecutedReturn
+          recursionDepth -= 1
+          return none(int64)
 
       paramEnv = oldParamEnv
+      executedReturn = oldExecutedReturn
       recursionDepth -= 1
       return none(int64)
     else:
@@ -250,6 +260,7 @@ proc tryEvaluatePureFunction*(call: Expr, argInfos: seq[Info], fn: FunDecl, prog
     return some(0'i64)
 
   proc evalReturnStmt(stmt: Stmt): Option[int64] =
+    executedReturn = true
     if stmt.re.isSome:
       return evalExpr(stmt.re.get)
     return some(0'i64)
@@ -296,14 +307,13 @@ proc tryEvaluatePureFunction*(call: Expr, argInfos: seq[Info], fn: FunDecl, prog
     # Process multiple statements in sequence
     for stmt in fn.body:
       let res = evalStmt(stmt)
-      if stmt.kind == skReturn:
-        return res
-      elif res.isSome:
-        # Any statement that produced a value must have hit a return
-        # (could be if/while/for/block containing a return) - stop here
+      if executedReturn:
+        # A return statement was executed (either explicitly or inside control flow)
         return res
       elif not res.isSome:
+        # Statement failed to evaluate - give up
         return none(int64)
+      # Otherwise: statement succeeded but didn't return - continue to next statement
     # Try to handle more complex function bodies with loops and variables
     return tryEvaluateComplexFunction(fn.body, paramEnv)
   else:
