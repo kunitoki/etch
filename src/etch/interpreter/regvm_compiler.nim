@@ -19,6 +19,8 @@ type
     debug*: bool                      # Include debug info in bytecode
     funInstances*: Table[string, FunDecl]  # Function declarations for default params
     lifetimeTracker*: LifetimeTracker  # Track variable lifetimes for debugging and destructors
+    currentFunction*: string          # Current function being compiled (for debug info)
+    globalVars*: seq[string]          # Names of global variables
 
   LoopInfo = object
     startLabel*: int
@@ -98,12 +100,11 @@ proc makeDebugInfo(c: RegCompiler, pos: Pos): RegDebugInfo =
     result = RegDebugInfo(
       line: pos.line,
       col: pos.col,
-      sourceFile: pos.filename
+      sourceFile: pos.filename,
+      functionName: c.currentFunction
     )
   else:
     result = RegDebugInfo()  # Empty debug info in release mode
-  when defined(debugRegCompiler):
-    echo "[DEBUG] makeDebugInfo: line=", pos.line, " col=", pos.col, " file=", pos.filename
 
 # Pattern matching for instruction fusion
 proc tryFuseArithmetic(c: var RegCompiler, e: Expr): tuple[fused: bool, reg: uint8] =
@@ -223,8 +224,10 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
       return c.allocator.regMap[e.vname]
     else:
       # Load from global
+      # IMPORTANT: Don't add globals to regMap - they can be modified elsewhere
+      # and the cached register value would become stale
       log(c.verbose, &"Variable '{e.vname}' not in regMap, loading from global")
-      result = c.allocator.allocReg(e.vname)
+      result = c.allocator.allocReg()  # Don't pass name - don't cache globals
       let nameIdx = c.addStringConst(e.vname)
       c.prog.emitABx(ropGetGlobal, result, nameIdx, c.makeDebugInfo(e.pos))
 
@@ -366,9 +369,12 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
     # Get function index for "new"
     let funcIdx = c.addFunctionIndex("new")
 
+    # Create debug info for the entire new() expression (including argument preparation)
+    let newDebug = c.makeDebugInfo(e.pos)
+
     # Set up argument in next register
     if initReg != result + 1:
-      c.prog.emitABC(ropMove, result + 1, initReg, 0)
+      c.prog.emitABC(ropMove, result + 1, initReg, 0, newDebug)
       c.allocator.freeReg(initReg)
 
     # Call new function using ropCall
@@ -379,7 +385,7 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
       funcIdx: funcIdx,
       numArgs: 1,
       numResults: 1,
-      debug: c.makeDebugInfo(e.pos)
+      debug: newDebug
     )
     c.prog.instructions.add(instr)
 
@@ -395,9 +401,12 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
     # Get function index for "deref"
     let funcIdx = c.addFunctionIndex("deref")
 
+    # Create debug info for the entire deref() expression (including argument preparation)
+    let derefDebug = c.makeDebugInfo(e.pos)
+
     # Set up argument in next register
     if refReg != result + 1:
-      c.prog.emitABC(ropMove, result + 1, refReg, 0)
+      c.prog.emitABC(ropMove, result + 1, refReg, 0, derefDebug)
       c.allocator.freeReg(refReg)
 
     # Call deref function using ropCall
@@ -408,7 +417,7 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
       funcIdx: funcIdx,
       numArgs: 1,
       numResults: 1,
-      debug: c.makeDebugInfo(e.pos)
+      debug: derefDebug
     )
     c.prog.instructions.add(instr)
 
@@ -425,9 +434,12 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
       # Get function index for "new"
       let funcIdx = c.addFunctionIndex("new")
 
+      # Create debug info for the entire new() expression (including argument preparation)
+      let newDebug = c.makeDebugInfo(e.pos)
+
       # Set up argument in next register
       if initReg != result + 1:
-        c.prog.emitABC(ropMove, result + 1, initReg, 0)
+        c.prog.emitABC(ropMove, result + 1, initReg, 0, newDebug)
         c.allocator.freeReg(initReg)
 
       # Call new function using ropCall
@@ -438,13 +450,13 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
         funcIdx: funcIdx,
         numArgs: 1,
         numResults: 1,
-        debug: c.makeDebugInfo(e.pos)
+        debug: newDebug
       )
       c.prog.instructions.add(instr)
     else:
       # No init expression - just return nil for now
       result = c.allocator.allocReg()
-      c.prog.emitABC(ropLoadNil, result, result, 0)
+      c.prog.emitABC(ropLoadNil, result, result, 0, c.makeDebugInfo(e.pos))
 
   of ekOptionSome:
     # Handle some(value) for option types
@@ -943,6 +955,9 @@ proc compileCall(c: var RegCompiler, e: Expr): uint8 =
   let funcIdx = c.addFunctionIndex(e.fname)
   log(c.verbose, &"Function '{e.fname}' has index {funcIdx} in function table")
 
+  # Create debug info for the entire call statement (including argument preparation)
+  let callDebug = c.makeDebugInfo(e.pos)
+
   # Reserve registers for arguments first
   let numArgs = completeArgs.len
   for i in 0..<numArgs:
@@ -963,13 +978,13 @@ proc compileCall(c: var RegCompiler, e: Expr): uint8 =
     if arg.kind == ekVar and c.allocator.regMap.hasKey(arg.vname):
       let sourceReg = c.allocator.regMap[arg.vname]
       if sourceReg != targetReg:
-        c.prog.emitABC(ropMove, targetReg, sourceReg, 0)
+        c.prog.emitABC(ropMove, targetReg, sourceReg, 0, callDebug)
         log(c.verbose, &"  Moving var '{arg.vname}' from reg {sourceReg} to reg {targetReg}")
     else:
       # For other expressions, compile them to a temporary register then move
       let tempReg = c.compileExpr(arg)
       if tempReg != targetReg:
-        c.prog.emitABC(ropMove, targetReg, tempReg, 0)
+        c.prog.emitABC(ropMove, targetReg, tempReg, 0, callDebug)
         log(c.verbose, &"  Moving arg {i} from reg {tempReg} to reg {targetReg}")
         c.allocator.freeReg(tempReg)
       else:
@@ -979,7 +994,6 @@ proc compileCall(c: var RegCompiler, e: Expr): uint8 =
 
   # Emit ropCall instruction with function index
   # Uses opType=4 (function call format)
-  let callDebug = c.makeDebugInfo(e.pos)
   var instr = RegInstruction(
     op: ropCall,
     a: result,
@@ -1006,7 +1020,11 @@ proc compileForLoop(c: var RegCompiler, s: Stmt) =
     let debug = c.makeDebugInfo(s.pos)
 
     # Initialize index to 0 - has debug info so we stop at the for statement once
+    let loopStartPC = c.prog.instructions.len
     c.prog.emitAsBx(ropLoadK, idxReg, 0, debug)
+
+    # Track loop variable lifetime - declare at loop start (in current scope)
+    c.lifetimeTracker.declareVariable(s.fvar, elemReg, loopStartPC)
 
     # Get array length (internal operation after init - no debug info)
     c.prog.emitABC(ropLen, lenReg, arrReg, 0)
@@ -1030,7 +1048,11 @@ proc compileForLoop(c: var RegCompiler, s: Stmt) =
     c.prog.emitAsBx(ropJmp, 0, 0)  # Jump to exit if idx >= len
 
     # Get current element: elemReg = arrReg[idxReg] (internal operation - no debug info)
+    let getIndexPC = c.prog.instructions.len
     c.prog.emitABC(ropGetIndex, elemReg, arrReg, idxReg)
+
+    # Mark loop variable as defined (gets its value from array)
+    c.lifetimeTracker.defineVariable(s.fvar, getIndexPC)
 
     # Push loop info before compiling body
     c.loopStack.add(loopInfo)
@@ -1091,7 +1113,12 @@ proc compileForLoop(c: var RegCompiler, s: Stmt) =
 
   # Initialize loop variables - first operation has debug info so we stop at for statement once
   let startReg = c.compileExpr(startExpr)
+  let loopInitPC = c.prog.instructions.len
   c.prog.emitABC(ropMove, idxReg, startReg, 0, c.makeDebugInfo(s.pos))
+
+  # Track loop variable lifetime - declare and define at loop initialization (in current scope)
+  c.lifetimeTracker.declareVariable(s.fvar, idxReg, loopInitPC)
+  c.lifetimeTracker.defineVariable(s.fvar, loopInitPC)
 
   let endReg = c.compileExpr(endExpr)
   if s.finclusive:
@@ -1212,8 +1239,15 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
 
       # Mark variable as defined (if it wasn't already)
       c.lifetimeTracker.defineVariable(s.aname, currentPC)
+    elif s.aname in c.globalVars:
+      # Assignment to global variable
+      log(c.verbose, &"Assignment to global variable '{s.aname}'")
+      let valReg = c.compileExpr(s.aval)
+      let nameIdx = c.addStringConst(s.aname)
+      c.prog.emitABx(ropSetGlobal, valReg, nameIdx, c.makeDebugInfo(s.pos))
+      c.allocator.freeReg(valReg)
     else:
-      # New variable - allocate register
+      # New local variable - allocate register
       let valReg = c.compileExpr(s.aval)
       c.allocator.regMap[s.aname] = valReg
 
@@ -1557,6 +1591,9 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
       return
 
 proc compileFunDecl*(c: var RegCompiler, name: string, params: seq[Param], retType: EtchType, body: seq[Stmt]) =
+  # Set current function for debug info
+  c.currentFunction = name
+
   # Reset allocator for new function - preserve max register count
   c.allocator = RegAllocator(
     nextReg: 0,
@@ -1598,6 +1635,9 @@ proc compileFunDecl*(c: var RegCompiler, name: string, params: seq[Param], retTy
   c.prog.lifetimeData[name] = cast[pointer](heapData)
   GC_ref(heapData)  # Keep a GC reference to prevent collection
 
+  # Save variable-to-register mapping for debugging
+  c.prog.varMaps[name] = c.allocator.regMap
+
   # Debug: dump lifetime info if verbose
   if c.verbose:
     c.lifetimeTracker.dumpLifetimes()
@@ -1618,7 +1658,8 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
     prog: RegBytecodeProgram(
       functions: initTable[string, regvm.FunctionInfo](),
       cffiInfo: initTable[string, regvm.CFFIInfo](),
-      lifetimeData: initTable[string, pointer]()
+      lifetimeData: initTable[string, pointer](),
+      varMaps: initTable[string, Table[string, uint8]]()
     ),
     allocator: RegAllocator(
       nextReg: 0,
@@ -1627,6 +1668,7 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
     ),
     constMap: initTable[string, uint16](),
     loopStack: @[],
+    globalVars: @[],
     optimizeLevel: optimizeLevel,
     verbose: verbose,
     debug: debug,
@@ -1634,12 +1676,20 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
     lifetimeTracker: newLifetimeTracker()
   )
 
+  # Collect global variable names FIRST - before compiling functions
+  # This allows functions to know which variables are globals
+  for globalStmt in p.globals:
+    if globalStmt.kind == skVar:
+      compiler.globalVars.add(globalStmt.vname)
+
+  log(verbose, &"Collected {compiler.globalVars.len} global variables: {compiler.globalVars}")
+
   # Populate C FFI info from AST - identify CFFI functions by their isCFFI flag
   for fname, funcDecl in p.funInstances:
     if funcDecl.isCFFI:
       # Extract base name from mangled name
       var baseName = fname
-      let underscorePos = fname.find("__")
+      let underscorePos = fname.find(FUNCTION_NAME_SEPARATOR_STRING)
       if underscorePos >= 0:
         baseName = fname[0..<underscorePos]
 

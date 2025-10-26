@@ -45,6 +45,7 @@ class EtchDebugAdapter extends DebugSession {
     private pendingStackTraceResponse: DebugProtocol.StackTraceResponse | undefined;
     private pendingVariablesResponse: DebugProtocol.VariablesResponse | undefined;
     private pendingScopesResponse: DebugProtocol.ScopesResponse | undefined;
+    private pendingCustomResponses: Map<string, any> = new Map();
 
     constructor() {
         super();
@@ -64,6 +65,7 @@ class EtchDebugAdapter extends DebugSession {
         response.body.supportsStepBack = false;
         response.body.supportsRestartFrame = false;
         response.body.supportsTerminateRequest = true;
+        response.body.supportsSetVariable = true;
 
         this.sendResponse(response);
         this.sendEvent(new InitializedEvent());
@@ -309,6 +311,26 @@ class EtchDebugAdapter extends DebugSession {
                 }
                 break;
 
+            case 'setVariable':
+                const setVarResponse = this.pendingCustomResponses.get('setVariable');
+                if (setVarResponse && message.body) {
+                    // Forward the updated variable info
+                    setVarResponse.body = {
+                        value: message.body.value,
+                        type: message.body.type,
+                        variablesReference: message.body.variablesReference || 0
+                    };
+
+                    log(`Variable set successfully: ${message.body.value}`);
+                    this.sendResponse(setVarResponse);
+                    this.pendingCustomResponses.delete('setVariable');
+                } else if (setVarResponse && !message.success) {
+                    // Handle error case
+                    this.sendErrorResponse(setVarResponse, 3001, message.message || 'Failed to set variable');
+                    this.pendingCustomResponses.delete('setVariable');
+                }
+                break;
+
             default:
                 log(`Unhandled response command: ${message.command}`);
                 break;
@@ -441,6 +463,20 @@ class EtchDebugAdapter extends DebugSession {
         log('Configuration done request');
         this.sendToEtch('configurationDone');
         this.sendResponse(response);
+    }
+
+    protected setVariableRequest(response: DebugProtocol.SetVariableResponse, args: DebugProtocol.SetVariableArguments): void {
+        log(`Set variable request: ${args.name} = ${args.value}`);
+
+        // Store the response to send back when we get Etch's response
+        this.pendingCustomResponses.set('setVariable', response);
+
+        // Forward request to Etch debug server
+        this.sendToEtch('setVariable', {
+            variablesReference: args.variablesReference,
+            name: args.name,
+            value: args.value
+        });
     }
 
     public shutdown(): void {

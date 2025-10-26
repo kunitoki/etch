@@ -1,4 +1,5 @@
-import std/[unittest, json, osproc, strutils, strformat]
+import std/[unittest, json, osproc, strutils]
+import ../src/etch/common/constants
 import ../src/etch/interpreter/[regvm_serialize, regvm_debugserver]
 
 suite "Register VM Debugger - Step Into Functionality":
@@ -34,7 +35,7 @@ suite "Register VM Debugger - Step Into Functionality":
     check frames[0]["line"].getInt() > 0
     # Verify function names are demangled
     let funcName = frames[0]["name"].getStr()
-    check not ("__" in funcName and funcName != "__global__")
+    check not (FUNCTION_NAME_SEPARATOR_STRING in funcName and funcName != "__global__")
 
   test "Step over from inside function works correctly":
     # Compile the example

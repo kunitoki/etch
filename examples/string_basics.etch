@@ -1,4 +1,5 @@
 fn main() -> void {
   let d: string = "hello!";
   print(d);
+  print(d);
 }

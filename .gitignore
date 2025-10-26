@@ -1,9 +1,5 @@
 .DS_Store
-.vscode/
-.claude/
 
-nimcache/
-nimblecache/
 htmldocs/
 nimble.develop
 nimble.paths
@@ -13,6 +9,7 @@ nimble.paths
 /bin
 __etch__/
 *.etcx
+*.replay
 *.etca
 *.vsix
 etch.out

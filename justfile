@@ -70,6 +70,7 @@ perf:
 # Clean build artifacts
 clean:
     find . -name "*.etcx" -delete
+    find . -name "*.replay" -delete
     find . -name "*.exe" -delete
     rm -rf __etch__
     rm -rf examples/__etch__

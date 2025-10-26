@@ -11,8 +11,8 @@ requires "nim >= 2.2.4"
 
 # Tasks
 task test, "Run all tests":
-  echo "===== Building etch binary ====="
-  exec "nim c -d:release -o:etch src/etch.nim"
+  echo "===== Building etch binary in release mode ====="
+  exec "nim c -d:release -o:bin/etch src/etch.nim"
   echo "===== Running core tests ====="
   exec "nim c -r tests/test_debugger_basic.nim"
   exec "nim c -r tests/test_debugger_simple.nim"
@@ -26,6 +26,10 @@ task test, "Run all tests":
   exec "nim c -r tests/test_stepout_issue.nim"
   exec "nim c -r tests/test_stepover_from_test.nim"
   exec "nim c -r tests/test_variables_display.nim"
+  exec "nim c -r tests/test_replay.nim"
+  exec "nim c -r tests/test_for_loop_debug.nim"
+  exec "nim c -r tests/test_normal_var_debug.nim"
+  exec "nim c -r tests/test_setvariable.nim"
 
 task perf, "Run performance benchmarks":
   echo "===== Building etch binary in release mode ====="

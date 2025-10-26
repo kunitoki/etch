@@ -1,4 +1,4 @@
-import std/[unittest, json, osproc, strformat]
+import std/[unittest, json, osproc]
 import ../src/etch/interpreter/[regvm_serialize, regvm_debugserver]
 
 suite "Register VM Debugger - Variables Display":

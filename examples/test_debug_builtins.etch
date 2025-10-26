@@ -1,0 +1,5 @@
+fn main() -> void {
+    let x = new(42);
+    let y = deref(x);
+    print(toString(y));
+}

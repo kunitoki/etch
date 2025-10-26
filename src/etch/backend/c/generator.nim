@@ -31,12 +31,12 @@ proc sanitizeFunctionName(name: string): string =
   ## Process multi-char operators first to avoid collisions
   result = name.multiReplace([
     ("==", "_eq_"), ("!=", "_ne_"), ("<=", "_le_"), (">=", "_ge_"),
-    ("<", "_lt_"), (">", "_gt_"), ("::", "_scope_"), (":", "_"),
-    ("+", "_plus_"), ("-", "_minus_"), ("*", "_mul_"), ("/", "_div_"),
+    ("<", "_lt_"), (">", "_gt_"), ("::", "_scp_"), (":", "_col_"),
+    ("+", "_pls_"), ("-", "_mns_"), ("*", "_mul_"), ("/", "_div_"),
     ("%", "_mod_"), ("!", "_not_"), ("&", "_and_"), ("|", "_or_"),
     ("^", "_xor_"), ("~", "_bnot_"), ("[", "_lbr_"), ("]", "_rbr_"),
-    ("(", "_lp_"), (")", "_rp_"), (".", "_dot_"), (",", "_comma_"),
-    (" ", "_"), ("=", "_assign_")
+    ("(", "_lp_"), (")", "_rp_"), (".", "_dot_"), (",", "_cma_"),
+    ("=", "_asg_"), (" ", "_")
   ])
 
 proc emitCRuntime(gen: var CGenerator) =

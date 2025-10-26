@@ -1,4 +1,5 @@
 import std/[unittest, json, osproc, strutils]
+import ../src/etch/common/constants
 import ../src/etch/interpreter/[regvm_serialize, regvm_debugserver]
 
 suite "Register VM Debugger - Function Name Demangling":
@@ -28,7 +29,7 @@ suite "Register VM Debugger - Function Name Demangling":
     check frames.len > 0
     let globalName = frames[0]["name"].getStr()
     check globalName == "<global>"
-    check not ("__" in globalName)
+    check not (FUNCTION_NAME_SEPARATOR_STRING in globalName)
 
     # Step to main
     discard server.handleDebugRequest(%*{"seq": 4, "type": "request", "command": "next", "arguments": {"threadId": 1}})
@@ -41,7 +42,7 @@ suite "Register VM Debugger - Function Name Demangling":
     check frames.len > 0
     let mainName = frames[0]["name"].getStr()
     check mainName == "main"
-    check not ("__" in mainName and mainName != "__global__")
+    check not (FUNCTION_NAME_SEPARATOR_STRING in mainName and mainName != "__global__")
 
   test "Demangled names in nested function calls":
     # Compile the example
@@ -74,4 +75,4 @@ suite "Register VM Debugger - Function Name Demangling":
     # Verify all function names are demangled
     for frame in frames:
       let funcName = frame["name"].getStr()
-      check not ("__" in funcName and funcName != "__global__")
+      check not (FUNCTION_NAME_SEPARATOR_STRING in funcName and funcName != "__global__")

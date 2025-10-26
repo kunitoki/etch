@@ -1,5 +1,5 @@
-import std/[unittest, json, osproc, strutils]
-import ../src/etch/interpreter/[regvm, regvm_serialize, regvm_debugserver]
+import std/[unittest, json, osproc]
+import ../src/etch/interpreter/[regvm_serialize, regvm_debugserver]
 
 suite "Register VM Debugger - Step Into Issue":
   test "Step into correctly enters nested functions":

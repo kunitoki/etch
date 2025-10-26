@@ -363,6 +363,24 @@ proc serializeToBinary*(prog: RegBytecodeProgram, sourceHash: string = "",
         stream.write(varNameLen)
         stream.write(varName)
 
+  # Variable maps (for debugging - maps variable names to registers per function)
+  var varMapCount = uint32(prog.varMaps.len)
+  stream.write(varMapCount)
+  for funcName, varMap in prog.varMaps:
+    # Write function name
+    var funcNameLen = uint32(funcName.len)
+    stream.write(funcNameLen)
+    stream.write(funcName)
+
+    # Write variable map
+    var mapSize = uint32(varMap.len)
+    stream.write(mapSize)
+    for varName, regNum in varMap:
+      var varNameLen = uint32(varName.len)
+      stream.write(varNameLen)
+      stream.write(varName)
+      stream.write(uint8(regNum))
+
   stream.setPosition(0)
   result = stream.readAll()
   stream.close()
@@ -541,6 +559,25 @@ proc deserializeFromBinary*(data: string): RegBytecodeProgram =
     )
     result.lifetimeData[funcName] = cast[pointer](heapData)
     GC_ref(heapData)
+
+  # Read variable maps (for debugging)
+  let varMapCount = stream.readUint32()
+  result.varMaps = initTable[string, Table[string, uint8]]()
+  for _ in 0..<varMapCount:
+    # Read function name
+    let funcNameLen = stream.readUint32()
+    let funcName = stream.readStr(int(funcNameLen))
+
+    # Read variable map
+    let mapSize = stream.readUint32()
+    var varMap = initTable[string, uint8]()
+    for _ in 0..<mapSize:
+      let varNameLen = stream.readUint32()
+      let varName = stream.readStr(int(varNameLen))
+      let regNum = stream.readUint8()
+      varMap[varName] = regNum
+
+    result.varMaps[funcName] = varMap
 
   stream.close()
 

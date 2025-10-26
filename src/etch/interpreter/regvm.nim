@@ -145,6 +145,7 @@ type
     program*: RegBytecodeProgram    # The program being executed
     debugger*: pointer               # Optional debugger (nil for production)
     isDebugging*: bool               # True when running in debug server mode
+    outputCallback*: proc(output: string) {.closure.}  # Callback for capturing program output in debug mode
     cffiRegistry*: pointer           # C FFI registry for dynamic library functions
     rngState*: uint64                # RNG state for cross-platform deterministic random
     profiler*: pointer               # Optional profiler (nil for production)
@@ -175,6 +176,7 @@ type
     functionTable*: seq[string]  # Function index table (index -> name for direct calls)
     cffiInfo*: Table[string, CFFIInfo]  # C FFI function metadata
     lifetimeData*: Table[string, pointer]  # Function -> Lifetime data (FunctionLifetimeData) for debugging/destructors
+    varMaps*: Table[string, Table[string, uint8]]  # Function -> (variable name -> register) mapping for debugging
 
   # Optimized V type using discriminated union to reduce memory footprint
   # This significantly improves performance by:
@@ -210,105 +212,105 @@ type
       wrapped*: VBox
 
 # Fast value constructors using discriminated union
-proc makeInt*(val: int64): V {.inline.} =
+template makeInt*(val: int64): V =
   V(kind: vkInt, ival: val)
 
-proc makeFloat*(val: float64): V {.inline.} =
+template makeFloat*(val: float64): V =
   V(kind: vkFloat, fval: val)
 
-proc makeBool*(val: bool): V {.inline.} =
+template makeBool*(val: bool): V =
   V(kind: vkBool, bval: val)
 
-proc makeNil*(): V {.inline.} =
+template makeNil*(): V =
   V(kind: vkNil)
 
-proc makeChar*(val: char): V {.inline.} =
+template makeChar*(val: char): V =
   V(kind: vkChar, cval: val)
 
-proc makeString*(val: sink string): V {.inline.} =
+template makeString*(val: sink string): V =
   V(kind: vkString, sval: val)
 
-proc makeSome*(val: V): V {.inline.} =
+template makeSome*(val: V): V =
   var boxed = new(VBox)
   boxed[] = val
   V(kind: vkSome, wrapped: boxed)
 
-proc makeNone*(): V {.inline.} =
+template makeNone*(): V =
   V(kind: vkNone)
 
-proc makeOk*(val: V): V {.inline.} =
+template makeOk*(val: V): V =
   var boxed = new(VBox)
   boxed[] = val
   V(kind: vkOk, wrapped: boxed)
 
-proc makeErr*(val: V): V {.inline.} =
+template makeErr*(val: V): V =
   var boxed = new(VBox)
   boxed[] = val
   V(kind: vkErr, wrapped: boxed)
 
-proc makeArray*(vals: sink seq[V]): V {.inline.} =
+template makeArray*(vals: sink seq[V]): V =
   V(kind: vkArray, aval: vals)
 
-proc makeTable*(): V {.inline.} =
+template makeTable*(): V =
   V(kind: vkTable, tval: initTable[string, V]())
 
 # Type checking functions
-proc isInt*(v: V): bool {.inline.} =
+template isInt*(v: V): bool =
   v.kind == vkInt
 
-proc isFloat*(v: V): bool {.inline.} =
+template isFloat*(v: V): bool =
   v.kind == vkFloat
 
-proc isChar*(v: V): bool {.inline.} =
+template isChar*(v: V): bool =
   v.kind == vkChar
 
-proc isBool*(v: V): bool {.inline.} =
+template isBool*(v: V): bool =
   v.kind == vkBool
 
-proc isNil*(v: V): bool {.inline.} =
+template isNil*(v: V): bool =
   v.kind == vkNil
 
-proc isString*(v: V): bool {.inline.} =
+template isString*(v: V): bool =
   v.kind == vkString
 
-proc isArray*(v: V): bool {.inline.} =
+template isArray*(v: V): bool =
   v.kind == vkArray
 
-proc isTable*(v: V): bool {.inline.} =
+template isTable*(v: V): bool =
   v.kind == vkTable
 
-proc isSome*(v: V): bool {.inline.} =
+template isSome*(v: V): bool =
   v.kind == vkSome
 
-proc isNone*(v: V): bool {.inline.} =
+template isNone*(v: V): bool =
   v.kind == vkNone
 
-proc isOk*(v: V): bool {.inline.} =
+template isOk*(v: V): bool =
   v.kind == vkOk
 
-proc isErr*(v: V): bool {.inline.} =
+template isErr*(v: V): bool =
   v.kind == vkErr
 
 # Value extraction functions
-proc getInt*(v: V): int64 {.inline.} =
+template getInt*(v: V): int64 =
   v.ival
 
-proc getFloat*(v: V): float64 {.inline.} =
+template getFloat*(v: V): float64 =
   v.fval
 
-proc getBool*(v: V): bool {.inline.} =
+template getBool*(v: V): bool =
   v.bval
 
-proc getChar*(v: V): char {.inline.} =
+template getChar*(v: V): char =
   v.cval
 
-proc unwrapOption*(v: V): V {.inline.} =
+template unwrapOption*(v: V): V =
   if v.kind == vkSome:
     v.wrapped[]
   else:
     makeNil()
 
-proc unwrapResult*(v: V): V {.inline.} =
+template unwrapResult*(v: V): V =
   if v.kind == vkOk or v.kind == vkErr:
     v.wrapped[]
   else:
@@ -350,7 +352,7 @@ proc freeReg*(ra: var RegAllocator, reg: uint8) =
 
 # Bytecode generation helpers
 proc emitABC*(prog: var RegBytecodeProgram, op: RegOpCode, a, b, c: uint8,
-              debug: RegDebugInfo = RegDebugInfo()) =
+              debug: RegDebugInfo = RegDebugInfo()) {.inline.} =
   prog.instructions.add RegInstruction(
     op: op,
     a: a,
@@ -361,7 +363,7 @@ proc emitABC*(prog: var RegBytecodeProgram, op: RegOpCode, a, b, c: uint8,
   )
 
 proc emitABx*(prog: var RegBytecodeProgram, op: RegOpCode, a: uint8, bx: uint16,
-              debug: RegDebugInfo = RegDebugInfo()) =
+              debug: RegDebugInfo = RegDebugInfo()) {.inline.} =
   prog.instructions.add RegInstruction(
     op: op,
     a: a,
@@ -369,11 +371,9 @@ proc emitABx*(prog: var RegBytecodeProgram, op: RegOpCode, a: uint8, bx: uint16,
     bx: bx,
     debug: debug
   )
-  when defined(debugRegCompiler):
-    echo "[EMIT] ", prog.instructions.len - 1, ": ", op, " a=", a, " bx=", bx
 
 proc emitAsBx*(prog: var RegBytecodeProgram, op: RegOpCode, a: uint8, sbx: int16,
-               debug: RegDebugInfo = RegDebugInfo()) =
+               debug: RegDebugInfo = RegDebugInfo()) {.inline.} =
   prog.instructions.add RegInstruction(
     op: op,
     a: a,

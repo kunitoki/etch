@@ -1,6 +1,6 @@
 fn main() -> void {
     let x: int = 42;
     let y: float = 3.14;
-    let mixed_sum2: int = x + int(y);
-    print("Mixed sum works");
+    let sum: int = x + int(y);
+    print("Mixed sum works with cast: " + toString(sum));
 }

@@ -2,7 +2,7 @@
 # Core AST + type for Etch
 
 import std/[tables, options, strutils]
-import ../common/types
+import ../common/[constants, types]
 
 
 type
@@ -386,7 +386,7 @@ proc getFunctionOverloads*(prog: Program, name: string): seq[FunDecl] =
 proc generateOverloadSignature*(funDecl: FunDecl): string =
   ## Generate a unique signature string for overload resolution using compact name mangling
   ## Format: funcName__paramTypes_returnType
-  result = funDecl.name & "__"
+  result = funDecl.name & FUNCTION_NAME_SEPARATOR_STRING
 
   # Compact type encoding: v=void, b=bool, c=char, i=int, f=float, s=string, A=array, R=ref, O=option, E=result, U=user-defined, D=distinct, T=object, N=union
   proc encodeType(t: EtchType): string =
@@ -414,7 +414,7 @@ proc generateOverloadSignature*(funDecl: FunDecl): string =
   for param in funDecl.params:
     result.add(encodeType(param.typ))
 
-  result.add("_")
+  result.add(FUNCTION_RETURN_SEPARATOR_STRING)
   if funDecl.ret != nil:
     result.add(encodeType(funDecl.ret))
   else:
@@ -422,27 +422,27 @@ proc generateOverloadSignature*(funDecl: FunDecl): string =
 
 
 proc functionNameFromSignature*(mangledName: string): string =
-  if "__" notin mangledName:
+  if FUNCTION_NAME_SEPARATOR_STRING notin mangledName:
     result = mangledName  # Not mangled, return as-is
   else:
-    result = mangledName.split("__")[0]
+    result = mangledName.split(FUNCTION_NAME_SEPARATOR_STRING)[0]
 
 
 proc demangleFunctionSignature*(mangledName: string): string =
-  if "__" notin mangledName:
+  if FUNCTION_NAME_SEPARATOR_STRING notin mangledName:
     return mangledName
 
-  let parts = mangledName.split("__")
+  let parts = mangledName.split(FUNCTION_NAME_SEPARATOR_STRING)
   if parts.len != 2:
     return mangledName
 
   let funcName = parts[0]
   let signature = parts[1]
 
-  if "_" notin signature:
+  if FUNCTION_RETURN_SEPARATOR_STRING notin signature:
     return mangledName
 
-  let sigParts = signature.split("_")
+  let sigParts = signature.split(FUNCTION_RETURN_SEPARATOR_STRING)
   if sigParts.len != 2:
     return mangledName
 

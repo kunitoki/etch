@@ -11,13 +11,17 @@ import ./etch/backend/c/[generator]
 proc usage() =
   echo "Etch - minimal language toolchain"
   echo "Usage:"
-  echo "  etch [--run [BACKEND]] [--verbose] [--release] [--profile] [--force] [--gen BACKEND] file.etch"
+  echo "  etch [--run [BACKEND]] [--record FILE] [--verbose] [--release] [--profile] [--force] [--gen BACKEND] file.etch"
+  echo "  etch --replay FILE [--step N[,N..]]"
   echo "  etch --test [DIR|FILE]"
   echo "  etch --test-c [DIR|FILE]"
   echo "  etch --perf [DIR]"
-  echo "  etch --replay-demo FILE"
   echo "Options:"
   echo "  --run [BACKEND]      Execute the program (default: bytecode VM, optional: c)"
+  echo "  --record FILE        Record execution to FILE.replay (use with --run)"
+  echo "  --replay FILE        Load and replay recorded execution from FILE.replay"
+  echo "  --step N[,N..]       Step through specific statements (use with --replay)"
+  echo "                       Special values: S=start, E=end (e.g., --step S,10,E,10,S)"
   echo "  --verbose            Enable verbose debug output"
   echo "  --release            Optimize and skip debug information in bytecode"
   echo "  --profile            Enable VM profiling (reports instruction timing and hotspots)"
@@ -25,7 +29,6 @@ proc usage() =
   echo "  --gen BACKEND        Generate code for specified backend (c)"
   echo "  --debug-server       Start debug server for VSCode integration"
   echo "  --dump-bytecode      Dump bytecode instructions with debug info"
-  echo "  --replay-demo FILE   Demonstrate replay/scrubbing functionality (record and seek)"
   echo "  --test [DIR|FILE]    Run tests in directory (default: tests/) with bytecode VM"
   echo "  --test-c [DIR|FILE]  Run tests in directory (default: tests/) with C backend"
   echo "                       Tests need .pass (expected output) or .fail (expected failure)"
@@ -323,6 +326,8 @@ when isMainModule:
   var force = false
   var mode = ""
   var modeArg = ""
+  var stepArg = ""
+  var recordFile = ""
   var runVm = false
   var runBackend = ""
   var backend = ""
@@ -381,10 +386,21 @@ when isMainModule:
       if i + 1 <= paramCount():
         modeArg = paramStr(i + 1)
         inc i
-    elif a == "--replay-demo":
-      mode = "replay-demo"
+    elif a == "--record":
+      if i + 1 <= paramCount():
+        recordFile = paramStr(i + 1)
+        inc i
+      else:
+        echo "Error: --record requires a file argument"
+        quit 1
+    elif a == "--replay":
+      mode = "replay"
       if i + 1 <= paramCount():
         modeArg = paramStr(i + 1)
+        inc i
+    elif a == "--step":
+      if i + 1 <= paramCount():
+        stepArg = paramStr(i + 1)
         inc i
     elif not a.startsWith("--"):
       files.add a
@@ -431,74 +447,83 @@ when isMainModule:
     dumpBytecodeProgram(bytecodeProgram, modeArg)
     quit 0
 
-  if mode == "replay-demo":
+  if mode == "replay":
     if modeArg == "":
-      echo "Error: --replay-demo requires a file argument"
+      echo "Error: --replay requires a file argument"
       quit 1
 
-    validateFile(modeArg)
-    echo "==== Replay Demo for: ", modeArg, " ===="
+    let replayFile = if modeArg.endsWith(".replay"): modeArg else: modeArg & ".replay"
+
+    if not fileExists(replayFile):
+      echo "Error: Replay file not found: ", replayFile
+      quit 1
+
+    echo "Loading replay from: ", replayFile
+
+    # Load replay data (includes source file path)
+    let replayData = loadFromFile(replayFile)
+    let sourceFile = replayData.sourceFile
+
+    if not fileExists(sourceFile):
+      echo "Error: Source file not found: ", sourceFile
+      echo "Note: The replay was recorded from '", sourceFile, "' which is no longer available"
+      quit 1
+
+    echo "Source file: ", sourceFile
+    echo "Loaded ", replayData.totalStatements, " statements (", replayData.snapshots.len, " snapshots)"
     echo ""
 
-    # Compile the program
-    let options = makeCompilerOptions(modeArg, runVM = false, verbose, debug)
+    # Compile source to get bytecode
+    let options = makeCompilerOptions(sourceFile, runVM = false, verbose, debug)
     let bytecodeProgram = compileToRegBytecode(options)
-
-    # Create VM and enable replay recording
     let vm = newRegisterVM(bytecodeProgram)
-    vm.enableReplayRecording(snapshotInterval = 100)  # Snapshot every 100 instructions
 
-    echo "Recording execution..."
-    let exitCode = vm.execute(verbose = false)
+    # Restore replay engine from loaded data
+    let engine = restoreReplayEngine(vm, replayData.totalStatements,
+                                     replayData.snapshotInterval, replayData.snapshots)
+    vm.replayEngine = cast[pointer](engine)
+    GC_ref(engine)
 
-    # Stop recording
-    vm.stopReplayRecording()
+    # Parse step argument
+    if stepArg == "":
+      echo "Error: --replay requires --step argument"
+      echo "Example: --step S,10,20,E  (S=start, E=end)"
+      quit 1
 
-    echo "Execution completed with exit code: ", exitCode
+    var steps: seq[int] = @[]
+    for part in stepArg.split(','):
+      let trimmed = part.strip()
+      if trimmed == "S" or trimmed == "s":
+        steps.add(0)  # Start
+      elif trimmed == "E" or trimmed == "e":
+        steps.add(replayData.totalStatements - 1)  # End
+      else:
+        try:
+          let stmt = parseInt(trimmed)
+          if stmt < 0 or stmt >= replayData.totalStatements:
+            echo "Warning: Statement ", stmt, " out of range (0..", replayData.totalStatements - 1, ")"
+          else:
+            steps.add(stmt)
+        except ValueError:
+          echo "Error: Invalid step value: ", trimmed
+          quit 1
+
+    if steps.len == 0:
+      echo "Error: No valid steps provided"
+      quit 1
+
+    echo ""
+    echo "==== Stepping through ", steps.len, " statements ===="
     echo ""
 
-    # Print replay statistics
-    vm.printReplayStats()
-    echo ""
-
-    # Get stats for demonstration
-    let stats = vm.getReplayStats()
-    if stats.instructions > 0:
-      echo "==== Demonstrating Scrubbing ===="
+    # Step through each statement
+    for i, stmt in steps:
+      echo "[", i + 1, "/", steps.len, "] Seeking to statement ", stmt, " / ", replayData.totalStatements - 1, "..."
+      vm.seekToStatement(stmt)
+      vm.printVMState()
       echo ""
 
-      # Seek to 25% of execution
-      let quarter = stats.instructions div 4
-      echo "Seeking to 25% (instruction ", quarter, ")..."
-      vm.seekToInstruction(quarter)
-      echo "Current position: ", vm.getReplayProgress() * 100.0, "%"
-      echo ""
-
-      # Seek to 50%
-      let half = stats.instructions div 2
-      echo "Seeking to 50% (instruction ", half, ")..."
-      vm.seekToInstruction(half)
-      echo "Current position: ", vm.getReplayProgress() * 100.0, "%"
-      echo ""
-
-      # Seek to 75%
-      let threeQuarters = (stats.instructions * 3) div 4
-      echo "Seeking to 75% (instruction ", threeQuarters, ")..."
-      vm.seekToInstruction(threeQuarters)
-      echo "Current position: ", vm.getReplayProgress() * 100.0, "%"
-      echo ""
-
-      # Seek back to start
-      echo "Seeking back to start (instruction 0)..."
-      vm.seekToInstruction(0)
-      echo "Current position: ", vm.getReplayProgress() * 100.0, "%"
-      echo ""
-
-      echo "==== Replay Demo Complete ===="
-      echo ""
-      echo "You can now scrub through the execution like a video!"
-      echo "Memory usage: ~", (stats.deltas * 50 + stats.snapshots * 1024) div 1024, " KB"
-
+    echo "==== Replay Complete ===="
     quit 0
 
   if files.len != 1: usage()
@@ -548,6 +573,45 @@ when isMainModule:
     let bytecodeProgram = compileToRegBytecode(options)
     let exitCode = compileAndRunCBackend(bytecodeProgram, sourceFile, verbose, debug)
     quit exitCode
+
+  # Handle recording if requested
+  if recordFile != "" and runVm:
+    validateFile(sourceFile)
+    let replayFile = recordFile & ".replay"
+
+    if verbose:
+      echo "Recording execution of: ", sourceFile
+      echo "Output will be saved to: ", replayFile
+      echo ""
+
+    # Compile and run the program with recording enabled
+    let options = makeCompilerOptions(sourceFile, runVM = false, verbose, debug, profile, force)
+    let bytecodeProgram = compileToRegBytecode(options)
+    let vm = newRegisterVM(bytecodeProgram)
+    vm.enableReplayRecording(snapshotInterval = 1)
+
+    let exitCode = vm.execute(verbose = verbose)
+    vm.stopReplayRecording()
+
+    # Save replay data to file
+    if vm.replayEngine != nil:
+      let engine = cast[ReplayEngine](vm.replayEngine)
+      try:
+        engine.saveToFile(replayFile, sourceFile)
+        if verbose:
+          let stats = engine.getStats()
+          echo ""
+          echo "Saved ", stats.statements, " statements (", stats.snapshots, " snapshots) to ", replayFile
+      except Exception as e:
+        echo "Error saving replay: ", e.msg
+        quit 1
+
+    quit exitCode
+
+  # Handle --record without --run
+  if recordFile != "" and not runVm:
+    echo "Error: --record requires --run to execute the program"
+    quit 1
 
   # Normal VM execution or compilation without running
   let options = makeCompilerOptions(sourceFile, runVm, verbose, debug, profile, force)

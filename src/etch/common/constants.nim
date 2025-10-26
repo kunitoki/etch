@@ -29,10 +29,16 @@ const
   GLOBAL_INIT_FUNCTION_NAME* = "<global>"
 
 
+# Function utils
+const
+  FUNCTION_NAME_SEPARATOR_STRING* = "__"
+  FUNCTION_RETURN_SEPARATOR_STRING* = "_"
+
+
 # Bytecode serialization constants
 const
   BYTECODE_MAGIC* = "ETCH"
-  BYTECODE_VERSION* = 24  # Added libraryPath to CFFIInfo
+  BYTECODE_VERSION* = 25  # Added varMaps for variable name display in debugging
 
 
 # Symbolic execution constants

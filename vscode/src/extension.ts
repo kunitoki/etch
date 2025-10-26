@@ -13,7 +13,7 @@ function log(message: string) {
 export function activate(context: vscode.ExtensionContext) {
     log('Extension activation started');
 
-    // Register inline debug adapter - this gives us more control
+    // Register inline debug adapter
     log('Registering inline debug adapter for type "etch"');
     const debugProvider = new EtchDebugAdapterProvider();
     context.subscriptions.push(

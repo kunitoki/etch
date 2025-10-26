@@ -1,7 +1,7 @@
 # regvm_debug_server.nim
 # Debug server for register VM communicating with VSCode Debug Adapter Protocol
 
-import std/[json, sequtils, tables, os, hashes, algorithm, strutils]
+import std/[json, sequtils, tables, os, algorithm, strutils]
 import ../common/[constants]
 import regvm, regvm_exec, regvm_debugger, regvm_lifetime
 
@@ -15,7 +15,7 @@ proc formatRegisterValue(val: V): string =
   elif val.isFloat():
     return $val.fval
   elif val.isString():
-    return "\"" & val.sval & "\""
+    return "\"" & val.sval & "\""  # Return with quotes for display
   elif val.isBool():
     return $val.bval
   elif val.isChar():
@@ -67,13 +67,13 @@ proc getValueType(val: V): string =
   elif val.isChar():
     return "char"
   elif val.isSome():
-    return "Option"
+    return "option"
   elif val.isNone():
-    return "Option"
+    return "option"
   elif val.isOk():
-    return "Result"
+    return "result"
   elif val.isErr():
-    return "Result"
+    return "result"
   elif val.isArray():
     return "array"
   elif val.isTable():
@@ -93,6 +93,21 @@ type
     # Variable tracking
     currentFunctionName*: string  # Current function for lifetime data lookup
     lifetimeData*: ptr FunctionLifetimeData  # Current function's lifetime data
+
+proc updateConsecutiveMoves(server: RegDebugServer, foundReg: int, newValue: V, currentPC: int) =
+  ## Scan backwards to find CONSECUTIVE Move instructions from foundReg and update their destinations
+  ## Stops when hitting a non-Move instruction (other operations might invalidate copies)
+  ## This handles multi-argument calls: R[1]=R[0]; R[2]=R[0]; R[3]=R[0]; call(...)
+  var scanPC = currentPC - 1
+  while scanPC >= 0:
+    let instr = server.vm.program.instructions[scanPC]
+    # Stop if not a Move instruction (other operations might invalidate copies)
+    if instr.op != ropMove or instr.opType != 0:
+      break
+    # If Move is from our register, update destination
+    if instr.b == uint8(foundReg):
+      server.vm.currentFrame.regs[instr.a] = newValue
+    scanPC -= 1
 
 proc newRegDebugServer*(program: RegBytecodeProgram, sourceFile: string): RegDebugServer =
   ## Create a new debug server instance for register VM
@@ -117,6 +132,19 @@ proc newRegDebugServer*(program: RegBytecodeProgram, sourceFile: string): RegDeb
       "body": data
     }
     echo $eventMsg
+
+  # Set up output callback to capture program output and send to VSCode Debug Console
+  vmInstance.outputCallback = proc(output: string) =
+    let outputEvent = %*{
+      "type": "event",
+      "event": "output",
+      "body": {
+        "category": "stdout",
+        "output": output
+      }
+    }
+    echo $outputEvent
+    stdout.flushFile()
 
 proc executeUntilBreak(server: RegDebugServer, maxInstructions: int = 10000): bool =
   ## Execute VM until next break or completion
@@ -176,7 +204,8 @@ proc handleDebugRequest*(server: RegDebugServer, request: JsonNode): JsonNode =
         "supportsStepOutRequest": true,
         "supportsContinueRequest": true,
         "supportsSetBreakpointsRequest": true,
-        "supportsTerminateRequest": true
+        "supportsTerminateRequest": true,
+        "supportsSetVariableRequest": true
       }
     }
 
@@ -209,18 +238,23 @@ proc handleDebugRequest*(server: RegDebugServer, request: JsonNode): JsonNode =
           startLine = 1
 
     # Set initial debugger position based on first instruction
+    # NOTE: Only set lastFile/lastLine if NOT stopOnEntry, because when stopOnEntry=true
+    # we want shouldBreak() to detect the first line as "new" and trigger a break
     if server.vm.program.instructions.len > server.vm.program.entryPoint:
       let firstInstr = server.vm.program.instructions[server.vm.program.entryPoint]
       if firstInstr.debug.line > 0:
-        server.debugger.lastFile = firstInstr.debug.sourceFile
-        server.debugger.lastLine = firstInstr.debug.line
         startLine = firstInstr.debug.line
+        if not stopOnEntry:
+          server.debugger.lastFile = firstInstr.debug.sourceFile
+          server.debugger.lastLine = firstInstr.debug.line
       else:
+        if not stopOnEntry:
+          server.debugger.lastFile = server.sourceFile
+          server.debugger.lastLine = startLine
+    else:
+      if not stopOnEntry:
         server.debugger.lastFile = server.sourceFile
         server.debugger.lastLine = startLine
-    else:
-      server.debugger.lastFile = server.sourceFile
-      server.debugger.lastLine = startLine
 
     # Push initial function frame to the debugger's stack
     let debugger = cast[RegEtchDebugger](server.debugger)
@@ -633,12 +667,18 @@ proc handleDebugRequest*(server: RegDebugServer, request: JsonNode): JsonNode =
           else:
             formatRegisterValue(reg)
 
-          variables.add(%*{
+          var varEntry = %*{
             "name": varName,
             "value": displayValue,
             "type": if isStale: "pending" else: getValueType(reg),
             "variablesReference": 0
-          })
+          }
+
+          # Add evaluateName for editable variables (not stale)
+          if not isStale:
+            varEntry["evaluateName"] = %varName
+
+          variables.add(varEntry)
     elif reference == 2:
       # Global variables
       for name, value in server.vm.globals:
@@ -646,7 +686,8 @@ proc handleDebugRequest*(server: RegDebugServer, request: JsonNode): JsonNode =
           "name": name,
           "value": formatRegisterValue(value),
           "type": getValueType(value),
-          "variablesReference": 0
+          "variablesReference": 0,
+          "evaluateName": name
         })
     elif reference == 3:
       # Registers (Debug) - show raw registers for VM debugging
@@ -678,6 +719,195 @@ proc handleDebugRequest*(server: RegDebugServer, request: JsonNode): JsonNode =
         "variables": variables
       }
     }
+
+  of "setVariable":
+    # Handle variable modification during debugging
+    let args = request["arguments"]
+    let variablesReference = args["variablesReference"].getInt()
+    let name = args["name"].getStr()
+    let value = args["value"].getStr()
+
+    # Currently only support setting local variables (variablesReference == 1)
+    if variablesReference != 1:
+      return %*{
+        "success": false,
+        "message": "Can only set local variables"
+      }
+
+    # Find the variable in the current frame
+    if server.vm.currentFrame == nil:
+      return %*{
+        "success": false,
+        "message": "No active frame"
+      }
+
+    # Check if this is a global variable first
+    var isGlobal = false
+    if server.vm.globals.hasKey(name):
+      isGlobal = true
+
+    # Try to find the variable using lifetime data (for locals)
+    var foundReg: int = -1
+    let currentPC = server.vm.currentFrame.pc
+
+    if not isGlobal:
+      if server.lifetimeData != nil and cast[int](server.lifetimeData) != 0:
+        let lifetimeData = server.lifetimeData[]
+        for lifetime in lifetimeData.ranges:
+          if lifetime.varName == name and
+             lifetime.startPC <= currentPC and
+             (lifetime.endPC == -1 or lifetime.endPC >= currentPC) and
+             lifetime.defPC != -1 and lifetime.defPC <= currentPC:
+            foundReg = lifetime.register.int
+            break
+
+      if foundReg == -1:
+        return %*{
+          "success": false,
+          "message": "Variable '" & name & "' not found or not in scope"
+        }
+
+    # Get current variable type for validation
+    let currentValue = if isGlobal:
+      server.vm.globals[name]
+    else:
+      server.vm.currentFrame.regs[foundReg]
+    let currentType = getValueType(currentValue)
+
+    # Parse and validate the new value based on current type
+    # Like Python debugpy, we require proper syntax (strings need quotes)
+    try:
+      case currentType:
+      of "int":
+        # Try to parse as integer
+        let intVal = parseInt(value)
+        let newValue = makeInt(intVal)
+
+        # Update both storage location and register
+        if isGlobal:
+          server.vm.globals[name] = newValue
+        else:
+          server.vm.currentFrame.regs[foundReg] = newValue
+          updateConsecutiveMoves(server, foundReg, newValue, currentPC)
+
+        return %*{
+          "success": true,
+          "body": {
+            "value": value,
+            "type": "int",
+            "variablesReference": 0
+          }
+        }
+
+      of "float":
+        # Try to parse as float
+        let floatVal = parseFloat(value)
+        let newValue = makeFloat(floatVal)
+
+        # Update both storage location and register
+        if isGlobal:
+          server.vm.globals[name] = newValue
+        else:
+          server.vm.currentFrame.regs[foundReg] = newValue
+          updateConsecutiveMoves(server, foundReg, newValue, currentPC)
+
+        return %*{
+          "success": true,
+          "body": {
+            "value": value,
+            "type": "float",
+            "variablesReference": 0
+          }
+        }
+
+      of "bool":
+        # Parse boolean (only "true" or "false" allowed)
+        if value == "true":
+          let newValue = makeBool(true)
+
+          # Update both storage location and register
+          if isGlobal:
+            server.vm.globals[name] = newValue
+          else:
+            server.vm.currentFrame.regs[foundReg] = newValue
+            updateConsecutiveMoves(server, foundReg, newValue, currentPC)
+
+          return %*{
+            "success": true,
+            "body": {
+              "value": "true",
+              "type": "bool",
+              "variablesReference": 0
+            }
+          }
+        elif value == "false":
+          let newValue = makeBool(false)
+
+          # Update both storage location and register
+          if isGlobal:
+            server.vm.globals[name] = newValue
+          else:
+            server.vm.currentFrame.regs[foundReg] = newValue
+            updateConsecutiveMoves(server, foundReg, newValue, currentPC)
+
+          return %*{
+            "success": true,
+            "body": {
+              "value": "false",
+              "type": "bool",
+              "variablesReference": 0
+            }
+          }
+        else:
+          return %*{
+            "success": false,
+            "message": "Invalid boolean value. Use 'true' or 'false'"
+          }
+
+      of "string":
+        # String must be quoted (like Python debugpy)
+        if value.len < 2 or value[0] != '"' or value[^1] != '"':
+          return %*{
+            "success": false,
+            "message": "String value must be quoted. Example: \"hello\""
+          }
+
+        # Check for unterminated string or other issues
+        var strValue = value[1..^2]  # Strip outer quotes
+        let newValue = makeString(strValue)
+
+        # Update both storage location and register
+        if isGlobal:
+          server.vm.globals[name] = newValue
+        else:
+          server.vm.currentFrame.regs[foundReg] = newValue
+          updateConsecutiveMoves(server, foundReg, newValue, currentPC)
+
+        return %*{
+          "success": true,
+          "body": {
+            "value": "\"" & strValue & "\"",  # Return WITH quotes for display
+            "type": "string",
+            "variablesReference": 0
+          }
+        }
+
+      else:
+        return %*{
+          "success": false,
+          "message": "Cannot modify variable of type '" & currentType & "'"
+        }
+
+    except ValueError as e:
+      return %*{
+        "success": false,
+        "message": "Invalid value: " & e.msg
+      }
+    except Exception as e:
+      return %*{
+        "success": false,
+        "message": "Error setting variable: " & e.msg
+      }
 
   of "disconnect":
     server.running = false

@@ -3,7 +3,7 @@
 
 import std/[tables, macros, math, strutils, times]
 import ../common/[constants, cffi, values, logging]
-import regvm, regvm_debugger, regvm_profiler, regvm_replay
+import regvm, regvm_debugger, regvm_profiler, regvm_replay, regvm_lifetime
 
 # Global table to store values injected during comptime execution
 var comptimeInjections*: Table[string, V] = initTable[string, V]()
@@ -434,9 +434,13 @@ proc callCFFIFunction(vm: RegisterVM, funcName: string, funcReg: uint8, numArgs:
 proc vmPrint(vm: RegisterVM, output: string, outputBuffer: var string, outputCount: var int) =
   ## Unified print function that handles output consistently
   if vm.isDebugging:
-    # In debug mode, always output to stderr immediately
-    stderr.writeLine(output)
-    stderr.flushFile()
+    # In debug mode, use output callback if available
+    if vm.outputCallback != nil:
+      vm.outputCallback(output & "\n")
+    else:
+      # Fallback to stderr if no callback (shouldn't happen in normal debug flow)
+      stderr.writeLine(output)
+      stderr.flushFile()
   else:
     # In normal mode, buffer output for performance
     if outputBuffer.addr != nil:
@@ -485,14 +489,25 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
     let instr = instructions[pc]
     vm.currentFrame.pc = pc  # Update frame PC for debugger
 
-    # Replay engine hook - periodic snapshots
+    # Replay engine hook - statement-level snapshots (BEFORE instruction)
+    var shouldTakeSnapshot = false
+    var statementToSnapshot = 0
     if vm.replayEngine != nil:
       let engine = cast[ReplayEngine](vm.replayEngine)
       if engine.isRecording:
-        engine.currentInstruction = pc
-        # Take periodic snapshots for fast seeking
-        if pc mod engine.snapshotInterval == 0:
-          engine.takeSnapshot(pc)
+        let debug = instr.debug
+        # Detect statement changes (new source line)
+        if debug.line > 0 and (debug.line != engine.lastSourceLine or debug.sourceFile != engine.lastSourceFile):
+          engine.currentStatement += 1
+          engine.lastSourceLine = debug.line
+          engine.lastSourceFile = debug.sourceFile
+          # Debug: print what statements we're counting
+          if false:  # Set to true for debugging
+            echo "Statement ", engine.currentStatement, ": line ", debug.line, " in ", debug.functionName
+          # Mark that we should take a snapshot AFTER this instruction executes
+          if engine.currentStatement mod engine.snapshotInterval == 0:
+            shouldTakeSnapshot = true
+            statementToSnapshot = engine.currentStatement
 
     # Profiler hook - before instruction
     if vm.profiler != nil:
@@ -1586,6 +1601,11 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       let profiler = cast[RegVMProfiler](vm.profiler)
       profiler.recordInstructionEnd(instr.op)
 
+    # Replay engine hook - take snapshot AFTER instruction (if needed)
+    if shouldTakeSnapshot and vm.replayEngine != nil:
+      let engine = cast[ReplayEngine](vm.replayEngine)
+      engine.takeSnapshot(statementToSnapshot)
+
   # Flush any remaining buffered output
   flushOutput()
   # Ensure all output is written to terminal
@@ -1631,11 +1651,11 @@ proc stopReplayRecording*(vm: RegisterVM) =
     engine.stopRecording()
 
 
-# Seek to a specific instruction index
-proc seekToInstruction*(vm: RegisterVM, instrIdx: int) =
+# Seek to a specific statement index
+proc seekToStatement*(vm: RegisterVM, stmtIdx: int) =
   if vm.replayEngine != nil:
     let engine = cast[ReplayEngine](vm.replayEngine)
-    engine.seekTo(instrIdx)
+    engine.seekTo(stmtIdx)
 
 
 # Seek to a specific time (in seconds from start)
@@ -1663,7 +1683,7 @@ proc getReplayDuration*(vm: RegisterVM): float =
 
 # Get replay statistics
 proc getReplayStats*(vm: RegisterVM): tuple[snapshots: int, deltas: int,
-                                            instructions: int, duration: float] =
+                                            statements: int, duration: float] =
   if vm.replayEngine != nil:
     let engine = cast[ReplayEngine](vm.replayEngine)
     return engine.getStats()
@@ -1675,3 +1695,89 @@ proc printReplayStats*(vm: RegisterVM) =
   if vm.replayEngine != nil:
     let engine = cast[ReplayEngine](vm.replayEngine)
     engine.printStats()
+
+
+# Print current VM state (for replay visualization)
+proc printVMState*(vm: RegisterVM, showEmpty: bool = false) =
+  if vm.frames.len == 0:
+    echo "  [No active frames]"
+    return
+
+  let frame = vm.currentFrame[]
+  let pc = frame.pc
+
+  # Get current instruction debug info and function name
+  var functionName = ""
+  if pc >= 0 and pc < vm.program.instructions.len:
+    let instr = vm.program.instructions[pc]
+    let debug = instr.debug
+    functionName = debug.functionName
+    echo "  Function: ", functionName, " (line ", debug.line, ")"
+    echo "  PC: ", pc
+  else:
+    echo "  PC: ", pc, " (invalid)"
+
+  # Get variables that are alive at the current PC
+  var aliveVars: seq[string] = @[]
+  if functionName != "" and vm.program.lifetimeData.hasKey(functionName):
+    let lifetimeData = cast[ptr regvm_lifetime.FunctionLifetimeData](vm.program.lifetimeData[functionName])[]
+    if lifetimeData.pcToVariables.hasKey(pc):
+      aliveVars = lifetimeData.pcToVariables[pc]
+
+  # Build reverse map: register -> variable name for this function (only for alive variables)
+  var regToVar = initTable[uint8, string]()
+  if functionName != "" and vm.program.varMaps.hasKey(functionName):
+    let varMap = vm.program.varMaps[functionName]
+    for varName, regNum in varMap:
+      # Only include variables that are alive at the current PC
+      if varName in aliveVars:
+        regToVar[regNum] = varName
+
+  # Show local variables (using variable names)
+  if regToVar.len > 0:
+    echo "  Local Variables:"
+    var foundValues = false
+    for regNum, varName in regToVar:
+      let val = frame.regs[regNum]
+      # Show all values for alive variables (even nil)
+      if true or val.kind != vkNil or showEmpty:
+        foundValues = true
+        case val.kind
+        of vkInt:
+          echo "    ", varName, " = ", val.ival
+        of vkFloat:
+          echo "    ", varName, " = ", val.fval
+        of vkBool:
+          echo "    ", varName, " = ", val.bval
+        of vkChar:
+          echo "    ", varName, " = '", val.cval, "'"
+        of vkString:
+          echo "    ", varName, " = \"", val.sval, "\""
+        of vkNil:
+          if showEmpty:
+            echo "    ", varName, " = nil"
+        else:
+          echo "    ", varName, " = <complex>"
+
+    if not foundValues:
+      echo "    (no values yet)"
+  else:
+    echo "  Local Variables: (no variable map available)"
+
+  # Show globals if any
+  if vm.globals.len > 0:
+    echo "  Globals:"
+    for name, val in vm.globals:
+      case val.kind
+      of vkInt:
+        echo "    ", name, " = ", val.ival
+      of vkFloat:
+        echo "    ", name, " = ", val.fval
+      of vkBool:
+        echo "    ", name, " = ", val.bval
+      of vkChar:
+        echo "    ", name, " = '", val.cval, "'"
+      of vkString:
+        echo "    ", name, " = \"", val.sval, "\""
+      else:
+        echo "    ", name, " = <complex>"

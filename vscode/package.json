@@ -2,7 +2,7 @@
   "name": "etchlang",
   "displayName": "Etch Language Support",
   "description": "Syntax highlighting and debugging support for the Etch language",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "publisher": "kunitoki",
   "engines": {
     "vscode": "^1.66.0"
@@ -82,12 +82,6 @@
     "breakpoints": [
       {
         "language": "etchlang"
-      }
-    ],
-    "commands": [
-      {
-        "command": "etch.test",
-        "title": "Test Etch Extension"
       }
     ],
     "debuggers": [

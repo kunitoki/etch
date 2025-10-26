@@ -2,8 +2,8 @@
 # Expression type inference for the type checker
 
 import std/[strformat, options, sequtils, tables, strutils]
-import ../frontend/ast, ../common/[errors, types]
-import ../common/builtins
+import ../common/[constants, builtins, errors, types]
+import ../frontend/ast
 import types
 
 
@@ -12,7 +12,7 @@ proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var 
 
 # Check if a function name represents an operator function (including mangled names)
 proc isOperatorFunction(name: string): bool =
-  let baseName = if "_" in name: name.split("_")[0] else: name
+  let baseName = if FUNCTION_NAME_SEPARATOR_STRING in name: name.split(FUNCTION_NAME_SEPARATOR_STRING)[0] else: name
   baseName in ["+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">="]
 
 
