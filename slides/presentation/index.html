@@ -323,9 +323,9 @@
 												↓
 											🎨 Type Checker (Inference + Validation)
 												↓
-											🛡️ Safety Prover (Range Analysis + Symbolic Execution)
-												↓
 											⚡ Comptime Executor (AST Transformation)
+												↓
+											🛡️ Safety Prover (Range Analysis + Symbolic Execution)
 														   ↓
 												┌──────────┴──────────┐
 												↓                     ↓
@@ -347,8 +347,8 @@
 						| 1️⃣ | **Lexer** | Token stream (frontend/lexer) |
 						| 2️⃣ | **Parser** | AST (frontend/ast - frontend/parser) |
 						| 3️⃣ | **Type Checker** | Typed + Inferred AST (typechecker/) |
-						| 4️⃣ | **Safety Prover** | Proven AST (prover/) |
-						| 5️⃣ | **Comptime Executor** | Transformed AST (comptime/) |
+						| 4️⃣ | **Comptime Executor** | Transformed AST (comptime/) |
+						| 5️⃣ | **Safety Prover** | Proven AST (prover/) |
 						| 6️⃣ | **Bytecode Generator** | Register VM bytecode (interpreter/) |
 						| 7️⃣ | **Cache** | Disk (`__etch__/` directory) |
 						| 8️⃣ | **VM / C Backend** | Execution or native binary (backend/) |
@@ -370,8 +370,6 @@
 						- 📝 Expression kinds: Binary ops, Calls, Arrays, Pattern matching
 						- 🔀 Statement kinds: Declarations, Control flow, Assignments
 						- 🛡️ Syntax validation during parsing
-
-						Note: frontend/lexer.nim and frontend/parser.nim
 
 						---
 
@@ -443,9 +441,89 @@
 
 						**Phase 3: Type Validation** ✅
 
-						- Expression type checking (expressions.nim)
-						- Statement type checking (statements.nim)
+						- Expression type checking
+						- Statement type checking
 						- Full program validation
+
+						---
+
+						## 🎨 Type System & Inference
+
+						```etch [1-6]
+						fn main() -> void {
+						    let x: int = 42;           // Explicit type
+						    let y = 3.14;              // Inferred as float
+						    let name = "Etch";         // Inferred as string
+						    let numbers = [1, 2, 3];   // Inferred as array[int]
+						}
+						```
+
+						- ✨ **Strong static typing**
+						- 🔮 **Smart type inference**
+						- ✅ **No surprises**
+
+						---
+
+						## 🏗️ Types and Objects
+
+						**Type Aliases, Unions and Object Definitions:**
+
+						```etch [2|3|6|8-12|15-16]
+						// Type aliases for clarity
+						type UserId = int;
+						type Email = distinct string;
+
+						// Union types for sum types
+						type IntOrString = int | string;
+
+						// Object types with fields
+						type Point = object {
+						  x: int;
+						  y: int;
+						};
+
+						fn main() -> void {
+						  let p: Point = { x: 10, y: 20 };
+						  print(p.x + p.y);  // 30
+						}
+						```
+
+						**Safety Guarantees:**
+						- 🛡️ All object fields must be initialized before use
+						- ✅ Prover tracks initialization of each field
+						- 🔍 Compile-time error if accessing uninitialized field
+					</textarea>
+				</section>
+
+				<!-- Slide: UFCS -->
+				<section class="center compact" data-markdown>
+					<textarea data-template>
+						## 🎯 Uniform Function Call Syntax
+
+						**Call functions as methods using dot notation:**
+
+						```etch [1-3|6-7|9-10|12-14|16-17]
+						fn add(a: int, b: int) {
+						  return a + b;
+						}
+
+						fn main() {
+						  var x: int = 10;
+						  var y: int = 20;
+
+						  // Traditional call
+						  discard add(x, y);
+
+						  // UFCS - first argument becomes receiver
+						  var result2: int = x.add(y);
+						  print(result2); // 30
+
+						  // But also!
+						  print(5.add(15)); // 20
+						}
+						```
+
+						**Clean, readable method-style calls without OOP overhead!** 🚀
 					</textarea>
 				</section>
 
@@ -547,6 +625,24 @@
 						**Unsafe Example:** divisor ranges [0, 5] → *COMPILE ERROR* ❌
 
 						Compiler tracks value ranges and proves divisor should be non-zero.
+
+						---
+
+						## The Safety Prover in Action
+
+						```etch [3|4-6|7|8]
+						// ✅ Safe!
+						fn main() -> void {
+						    let divisor: int = rand(5);             // Range: [0, 5]
+							if (divisor == 0) {                     // Make sure it's not zero
+								return;
+							}
+						    let calculation: int = 100 / divisor;   // ✅ Compiler can ensure divisor is != 0
+							print(calculation);
+						}
+						```
+
+						**Back to safety:** divisor ranges [0, 5] → runtime check → division can happen ✅
 					</textarea>
 				</section>
 
@@ -568,89 +664,6 @@
 						- ✅ Compile-time bounds checking when possible
 						- 🔍 Compiler enforces insertion of runtime checks when necessary
 						- 📝 Clear error messages
-					</textarea>
-				</section>
-
-				<!-- Slide: Type System & Inference -->
-				<section class="center compact" data-markdown>
-					<textarea data-template>
-						## 🎨 Type System & Inference
-
-						```etch [1-6]
-						fn main() -> void {
-						    let x: int = 42;           // Explicit type
-						    let y = 3.14;              // Inferred as float
-						    let name = "Etch";         // Inferred as string
-						    let numbers = [1, 2, 3];   // Inferred as array[int]
-						}
-						```
-
-						- ✨ **Strong static typing**
-						- 🔮 **Smart type inference**
-						- ✅ **No surprises**
-
-						---
-
-						## 🏗️ Types and Objects
-
-						**Type Aliases, Unions and Object Definitions:**
-
-						```etch [2|3|6|8-12|15-16]
-						// Type aliases for clarity
-						type UserId = int;
-						type Email = distinct string;
-
-						// Union types for sum types
-						type IntOrString = int | string;
-
-						// Object types with fields
-						type Point = object {
-						  x: int;
-						  y: int;
-						};
-
-						fn main() -> void {
-						  let p: Point = { x: 10, y: 20 };
-						  print(p.x + p.y);  // 30
-						}
-						```
-
-						**Safety Guarantees:**
-						- 🛡️ All object fields must be initialized before use
-						- ✅ Prover tracks initialization of each field
-						- 🔍 Compile-time error if accessing uninitialized field
-					</textarea>
-				</section>
-
-				<!-- Slide: UFCS -->
-				<section class="center compact" data-markdown>
-					<textarea data-template>
-						## 🎯 Uniform Function Call Syntax
-
-						**Call functions as methods using dot notation:**
-
-						```etch [1-3|6-7|9-10|12-14|16-17]
-						fn add(a: int, b: int) {
-						  return a + b;
-						}
-
-						fn main() {
-						  var x: int = 10;
-						  var y: int = 20;
-
-						  // Traditional call
-						  discard add(x, y);
-
-						  // UFCS - first argument becomes receiver
-						  var result2: int = x.add(y);
-						  print(result2); // 30
-
-						  // But also!
-						  print(5.add(15)); // 20
-						}
-						```
-
-						**Clean, readable method-style calls without OOP overhead!** 🚀
 					</textarea>
 				</section>
 
@@ -703,11 +716,11 @@
 						  let numbers: array[int] = [10, 20, 30];
 						  let maybeValue: option[int] = tryGetElement(numbers, 1);
 
-						  let result: string = match maybeValue {
+						  let res: string = match maybeValue {
 						    some(value) => "Found: " + toString(value);
 						    none => "Not found";
 						  };
-						  print(result);  // "Found: 20"
+						  print(res);  // "Found: 20"
 						}
 						```
 
@@ -804,7 +817,7 @@
 
 						## Comptime Basics
 
-						```etch [6-7|9-11]
+						```etch [1-3|6-7|9-11]
 						fn square(x: int) -> int {
 						    return x * x;
 						}
