@@ -4,8 +4,8 @@
 import std/[tables, macros, options, strutils, strformat]
 import ../common/[constants, types, logging]
 import ../frontend/ast
-import regvm
-import regvm_lifetime
+import ./[regvm, regvm_lifetime]
+import regvm_optimizer
 
 
 type
@@ -92,7 +92,6 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8
 proc compileStmt*(c: var RegCompiler, s: Stmt)
 proc compileBinOp(c: var RegCompiler, op: BinOp, dest, left, right: uint8, debug: RegDebugInfo = RegDebugInfo())
 proc compileCall(c: var RegCompiler, e: Expr): uint8
-proc optimizeBytecode*(prog: var RegBytecodeProgram)
 
 proc makeDebugInfo(c: RegCompiler, pos: Pos): RegDebugInfo =
   ## Create debug info from AST position (only if debug mode enabled)
@@ -1006,6 +1005,12 @@ proc compileCall(c: var RegCompiler, e: Expr): uint8 =
   c.prog.instructions.add(instr)
   log(c.verbose, &"Emitted ropCall for {e.fname} (index {funcIdx}) at reg {result} with {completeArgs.len} args at PC={c.prog.instructions.len - 1}")
 
+  # Free argument registers after the call - they're no longer needed
+  # The result register stays allocated as it may be used by the caller
+  for argReg in argRegs:
+    log(c.verbose, &"  Freed argument register {argReg} after call")
+    c.allocator.freeReg(argReg)
+
 proc compileForLoop(c: var RegCompiler, s: Stmt) =
   ## Compile optimized for loop
 
@@ -1256,8 +1261,8 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
       c.lifetimeTracker.defineVariable(s.aname, currentPC)
 
   of skIf:
-    log(c.verbose, "Compiling if statement")
     if c.verbose:
+      log(c.verbose, "Compiling if statement")
       log(c.verbose, &"   Then body len = {s.thenBody.len}")
       log(c.verbose, &"   Else body len = {s.elseBody.len}")
       if s.elseBody.len > 0:
@@ -1870,124 +1875,8 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
 
     log(verbose, &"Compiled main function at {mainStartPos}..{mainEndPos}")
 
-  # Apply optimization passes
-  # Enable with only Pass 1 and 2 (disable Pass 3 which seems buggy)
-  if optimizeLevel >= 1:
-    optimizeBytecode(compiler.prog)
+  # Apply optimization passes, enable with only pass 1 and 2
+  #if optimizeLevel >= 1:
+  #  optimizeBytecode(compiler.prog)
 
   return compiler.prog
-
-proc optimizeBytecode*(prog: var RegBytecodeProgram) =
-  ## Apply bytecode optimization passes
-
-  var changed = true
-  var passes = 0
-  const maxPasses = 3
-
-  while changed and passes < maxPasses:
-    changed = false
-    inc passes
-
-    # Pass 1: Build optimized instruction sequence
-    var newInstructions: seq[RegInstruction] = @[]
-    var skipNext = false
-
-    var i = 0
-    while i < prog.instructions.len:
-      if skipNext:
-        skipNext = false
-        inc i
-        continue
-
-      let instr = prog.instructions[i]
-
-      # Skip dead moves (Move R1, R1)
-      if instr.op == ropMove and instr.opType == 0 and instr.a == instr.b:
-        changed = true
-        inc i
-        continue
-
-      # Check for redundant move pairs
-      if i < prog.instructions.len - 1:
-        let next = prog.instructions[i + 1]
-        if instr.op == ropMove and next.op == ropMove and instr.opType == 0 and next.opType == 0:
-          # Check if they're inverses (Move R1, R2; Move R2, R1)
-          if instr.a == next.b and instr.b == next.a:
-            newInstructions.add(instr)
-            skipNext = true
-            changed = true
-            inc i
-            continue
-
-      # Constant folding for LoadK, LoadK, BinOp pattern
-      if i < prog.instructions.len - 2:
-        let instr1 = instr
-        let instr2 = prog.instructions[i + 1]
-        let instr3 = prog.instructions[i + 2]
-
-        if instr1.op == ropLoadK and instr2.op == ropLoadK and instr1.opType == 1 and instr2.opType == 1:
-          let r1 = instr1.a
-          let r2 = instr2.a
-          let k1 = instr1.bx
-          let k2 = instr2.bx
-
-          # Check if next instruction uses both registers
-          if instr3.opType == 0 and instr3.b == r1 and instr3.c == r2:
-            if k1 < prog.constants.len.uint16 and k2 < prog.constants.len.uint16:
-              let c1 = prog.constants[k1]
-              let c2 = prog.constants[k2]
-
-              # Only fold integer operations
-              if c1.kind == vkInt and c2.kind == vkInt:
-                var foldedValue: Option[int64] = none(int64)
-
-                case instr3.op:
-                of ropAdd:
-                  foldedValue = some(c1.ival + c2.ival)
-                of ropSub:
-                  foldedValue = some(c1.ival - c2.ival)
-                of ropMul:
-                  foldedValue = some(c1.ival * c2.ival)
-                of ropDiv:
-                  if c2.ival != 0:
-                    foldedValue = some(c1.ival div c2.ival)
-                of ropMod:
-                  if c2.ival != 0:
-                    foldedValue = some(c1.ival mod c2.ival)
-                else:
-                  discard
-
-                if foldedValue.isSome():
-                  # Find or add constant
-                  var constIdx = 0'u16
-                  var found = false
-                  for j, c in prog.constants:
-                    if c.kind == vkInt and c.ival == foldedValue.get():
-                      constIdx = uint16(j)
-                      found = true
-                      break
-
-                  if not found:
-                    constIdx = uint16(prog.constants.len)
-                    prog.constants.add(regvm.makeInt(foldedValue.get()))
-
-                  # Create folded instruction
-                  var foldedInstr = RegInstruction(
-                    op: ropLoadK,
-                    a: instr3.a,
-                    opType: 1,
-                    bx: constIdx,
-                    debug: instr1.debug
-                  )
-                  newInstructions.add(foldedInstr)
-
-                  # Skip all three instructions
-                  i += 3
-                  changed = true
-                  continue
-
-      newInstructions.add(instr)
-      inc i
-
-    if changed:
-      prog.instructions = newInstructions

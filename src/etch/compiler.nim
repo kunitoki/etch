@@ -186,7 +186,7 @@ proc parseAndTypecheck*(options: CompilerOptions): (Program, string, Table[strin
   else:
     let content = readFile(options.sourceFile)
     logCompiler(options.verbose, "Read source file (" & $content.len & " characters)")
-    # For file compilation, source lines will be lazily loaded on error in formatError()
+    # For file compilation, source lines will be lazily loaded on error
     content
 
   let srcHash = hashSourceAndFlags(src, options)

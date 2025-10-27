@@ -501,9 +501,6 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
           engine.currentStatement += 1
           engine.lastSourceLine = debug.line
           engine.lastSourceFile = debug.sourceFile
-          # Debug: print what statements we're counting
-          if false:  # Set to true for debugging
-            echo "Statement ", engine.currentStatement, ": line ", debug.line, " in ", debug.functionName
           # Mark that we should take a snapshot AFTER this instruction executes
           if engine.currentStatement mod engine.snapshotInterval == 0:
             shouldTakeSnapshot = true
@@ -539,7 +536,9 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
             (if instr.opType == 0: " b=" & $instr.b & " c=" & $instr.c
             elif instr.opType == 1: " bx=" & $instr.bx
             elif instr.opType == 2: " sbx=" & $instr.sbx
-            else: " ax=" & $instr.ax))
+            elif instr.opType == 3: " ax=" & $instr.ax
+            elif instr.opType == 4: " funcIdx=" & $instr.funcIdx & " numArgs=" & $instr.numArgs
+            else: ""))
       log(verbose, "PC=" & $pc & " op=" & $instr.op)
 
     inc pc

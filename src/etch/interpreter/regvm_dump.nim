@@ -141,15 +141,20 @@ proc formatInstruction*(instr: RegInstruction): string =
       result = &"{instr.op} A={instr.a} Bx={instr.bx}"
 
   of 2:  # AsBx format
-    let sbx = cast[int16](instr.sbx) - 32767
-    let sign = if sbx >= 0: "+" else: ""
     case instr.op
-    of ropJmp:
-      result = &"jump {sign}{sbx}"
-    of ropCmpJmp:
-      result = &"cmp-jump {sign}{sbx}"
+    of ropLoadK:
+      # ropLoadK with AsBx uses immediate value (no biasing)
+      result = &"R[{instr.a}] = {instr.sbx}"
+    of ropJmp, ropCmpJmp:
+      # Jump instructions need offset calculation
+      let sbx = instr.sbx
+      let sign = if sbx >= 0: "+" else: ""
+      if instr.op == ropJmp:
+        result = &"jump {sign}{sbx}"
+      else:
+        result = &"cmp-jump {sign}{sbx}"
     else:
-      result = &"{instr.op} A={instr.a} sBx={sbx}"
+      result = &"{instr.op} A={instr.a} sBx={instr.sbx}"
 
   else:
     result = &"{instr.op} (unknown format)"
@@ -275,7 +280,7 @@ proc dumpInstructionsByFunctions*(prog: RegBytecodeProgram, maxInstructions: int
 
         # Add constant value if it's a LoadK instruction
         var extra = ""
-        if instr.op == ropLoadK and instr.bx < prog.constants.len.uint16:
+        if instr.op == ropLoadK and instr.opType == 1 and instr.bx < prog.constants.len.uint16:
           let constant = prog.constants[instr.bx]
           extra = case constant.kind
             of vkString: &"  ; \"{constant.sval}\""

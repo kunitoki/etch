@@ -1,7 +1,7 @@
 # errors.nim
 # Centralized error handling and formatting for the Etch language implementation
 
-import strformat, strutils
+import std/[strformat, strutils, tables]
 import types
 
 
@@ -13,28 +13,19 @@ type
   ParseError* = object of EtchError
   TypecheckError* = object of EtchError
   ProverError* = object of EtchError
+  CompilerError* = object of EtchError
   RuntimeError* = object of EtchError
 
 
 # Global state for error formatting - cache source lines by filename
-import tables
-var currentFilename* = "<unknown>"
-var sourceLinesCache*: Table[string, seq[string]] = initTable[string, seq[string]]()
-
-
-# Load source lines from a string for error context
-# Only call this for in-memory source code that isn't on disk.
-# For file-based compilation, formatError() will lazily load from disk on demand.
-proc loadSourceLinesFromString*(src: string, filename: string = "<unknown>") =
-  currentFilename = filename
-  if filename notin sourceLinesCache:
-    sourceLinesCache[filename] = src.splitLines()
+var currentFilename = "<unknown>"
+var sourceLinesCache: Table[string, seq[string]] = initTable[string, seq[string]]()
 
 
 # Format an error message with position and context
 # Lazily loads source lines from disk if not already cached.
 # This centralizes error formatting and avoids loading source files unless an error occurs.
-proc formatError*(pos: Pos, msg: string): string =
+proc formatError(pos: Pos, msg: string): string =
   let filename = if pos.filename.len > 0: pos.filename else: currentFilename
   result = &"{filename}:{pos.line}:{pos.col}: error: {msg}\n"
 
@@ -73,6 +64,15 @@ proc formatError*(pos: Pos, msg: string): string =
       result.add &"  {pos.line + 1} | {sourceLines[lineIdx + 1]}\n"
 
 
+# Load source lines from a string for error context
+# Only call this for in-memory source code that isn't on disk.
+# For file-based compilation, formatError() will lazily load from disk on demand.
+proc loadSourceLinesFromString*(src: string, filename: string = "<unknown>") =
+  currentFilename = filename
+  if filename notin sourceLinesCache:
+    sourceLinesCache[filename] = src.splitLines()
+
+
 # Helper procs for creating formatted exceptions
 proc newParseError*(pos: Pos, msg: string): ref ParseError =
   result = newException(ParseError, formatError(pos, msg))
@@ -84,6 +84,10 @@ proc newTypecheckError*(pos: Pos, msg: string): ref TypecheckError =
 
 proc newProverError*(pos: Pos, msg: string): ref ProverError =
   result = newException(ProverError, formatError(pos, msg))
+  result.pos = pos
+
+proc newCompilerError*(pos: Pos, msg: string): ref CompilerError =
+  result = newException(CompilerError, formatError(pos, msg))
   result.pos = pos
 
 proc newRuntimeError*(pos: Pos, msg: string): ref RuntimeError =

@@ -42,8 +42,7 @@ proc findEtchExecutable*(): string =
   elif fileExists("../" & binaryName):
     return "../" & binaryName
   else:
-    let errorMessage = "ERROR: etch binary not found at " & binaryName
-      & ", please run 'nimble test' from project root to build it"
+    let errorMessage = "ERROR: etch binary not found at " & binaryName & ", please run 'nimble test' from project root to build it"
     raise newException(ValueError, errorMessage)
 
 proc getTestTempDir*(): string =
