@@ -661,6 +661,7 @@ proc `$`*(op: RegOpCode): string =
   of ropLoadNil: "LOADNIL"
   of ropGetGlobal: "GETGLOBAL"
   of ropSetGlobal: "SETGLOBAL"
+  of ropInitGlobal: "INITGLOBAL"
   of ropAdd: "ADD"
   of ropSub: "SUB"
   of ropMul: "MUL"

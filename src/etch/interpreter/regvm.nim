@@ -21,6 +21,7 @@ type
     # Global access
     ropGetGlobal,     # R[A] = Globals[K[Bx]]
     ropSetGlobal,     # Globals[K[Bx]] = R[A]
+    ropInitGlobal,    # Globals[K[Bx]] = R[A] (only if not already set - for <global> initialization)
 
     # Arithmetic (R[A] = R[B] op R[C])
     ropAdd, ropSub, ropMul, ropDiv, ropMod, ropPow,

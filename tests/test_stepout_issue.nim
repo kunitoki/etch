@@ -1,10 +1,13 @@
 import std/[unittest, json, osproc]
 import ../src/etch/interpreter/[regvm_serialize, regvm_debugserver]
+import test_utils
 
 suite "Register VM Debugger - Step Out Functionality":
+  let etchExe = findEtchExecutable()
+
   test "Step out from test function back to main works correctly":
     # Compile the example
-    discard execProcess("./etch --compile examples/fn_order.etch")
+    discard execProcess(etchExe & " --compile examples/fn_order.etch")
 
     # Load and create debug server
     let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")
@@ -40,7 +43,7 @@ suite "Register VM Debugger - Step Out Functionality":
 
   test "Step over completes program correctly":
     # Compile the example
-    discard execProcess("./etch --compile examples/fn_order.etch")
+    discard execProcess(etchExe & " --compile examples/fn_order.etch")
 
     # Load and create debug server
     let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")

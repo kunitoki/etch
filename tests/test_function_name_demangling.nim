@@ -1,11 +1,14 @@
 import std/[unittest, json, osproc, strutils]
 import ../src/etch/common/constants
 import ../src/etch/interpreter/[regvm_serialize, regvm_debugserver]
+import test_utils
 
 suite "Register VM Debugger - Function Name Demangling":
+  let etchExe = findEtchExecutable()
+
   test "Function names are properly demangled in stack traces":
     # Compile the example
-    discard execProcess("./etch --compile examples/fn_order.etch")
+    discard execProcess(etchExe & " --compile examples/fn_order.etch")
 
     # Load and create debug server
     let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")

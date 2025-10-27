@@ -1,0 +1,14 @@
+=== Etch C API Global Override Example ===
+
+Example 1: Override global variables before execution
+Compiled program with globals: x=10, y=20, message="default"
+Setting overrides from C API: x=100, y=200, message="overridden"
+
+Executing program (should print overridden values):
+x = 100, y = 200, message = overridden
+Verifying globals after execution:
+  x = 100 (expected 100)
+  y = 200 (expected 200)
+  message = "overridden" (expected "overridden")
+
+=== SUCCESS: Global overrides working correctly! ===

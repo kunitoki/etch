@@ -12,6 +12,7 @@ requires "nim >= 2.2.4"
 # Tasks
 task test, "Run all tests":
   echo "===== Building etch binary in release mode ====="
+  mkDir "bin"
   exec "nim c -d:release -o:bin/etch src/etch.nim"
   echo "===== Running core tests ====="
   exec "nim c -r tests/test_debugger_basic.nim"
@@ -34,6 +35,7 @@ task test, "Run all tests":
 
 task perf, "Run performance benchmarks":
   echo "===== Building etch binary in release mode ====="
+  mkDir "bin"
   exec "nim c -d:release -o:bin/etch src/etch.nim"
   echo "===== Running performance benchmarks ====="
   exec "./bin/etch --perf"

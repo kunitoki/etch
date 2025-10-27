@@ -43,7 +43,7 @@ const
 # Bytecode serialization constants
 const
   BYTECODE_MAGIC* = "ETCH"
-  BYTECODE_VERSION* = 26  # Changed function name separator from __ to $$ and _ to $
+  BYTECODE_VERSION* = 27  # Added ropInitGlobal for C API global override support
 
 
 # Symbolic execution constants

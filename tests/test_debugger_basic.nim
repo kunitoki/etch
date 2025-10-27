@@ -5,9 +5,9 @@ import std/[unittest, os, strutils]
 import test_utils
 
 suite "Register VM Debugger - Basic Sanity":
-  # Ensure etch binary is built before running tests
   discard ensureEtchBinary()
   let etchExe = findEtchExecutable()
+
   test "Debug server responds to initialize":
     let testProg = getTestTempDir() / "test.etch"
     writeFile(testProg, "fn main() -> void { var x: int = 1; print(x); }")

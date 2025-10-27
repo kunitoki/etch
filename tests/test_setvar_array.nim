@@ -20,10 +20,11 @@ fn main() -> void {
       "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n" &
       "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{\"program\":\"" & testProg & "\",\"stopOnEntry\":true}}\n" &
       "{\"seq\":3,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
-      "{\"seq\":4,\"type\":\"request\",\"command\":\"variables\",\"arguments\":{\"variablesReference\":1}}\n" &
-      "{\"seq\":5,\"type\":\"request\",\"command\":\"setVariable\",\"arguments\":{\"variablesReference\":1,\"name\":\"arr\",\"value\":\"[10, 20, 30]\"}}\n" &
-      "{\"seq\":6,\"type\":\"request\",\"command\":\"variables\",\"arguments\":{\"variablesReference\":1}}\n" &
-      "{\"seq\":7,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}\n"
+      "{\"seq\":4,\"type\":\"request\",\"command\":\"scopes\",\"arguments\":{\"frameId\":0}}\n" &
+      "{\"seq\":5,\"type\":\"request\",\"command\":\"variables\",\"arguments\":{\"variablesReference\":1}}\n" &
+      "{\"seq\":6,\"type\":\"request\",\"command\":\"setVariable\",\"arguments\":{\"variablesReference\":1,\"name\":\"arr\",\"value\":\"[10, 20, 30]\"}}\n" &
+      "{\"seq\":7,\"type\":\"request\",\"command\":\"variables\",\"arguments\":{\"variablesReference\":1}}\n" &
+      "{\"seq\":8,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}\n"
 
     let (output, _) = runDebugServerWithInput(etchExe, testProg, inputCommands, timeoutSecs = 3)
 
@@ -45,8 +46,10 @@ fn main() -> void {
       "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n" &
       "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{\"program\":\"" & testProg & "\",\"stopOnEntry\":true}}\n" &
       "{\"seq\":3,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
-      "{\"seq\":4,\"type\":\"request\",\"command\":\"setVariable\",\"arguments\":{\"variablesReference\":1,\"name\":\"words\",\"value\":\"[\\\"foo\\\", \\\"bar\\\", \\\"baz\\\"]\"}}\n" &
-      "{\"seq\":5,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}\n"
+      "{\"seq\":4,\"type\":\"request\",\"command\":\"scopes\",\"arguments\":{\"frameId\":0}}\n" &
+      "{\"seq\":5,\"type\":\"request\",\"command\":\"variables\",\"arguments\":{\"variablesReference\":1}}\n" &
+      "{\"seq\":6,\"type\":\"request\",\"command\":\"setVariable\",\"arguments\":{\"variablesReference\":1,\"name\":\"words\",\"value\":\"[\\\"foo\\\", \\\"bar\\\", \\\"baz\\\"]\"}}\n" &
+      "{\"seq\":7,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}\n"
 
     let (output, _) = runDebugServerWithInput(etchExe, testProg, inputCommands, timeoutSecs = 3)
 
@@ -68,8 +71,10 @@ fn main() -> void {
       "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n" &
       "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{\"program\":\"" & testProg & "\",\"stopOnEntry\":true}}\n" &
       "{\"seq\":3,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
-      "{\"seq\":4,\"type\":\"request\",\"command\":\"setVariable\",\"arguments\":{\"variablesReference\":1,\"name\":\"nums\",\"value\":\"[]\"}}\n" &
-      "{\"seq\":5,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}\n"
+      "{\"seq\":4,\"type\":\"request\",\"command\":\"scopes\",\"arguments\":{\"frameId\":0}}\n" &
+      "{\"seq\":5,\"type\":\"request\",\"command\":\"variables\",\"arguments\":{\"variablesReference\":1}}\n" &
+      "{\"seq\":6,\"type\":\"request\",\"command\":\"setVariable\",\"arguments\":{\"variablesReference\":1,\"name\":\"nums\",\"value\":\"[]\"}}\n" &
+      "{\"seq\":7,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}\n"
 
     let (output, _) = runDebugServerWithInput(etchExe, testProg, inputCommands, timeoutSecs = 3)
 
@@ -91,8 +96,9 @@ fn main() -> void {
       "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}\n" &
       "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{\"program\":\"" & testProg & "\",\"stopOnEntry\":true}}\n" &
       "{\"seq\":3,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}\n" &
-      "{\"seq\":4,\"type\":\"request\",\"command\":\"setVariable\",\"arguments\":{\"variablesReference\":1,\"name\":\"arr\",\"value\":\"1, 2, 3\"}}\n" &
-      "{\"seq\":5,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}\n"
+      "{\"seq\":4,\"type\":\"request\",\"command\":\"scopes\",\"arguments\":{\"frameId\":0}}\n" &
+      "{\"seq\":5,\"type\":\"request\",\"command\":\"setVariable\",\"arguments\":{\"variablesReference\":1,\"name\":\"arr\",\"value\":\"1, 2, 3\"}}\n" &
+      "{\"seq\":6,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}\n"
 
     let (output, _) = runDebugServerWithInput(etchExe, testProg, inputCommands, timeoutSecs = 3)
 

@@ -35,35 +35,24 @@ proc wrapWithTimeout*(cmd: string, seconds: int): string =
     return cmd
 
 proc findEtchExecutable*(): string =
-  ## Find the etch executable, trying multiple locations
-  ## This works whether tests are run from project root or tests directory
+  ## Find the etch executable in bin/ directory
+  ## Works whether tests are run from project root or tests directory
 
   when defined(windows):
-    # Windows uses .exe extension
-    if fileExists("./etch.exe"):
-      return "./etch.exe"
-    if fileExists("../etch.exe"):
-      return "../etch.exe"
-    if fileExists("etch.exe"):
-      return "etch.exe"
+    const binaryName = "bin/etch.exe"
   else:
-    # Unix-like systems
-    if fileExists("./etch"):
-      return "./etch"
-    if fileExists("../etch"):
-      return "../etch"
+    const binaryName = "bin/etch"
 
-  # Try using nim to run directly (fallback)
-  if fileExists("src/etch.nim"):
-    return "nim r src/etch.nim"
-  elif fileExists("../src/etch.nim"):
-    return "nim r ../src/etch.nim"
+  # Try from current directory (if running from project root)
+  if fileExists(binaryName):
+    return binaryName
 
-  # Last resort: assume it's in PATH or current dir
-  when defined(windows):
-    return "etch.exe"
-  else:
-    return "./etch"
+  # Try from parent directory (if running from tests/ directory)
+  if fileExists("../" & binaryName):
+    return "../" & binaryName
+
+  # Not found - return expected location for better error messages
+  return binaryName
 
 proc getTestTempDir*(): string =
   ## Get a temporary directory for test files
@@ -89,42 +78,21 @@ proc cleanupTestTempDir*() =
       discard # Ignore errors during cleanup
 
 proc ensureEtchBinary*(): bool =
-  ## Ensure the etch binary is built and available
+  ## Check that the etch binary exists in bin/ directory
   ## Returns true if binary is available, false otherwise
 
-  # First check if binary already exists (platform-specific)
   when defined(windows):
-    if fileExists("./etch.exe") or fileExists("../etch.exe") or fileExists("etch.exe"):
-      return true
+    const binaryName = "bin/etch.exe"
   else:
-    if fileExists("./etch") or fileExists("../etch"):
-      return true
+    const binaryName = "bin/etch"
 
-  # Try to build it
-  echo "Building etch binary for tests..."
+  # Check if binary exists
+  if fileExists(binaryName) or fileExists("../" & binaryName):
+    return true
 
-  when defined(windows):
-    let buildCmd = if fileExists("src/etch.nim"):
-      "nim c -d:danger -o:etch.exe src/etch.nim"
-    elif fileExists("../src/etch.nim"):
-      "cd .. && nim c -d:danger -o:etch.exe src/etch.nim"
-    else:
-      return false
-  else:
-    let buildCmd = if fileExists("src/etch.nim"):
-      "nim c -d:danger -o:etch src/etch.nim"
-    elif fileExists("../src/etch.nim"):
-      "cd .. && nim c -d:danger -o:etch src/etch.nim"
-    else:
-      return false
-
-  let (output, exitCode) = execCmdEx(buildCmd)
-  if exitCode != 0:
-    echo "Failed to build etch binary:"
-    echo output
-    return false
-
-  return true
+  echo "ERROR: etch binary not found at ", binaryName
+  echo "Please run 'nimble test' from project root to build the binary first"
+  return false
 
 proc runDebugServerWithInput*(etchExe: string, testProg: string, inputCommands: string, timeoutSecs: int = 5): tuple[output: string, exitCode: int] =
   ## Run the debug server with input commands using proper process piping

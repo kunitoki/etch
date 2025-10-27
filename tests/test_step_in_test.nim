@@ -1,11 +1,14 @@
 import std/[unittest, json, osproc, strutils]
 import ../src/etch/common/constants
 import ../src/etch/interpreter/[regvm_serialize, regvm_debugserver]
+import test_utils
 
 suite "Register VM Debugger - Step Into Functionality":
+  let etchExe = findEtchExecutable()
+
   test "Step into test function works correctly":
     # Compile the example
-    discard execProcess("./etch --compile examples/fn_order.etch")
+    discard execProcess(etchExe & " --compile examples/fn_order.etch")
 
     # Load and create debug server
     let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")
@@ -39,7 +42,7 @@ suite "Register VM Debugger - Step Into Functionality":
 
   test "Step over from inside function works correctly":
     # Compile the example
-    discard execProcess("./etch --compile examples/fn_order.etch")
+    discard execProcess(etchExe & " --compile examples/fn_order.etch")
 
     # Load and create debug server
     let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")
@@ -71,7 +74,7 @@ suite "Register VM Debugger - Step Into Functionality":
 
   test "Step into from inside test continues stepping":
     # Compile the example
-    discard execProcess("./etch --compile examples/fn_order.etch")
+    discard execProcess(etchExe & " --compile examples/fn_order.etch")
 
     # Load and create debug server
     let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")

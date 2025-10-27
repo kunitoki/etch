@@ -32,6 +32,7 @@ type
     program: RegBytecodeProgram
     lastError: string
     hostFunctions: Table[string, HostFunctionInfo]
+    globalOverrides: Table[string, V]  # Globals set via C API before VM execution
     options: CompilerOptions
     instructionCallback: EtchInstructionCallback
     instructionCallbackUserData: pointer
@@ -58,6 +59,7 @@ proc etch_context_new*(): EtchContext {.exportc, cdecl, dynlib.} =
   try:
     var ctx = cast[EtchContext](alloc0(sizeof(EtchContextObj)))
     ctx.hostFunctions = initTable[string, HostFunctionInfo]()
+    ctx.globalOverrides = initTable[string, V]()
     ctx.options = CompilerOptions(
       sourceFile: "",
       sourceString: none(string),
@@ -80,6 +82,7 @@ proc etch_context_new_with_options*(verbose: cint, debug: cint): EtchContext {.e
   try:
     var ctx = cast[EtchContext](alloc0(sizeof(EtchContextObj)))
     ctx.hostFunctions = initTable[string, HostFunctionInfo]()
+    ctx.globalOverrides = initTable[string, V]()
     ctx.options = CompilerOptions(
       sourceFile: "",
       sourceString: none(string),
@@ -200,6 +203,11 @@ proc etch_execute*(ctx: EtchContext): cint {.exportc, cdecl, dynlib.} =
     if ctx.vm == nil:
       ctx.lastError = "No program compiled"
       return 1
+
+    # Apply global overrides set via C API before execution
+    # ropInitGlobal in <global> function will skip these since they're already set
+    for name, value in ctx.globalOverrides:
+      ctx.vm.globals[name] = value
 
     # Check if remote debugging should be enabled
     let debugPortEnv = getEnv("ETCH_DEBUG_PORT")
@@ -469,13 +477,19 @@ proc etch_value_free*(v: EtchValue) {.exportc, cdecl, dynlib.} =
 
 proc etch_set_global*(ctx: EtchContext, name: cstring, value: EtchValue) {.exportc, cdecl, dynlib.} =
   ## Set a global variable in the Etch context
+  ## This can be called before or after compilation.
+  ## If called before execution, the value will override any compile-time initialization.
   if ctx == nil or name == nil or value == nil:
-    return
-  if ctx.vm == nil:
     return
 
   let nameStr = $name
-  ctx.vm.globals[nameStr] = value.value
+
+  if ctx.vm != nil:
+    # VM exists - set directly
+    ctx.vm.globals[nameStr] = value.value
+  else:
+    # VM doesn't exist yet - store in overrides to be applied during execute
+    ctx.globalOverrides[nameStr] = value.value
 
 proc etch_get_global*(ctx: EtchContext, name: cstring): EtchValue {.exportc, cdecl, dynlib.} =
   ## Get a global variable from the Etch context

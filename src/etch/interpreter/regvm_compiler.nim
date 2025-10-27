@@ -1802,9 +1802,10 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
         if globalStmt.vinit.isSome():
           # Compile the initialization expression
           let valueReg = compiler.compileExpr(globalStmt.vinit.get())
-          # Store in global table
+          # Store in global table using ropInitGlobal (only sets if not already present)
+          # This allows C API to override compile-time initialization
           let nameIdx = compiler.addStringConst(globalStmt.vname)
-          compiler.prog.emitABx(ropSetGlobal, valueReg, nameIdx)
+          compiler.prog.emitABx(ropInitGlobal, valueReg, nameIdx)
           compiler.allocator.freeReg(valueReg)
 
     # After global initialization, call main using ropCall

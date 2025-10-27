@@ -1,10 +1,13 @@
 import std/[unittest, osproc]
 import ../src/etch/interpreter/[regvm, regvm_serialize]
+import test_utils
 
 suite "Bytecode Dumping":
+  let etchExe = findEtchExecutable()
+
   test "Bytecode can be loaded and inspected":
     # Compile the example first
-    discard execProcess("./etch examples/fn_order.etch")
+    discard execProcess(etchExe & " examples/fn_order.etch")
 
     let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")
 
@@ -14,7 +17,7 @@ suite "Bytecode Dumping":
 
   test "Instructions have debug information":
     # Compile the example first
-    discard execProcess("./etch examples/fn_order.etch")
+    discard execProcess(etchExe & " examples/fn_order.etch")
 
     let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")
 

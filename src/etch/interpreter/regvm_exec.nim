@@ -606,6 +606,25 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
             ))
         vm.globals[name] = getReg(vm, instr.a)
 
+    of ropInitGlobal:
+      # Initialize global only if not already set (used in <global> function)
+      # This allows C API to override compile-time initialization
+      if instr.opType == 1 and int(instr.bx) < vm.constants.len:
+        let name = vm.constants[instr.bx].sval
+        if not vm.globals.hasKey(name):
+          # Only set if not already present
+          if vm.replayEngine != nil:
+            let engine = cast[ReplayEngine](vm.replayEngine)
+            if engine.isRecording:
+              engine.recordDelta(ExecutionDelta(
+                instructionIndex: pc,
+                kind: dkGlobalWrite,
+                globalName: name,
+                oldGlobal: makeNil(),
+                newGlobal: getReg(vm, instr.a)
+              ))
+          vm.globals[name] = getReg(vm, instr.a)
+
     # --- Arithmetic Operations ---
     of ropAdd:
       setReg(vm, instr.a, doAdd(getReg(vm, instr.b), getReg(vm, instr.c)))

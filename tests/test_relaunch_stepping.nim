@@ -1,10 +1,13 @@
 import std/[unittest, json, osproc, strformat]
 import ../src/etch/interpreter/[regvm_serialize, regvm_debugserver]
+import test_utils
 
 suite "Register VM Debugger - Relaunch and Stepping":
+  let etchExe = findEtchExecutable()
+
   test "Program can be launched and stepped through":
     # Compile the example
-    discard execProcess("./etch --compile examples/fn_order.etch")
+    discard execProcess(etchExe & " --compile examples/fn_order.etch")
 
     # Load and create debug server
     let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")

@@ -1,10 +1,13 @@
 import std/[unittest, json, osproc]
 import ../src/etch/interpreter/[regvm_serialize, regvm_debugserver]
+import test_utils
 
 suite "Register VM Debugger - Variables Display":
+  let etchExe = findEtchExecutable()
+
   test "Variables display correctly during execution":
     # Compile the example
-    discard execProcess("./etch --compile examples/float_test.etch")
+    discard execProcess(etchExe & " --compile examples/float_test.etch")
 
     # Load and create debug server
     let prog = loadRegBytecode("examples/__etch__/float_test.etcx")
@@ -32,7 +35,7 @@ suite "Register VM Debugger - Variables Display":
 
   test "Scopes are available during execution":
     # Compile the example
-    discard execProcess("./etch --compile examples/float_test.etch")
+    discard execProcess(etchExe & " --compile examples/float_test.etch")
 
     # Load and create debug server
     let prog = loadRegBytecode("examples/__etch__/float_test.etcx")
@@ -61,7 +64,7 @@ suite "Register VM Debugger - Variables Display":
 
   test "Local variables are accessible":
     # Compile the example
-    discard execProcess("./etch --compile examples/float_test.etch")
+    discard execProcess(etchExe & " --compile examples/float_test.etch")
 
     # Load and create debug server
     let prog = loadRegBytecode("examples/__etch__/float_test.etcx")

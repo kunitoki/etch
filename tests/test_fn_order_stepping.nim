@@ -1,10 +1,13 @@
 import std/[unittest, json, osproc, strformat, tables]
 import ../src/etch/interpreter/[regvm, regvm_serialize, regvm_debugserver]
+import test_utils
 
 suite "Register VM Debugger - Function Order Stepping":
+  let etchExe = findEtchExecutable()
+
   test "Program structure is correct":
     # Compile the example
-    discard execProcess("./etch --compile examples/fn_order.etch")
+    discard execProcess(etchExe & " --compile examples/fn_order.etch")
 
     # Load bytecode
     let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")
@@ -16,7 +19,7 @@ suite "Register VM Debugger - Function Order Stepping":
 
   test "Launch initializes debugger correctly":
     # Compile the example
-    discard execProcess("./etch --compile examples/fn_order.etch")
+    discard execProcess(etchExe & " --compile examples/fn_order.etch")
 
     # Load and create debug server
     let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")
@@ -37,7 +40,7 @@ suite "Register VM Debugger - Function Order Stepping":
 
   test "Initial stack shows global init":
     # Compile the example
-    discard execProcess("./etch --compile examples/fn_order.etch")
+    discard execProcess(etchExe & " --compile examples/fn_order.etch")
 
     # Load and create debug server
     let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")
@@ -61,7 +64,7 @@ suite "Register VM Debugger - Function Order Stepping":
 
   test "Stepping transitions from global to main":
     # Compile the example
-    discard execProcess("./etch --compile examples/fn_order.etch")
+    discard execProcess(etchExe & " --compile examples/fn_order.etch")
 
     # Load and create debug server
     let prog = loadRegBytecode("examples/__etch__/fn_order.etcx")
