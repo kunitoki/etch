@@ -11,8 +11,8 @@ fn factorial(n: int) -> int {
 
 fn main() -> void {
     let x: int = 5;
-    let result: int = factorial(x);
-    print(result);
+    let res: int = factorial(x);
+    print(res);
 
     let y: int = 10;
     let z: int = x + y;

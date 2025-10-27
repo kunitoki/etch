@@ -391,6 +391,33 @@
 
 						---
 
+						## 🎨 Type Kinds
+
+						**Primitive Types:**
+						- ✅ `tkBool` (1 byte)
+						- 📝 `tkChar` (1 byte)
+						- 🔢 `tkInt` (8 bytes, signed)
+						- 🔢 `tkFloat` (8 bytes, double)
+						- 📝 `tkString`
+						- 🚫 `tkVoid`
+
+						**Composite Types:**
+						- 📦 `tkArray` - Fixed and dynamic arrays
+						- 🔗 `tkRef` - References with generational tracking
+						- 🏗️ `tkObject` - Structured data with fields
+
+						---
+
+						## 🎨 Type Kinds
+
+						**Advanced Types:**
+						- ❓ `tkOption` - Optional values (some/none)
+						- ✨ `tkResult` - Result types (ok/error)
+						- 🎭 `tkGeneric` - Generic type parameters
+						- 🔗 `tkUnion` - Sum types
+
+						---
+
 						## 🎯 Type System: Three-Phase Process
 
 						**Phase 1: Type Collection** 📚
@@ -419,33 +446,6 @@
 						- Expression type checking (expressions.nim)
 						- Statement type checking (statements.nim)
 						- Full program validation
-
-						---
-
-						## 🎨 Type Kinds
-
-						**Primitive Types:**
-						- ✅ `tkBool` (1 byte)
-						- 📝 `tkChar` (1 byte)
-						- 🔢 `tkInt` (8 bytes, signed)
-						- 🔢 `tkFloat` (8 bytes, double)
-						- 📝 `tkString`
-						- 🚫 `tkVoid`
-
-						**Composite Types:**
-						- 📦 `tkArray` - Fixed and dynamic arrays
-						- 🔗 `tkRef` - References with generational tracking
-						- 🏗️ `tkObject` - Structured data with fields
-
-						---
-
-						## 🎨 Type Kinds
-
-						**Advanced Types:**
-						- ❓ `tkOption` - Optional values (some/none)
-						- ✨ `tkResult` - Result types (ok/error)
-						- 🎭 `tkGeneric` - Generic type parameters
-						- 🔗 `tkUnion` - Sum types
 					</textarea>
 				</section>
 

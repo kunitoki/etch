@@ -2103,6 +2103,165 @@ proc checkUnusedVariables*(env: Env, ctx: ProverContext, scopeName: string = "",
       raise newProverError(pos, &"unused variable '{varName}'")
 
 
+proc markGlobalsUsedInFunctions*(env: var Env, ctx: ProverContext) =
+  ## Scan all function bodies for global variable references and mark them as used
+  ## This ensures that globals used in function bodies don't get flagged as unused
+  logProver(ctx.options.verbose, "Scanning function bodies for global variable usage")
+
+  if ctx.prog == nil:
+    return
+
+  # Forward declarations for mutually recursive helpers
+  proc scanExprForGlobals(expr: Expr, env: var Env, globals: Table[string, bool])
+  proc scanStmtForGlobals(stmt: Stmt, env: var Env, globals: Table[string, bool])
+
+  # Helper to recursively scan expressions for identifier references
+  proc scanExprForGlobals(expr: Expr, env: var Env, globals: Table[string, bool]) =
+    case expr.kind
+    of ekInt, ekFloat, ekString, ekBool, ekChar, ekNil:
+      discard
+    of ekVar:
+      # Check if this is a global variable
+      if globals.hasKey(expr.vname) and env.vals.hasKey(expr.vname):
+        # Mark the global as used
+        var info = env.vals[expr.vname]
+        info.used = true
+        env.vals[expr.vname] = info
+        logProver(ctx.options.verbose, "  Marked global '" & expr.vname & "' as used (found in function)")
+    of ekBin:
+      scanExprForGlobals(expr.lhs, env, globals)
+      scanExprForGlobals(expr.rhs, env, globals)
+    of ekUn:
+      scanExprForGlobals(expr.ue, env, globals)
+    of ekCall:
+      for arg in expr.args:
+        scanExprForGlobals(arg, env, globals)
+    of ekIndex:
+      scanExprForGlobals(expr.arrayExpr, env, globals)
+      scanExprForGlobals(expr.indexExpr, env, globals)
+    of ekFieldAccess:
+      scanExprForGlobals(expr.objectExpr, env, globals)
+    of ekArray:
+      for elem in expr.elements:
+        scanExprForGlobals(elem, env, globals)
+    of ekOptionSome:
+      scanExprForGlobals(expr.someExpr, env, globals)
+    of ekOptionNone:
+      discard
+    of ekResultOk:
+      scanExprForGlobals(expr.okExpr, env, globals)
+    of ekResultErr:
+      scanExprForGlobals(expr.errExpr, env, globals)
+    of ekArrayLen:
+      scanExprForGlobals(expr.lenExpr, env, globals)
+    of ekCast:
+      scanExprForGlobals(expr.castExpr, env, globals)
+    of ekSlice:
+      scanExprForGlobals(expr.sliceExpr, env, globals)
+      if expr.startExpr.isSome:
+        scanExprForGlobals(expr.startExpr.get, env, globals)
+      if expr.endExpr.isSome:
+        scanExprForGlobals(expr.endExpr.get, env, globals)
+    of ekMatch:
+      scanExprForGlobals(expr.matchExpr, env, globals)
+      for matchCase in expr.cases:
+        for stmt in matchCase.body:
+          scanStmtForGlobals(stmt, env, globals)
+    of ekIf:
+      scanExprForGlobals(expr.ifCond, env, globals)
+      for stmt in expr.ifThen:
+        scanStmtForGlobals(stmt, env, globals)
+      for elifBranch in expr.ifElifChain:
+        scanExprForGlobals(elifBranch.cond, env, globals)
+        for stmt in elifBranch.body:
+          scanStmtForGlobals(stmt, env, globals)
+      for stmt in expr.ifElse:
+        scanStmtForGlobals(stmt, env, globals)
+    of ekNewRef:
+      if expr.init != nil:
+        scanExprForGlobals(expr.init, env, globals)
+    of ekDeref:
+      scanExprForGlobals(expr.refExpr, env, globals)
+    of ekObjectLiteral:
+      for field in expr.fieldInits:
+        scanExprForGlobals(field.value, env, globals)
+    of ekNew:
+      if expr.initExpr.isSome:
+        scanExprForGlobals(expr.initExpr.get, env, globals)
+    of ekComptime:
+      scanExprForGlobals(expr.comptimeExpr, env, globals)
+    of ekCompiles:
+      for stmt in expr.compilesBlock:
+        scanStmtForGlobals(stmt, env, globals)
+
+  # Helper to recursively scan statements for global references
+  proc scanStmtForGlobals(stmt: Stmt, env: var Env, globals: Table[string, bool]) =
+    case stmt.kind
+    of skVar:
+      if stmt.vinit.isSome:
+        scanExprForGlobals(stmt.vinit.get, env, globals)
+    of skAssign:
+      if globals.hasKey(stmt.aname) and env.vals.hasKey(stmt.aname):
+        # Assignment to global
+        var info = env.vals[stmt.aname]
+        info.used = true
+        env.vals[stmt.aname] = info
+      scanExprForGlobals(stmt.aval, env, globals)
+    of skFieldAssign:
+      scanExprForGlobals(stmt.faTarget, env, globals)
+      scanExprForGlobals(stmt.faValue, env, globals)
+    of skIf:
+      scanExprForGlobals(stmt.cond, env, globals)
+      for s in stmt.thenBody:
+        scanStmtForGlobals(s, env, globals)
+      for elifBranch in stmt.elifChain:
+        scanExprForGlobals(elifBranch.cond, env, globals)
+        for s in elifBranch.body:
+          scanStmtForGlobals(s, env, globals)
+      for s in stmt.elseBody:
+        scanStmtForGlobals(s, env, globals)
+    of skWhile:
+      scanExprForGlobals(stmt.wcond, env, globals)
+      for s in stmt.wbody:
+        scanStmtForGlobals(s, env, globals)
+    of skFor:
+      if stmt.fstart.isSome:
+        scanExprForGlobals(stmt.fstart.get, env, globals)
+      if stmt.fend.isSome:
+        scanExprForGlobals(stmt.fend.get, env, globals)
+      if stmt.farray.isSome:
+        scanExprForGlobals(stmt.farray.get, env, globals)
+      for s in stmt.fbody:
+        scanStmtForGlobals(s, env, globals)
+    of skReturn:
+      if stmt.re.isSome:
+        scanExprForGlobals(stmt.re.get, env, globals)
+    of skExpr:
+      scanExprForGlobals(stmt.sexpr, env, globals)
+    of skDiscard:
+      for e in stmt.dexprs:
+        scanExprForGlobals(e, env, globals)
+    of skComptime:
+      for s in stmt.cbody:
+        scanStmtForGlobals(s, env, globals)
+    of skDefer:
+      for s in stmt.deferBody:
+        scanStmtForGlobals(s, env, globals)
+    of skBreak, skTypeDecl, skImport:
+      discard
+
+  # Build a set of global variable names for quick lookup
+  var globals = initTable[string, bool]()
+  for g in ctx.prog.globals:
+    if g.kind == skVar:
+      globals[g.vname] = true
+
+  # Scan all functions
+  for funcName, funcInstance in ctx.prog.funInstances:
+    logProver(ctx.options.verbose, "  Scanning function: " & funcName)
+    for stmt in funcInstance.body:
+      scanStmtForGlobals(stmt, env, globals)
+
 proc checkUnusedGlobalVariables*(env: Env, ctx: ProverContext) =
   ## Check for unused global variables specifically
   logProver(ctx.options.verbose, "Checking for unused global variables")

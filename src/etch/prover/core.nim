@@ -45,7 +45,11 @@ proc prove*(prog: Program, filename: string = "<unknown>", options: CompilerOpti
     # Check for unused local variables in main function (exclude globals)
     checkUnusedVariables(mainEnv, mainCtx, "main function", excludeGlobals = true)
 
-    # Now check for unused global variables (after main analysis)
+    # Scan all function bodies for global variable usage
+    # This marks globals as "used" if they appear in any function body
+    markGlobalsUsedInFunctions(mainEnv, globalCtx)
+
+    # Now check for unused global variables (after scanning all functions)
     checkUnusedGlobalVariables(mainEnv, globalCtx)
   else:
     logProver(options.verbose, "No main function found to analyze")
