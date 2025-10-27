@@ -18,7 +18,7 @@ else ifeq ($(UNAME_S),Linux)
 endif
 
 # Targets
-TARGETS = simple_example host_functions_example cpp_example vm_inspection_example debug_example cpp_hybrid_debug
+TARGETS = simple_example host_functions_example cpp_example vm_inspection_example cpp_hybrid_debug
 
 .PHONY: all clean
 
@@ -34,9 +34,6 @@ cpp_example: cpp_example.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $< $(LDFLAGS)
 
 vm_inspection_example: vm_inspection_example.c
-	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
-
-debug_example: debug_example.c
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 
 cpp_hybrid_debug: cpp_hybrid_debug.cpp

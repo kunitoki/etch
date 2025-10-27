@@ -13,14 +13,6 @@
         },
         {
             "type": "etch",
-            "request": "launch",
-            "name": "Launch Etch C Program",
-            "program": "${workspaceFolder}/examples/capi/test_debug.etch",
-            "debugExecutable": "${workspaceFolder}/examples/capi/debug_example",
-            "stopOnEntry": true
-        },
-        {
-            "type": "etch",
             "request": "attach",
             "name": "Attach to Etch Remote Debugger",
             "host": "127.0.0.1",

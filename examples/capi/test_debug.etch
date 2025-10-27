@@ -1,6 +1,10 @@
 // Simple test script for debugging C binaries
-// This script demonstrates debugging features like breakpoints,
-// stepping, and variable inspection
+
+// Globals that can be set from C++ before execution
+// These have default values but C++ can override them with ctx.setGlobal()
+let cpp_version: string = "unknown";
+let cpp_ready: bool = false;
+var magic_number: int = 0;  // var so Etch can modify it
 
 fn factorial(n: int) -> int {
     if n <= 1 {
@@ -10,6 +14,11 @@ fn factorial(n: int) -> int {
 }
 
 fn main() -> void {
+    // Print globals set from C++
+    print("C++ Version: " + cpp_version);
+    print("C++ Ready: " + toString(cpp_ready));
+    print("Magic Number: " + toString(magic_number));
+
     let x: int = 5;
     let res: int = factorial(x);
     print(res);
@@ -17,4 +26,8 @@ fn main() -> void {
     let y: int = 10;
     let z: int = x + y;
     print(z);
+
+    // Modify magic_number to test bidirectional communication
+    magic_number = magic_number + 100;
+    print(magic_number);
 }
