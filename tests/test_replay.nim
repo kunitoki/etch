@@ -158,7 +158,7 @@ fn main() -> int {
 
     # Record execution
     let recordCmd = etchExe & " --run --record " & replayFile & " " & testProg
-    let (recordOutput, recordExitCode) = execCmdEx(recordCmd)
+    let (_, recordExitCode) = execCmdEx(recordCmd)
 
     check recordExitCode == 0
     check fileExists(replayFile & ".replay")
@@ -476,7 +476,7 @@ fn main() -> int {
 
     # Replay execution
     let replayCmd = etchExe & " --replay " & replayFile & ".replay --step S,E"
-    let (replayOutput, replayExitCode) = execCmdEx(replayCmd)
+    let (_, replayExitCode) = execCmdEx(replayCmd)
 
     check replayExitCode == 0
 
@@ -541,7 +541,7 @@ fn main() -> void {
 
     # Replay execution
     let replayCmd = etchExe & " --replay " & replayFile & ".replay --step S,E"
-    let (replayOutput, replayExitCode) = execCmdEx(replayCmd)
+    let (_, replayExitCode) = execCmdEx(replayCmd)
 
     check replayExitCode == 0
 
