@@ -119,6 +119,15 @@ typedef struct {
 EtchGlobalEntry etch_globals_table[ETCH_MAX_GLOBALS];
 int etch_globals_count = 0;
 
+static bool etch_has_global(const char* name) {
+  for (int i = 0; i < etch_globals_count; i++) {
+    if (strcmp(etch_globals_table[i].name, name) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 static EtchV etch_get_global(const char* name) {
   for (int i = 0; i < etch_globals_count; i++) {
     if (strcmp(etch_globals_table[i].name, name) == 0) {
@@ -833,6 +842,9 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
       echo &"DEBUG PC {pc}: {instr.op} with opType 1"
 
   case instr.op
+  of ropNoOp:
+    gen.emit(&"// NoOp")
+
   of ropLoadK:
     # LoadK can be either ABx (constant pool index) or AsBx (immediate value)
     if instr.opType == 1:  # ABx format - constant pool index
@@ -1224,7 +1236,6 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
             let argReg = resultReg + 1
             gen.emit(&"etch_print_value(r[{argReg}]);  // Call print")
             gen.emit("printf(\"\\n\");")
-            gen.emit(&"r[{resultReg}] = etch_make_nil();  // print returns nil")
           else:
             gen.emit(&"// TODO: print with {numArgs} args")
 
@@ -1234,7 +1245,6 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
             gen.emit(&"if (r[{argReg}].kind == VK_INT) {{")
             gen.emit(&"  etch_srand((uint64_t)r[{argReg}].ival);")
             gen.emit(&"}}")
-            gen.emit(&"r[{resultReg}] = etch_make_nil();  // seed returns nil")
 
         of "rand":
           if numArgs == 1:
@@ -1441,6 +1451,19 @@ proc emitInstruction(gen: var CGenerator, instr: RegInstruction, pc: int) =
     else:
       gen.emit(&"// TODO: SetGlobal with opType {instr.opType}")
 
+  of ropInitGlobal:
+    if instr.opType == 1:
+      let bx = instr.bx
+      gen.emit(&"// InitGlobal: globals[K[{bx}]] = R[{a}] (only if not already set)")
+      gen.emit(&"if ({bx} < ETCH_CONST_POOL_SIZE) {{")
+      gen.emit(&"  const char* name = etch_constants[{bx}].sval;")
+      gen.emit(&"  if (!etch_has_global(name)) {{")
+      gen.emit(&"    etch_set_global(name, r[{a}]);")
+      gen.emit(&"  }}")
+      gen.emit(&"}}")
+    else:
+      gen.emit(&"// TODO: InitGlobal with opType {instr.opType}")
+
   of ropTailCall, ropTestSet:
     gen.emit(&"// TODO: Implement {instr.op}")
 
@@ -1521,9 +1544,9 @@ proc emitFunction(gen: var CGenerator, funcName: string, info: FunctionInfo) =
           let targetPC = pc + offset
           if targetPC notin deferTargets:
             deferTargets.add(targetPC)
-      elif instr.op == ropExecDefers or instr.op == ropDeferEnd:
-        hasDefer = true  # Function has defer opcodes
-        if instr.op == ropExecDefers and pc notin execDefersLocations:
+      elif instr.op == ropExecDefers:
+        # Track ExecDefers locations for defer jumps (but don't set hasDefer)
+        if pc notin execDefersLocations:
           execDefersLocations.add(pc)
 
   # Generate parameter list
@@ -1539,10 +1562,13 @@ proc emitFunction(gen: var CGenerator, funcName: string, info: FunctionInfo) =
   gen.emit(&"EtchV func_{safeName}({params}) {{")
   gen.incIndent()
 
-  # Allocate registers
-  gen.emit(&"EtchV r[{MAX_REGISTERS}];")
+  # Allocate registers based on actual usage
+  # maxRegister is the highWaterMark (next register to allocate), so we need maxRegister+1 slots
+  # to accommodate indices 0 through maxRegister
+  let numRegisters = max(1, info.maxRegister + 1)
+  gen.emit(&"EtchV r[{numRegisters}];")
   gen.emit("// Initialize registers to nil")
-  gen.emit(&"for (int i = 0; i < {MAX_REGISTERS}; i++) r[i] = etch_make_nil();")
+  gen.emit(&"for (int i = 0; i < {numRegisters}; i++) r[i] = etch_make_nil();")
 
   # Defer stack for defer blocks (only if function uses defer)
   if hasDefer:
@@ -1602,7 +1628,10 @@ proc emitMainWrapper(gen: var CGenerator) =
       let safeName = sanitizeFunctionName(MAIN_FUNCTION_NAME)
       gen.emit(&"EtchV result = func_{safeName}();")
       # Don't print main's return value (matches bytecode VM behavior)
-      gen.emit("// Main's return value is not printed")
+      gen.emit("// If main returns an int, use it as the exit code")
+      gen.emit("if (result.kind == VK_INT) {")
+      gen.emit("  return (int)result.ival;")
+      gen.emit("}")
     else:
       gen.emit("printf(\"No main function found\\n\");")
 

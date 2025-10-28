@@ -1531,6 +1531,10 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
 
         return 0
 
+    of ropNoOp:
+      # No operation - used to maintain jump offsets when optimizations skip instructions
+      log(verbose, "ropNoOp")
+
     of ropPushDefer:
       # Register a defer block by pushing its PC location to the defer stack
       let deferBodyOffset = instr.sbx

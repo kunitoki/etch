@@ -28,7 +28,7 @@
             "cwd": "${workspaceFolder}",
             "externalConsole": false,
             "MIMode": "lldb",
-            "stopAtEntry": false,
+            "stopAtEntry": true,
             "preLaunchTask": "",
         },
         {

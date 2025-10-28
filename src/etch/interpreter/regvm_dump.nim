@@ -214,7 +214,7 @@ proc dumpFunctions*(prog: RegBytecodeProgram) =
     for i, funcTuple in funcList:
       let (name, info) = funcTuple
       echo &"  [{i:3}] {name} @ instruction {info.startPos}"
-      echo &"       Params: {info.numParams}, Locals: {info.numLocals}"
+      echo &"       Params: {info.numParams}, MaxReg: {info.maxRegister}"
 
 proc dumpInstructionsSummary*(prog: RegBytecodeProgram) =
   echo ""
@@ -259,7 +259,7 @@ proc dumpInstructionsByFunctions*(prog: RegBytecodeProgram, maxInstructions: int
 
     # Print function header
     echo ""
-    echo &"--- Function: {funcName} (starts at {info.startPos}, {info.numParams} params, {info.numLocals} locals) ---"
+    echo &"--- Function: {funcName} (starts at {info.startPos}, {info.numParams} params, {info.maxRegister} max regs) ---"
 
     # Determine the end address for this function
     let nextFuncAddress = if funcIdx + 1 < funcList.len:

@@ -82,6 +82,7 @@ type
     ropCall,          # R[A..A+C-2] = functionTable[funcIdx](R[A+1..A+B-1]) - function index call
     ropTailCall,      # tail call optimization
     ropReturn,        # return R[A..A+B-2]
+    ropNoOp,          # No operation (used to maintain jump offsets)
 
     # Defer support
     ropPushDefer,     # Push defer body PC (at pc + sBx) to defer stack
@@ -159,7 +160,7 @@ type
     startPos*: int
     endPos*: int
     numParams*: int
-    numLocals*: int
+    maxRegister*: int  # Maximum register number used in this function
 
   CFFIInfo* = object
     library*: string        # Normalized library name (e.g., "mathlib", "c", "cmath")
@@ -322,6 +323,7 @@ type
   RegAllocator* = object
     nextReg*: uint8
     maxRegs*: uint8
+    highWaterMark*: uint8  # Track the highest register number ever allocated
     regMap*: Table[string, uint8]  # Variable name to register mapping
 
 proc allocReg*(ra: var RegAllocator, name: string = ""): uint8 =
@@ -336,6 +338,9 @@ proc allocReg*(ra: var RegAllocator, name: string = ""): uint8 =
 
   result = ra.nextReg
   inc ra.nextReg
+  # Track the highest register number we've allocated
+  if ra.nextReg > ra.highWaterMark:
+    ra.highWaterMark = ra.nextReg
   if name != "":
     ra.regMap[name] = result
 
@@ -350,6 +355,12 @@ proc freeReg*(ra: var RegAllocator, reg: uint8) =
 
   if reg == ra.nextReg - 1:
     dec ra.nextReg
+
+proc setNextReg*(ra: var RegAllocator, newNextReg: uint8) =
+  # Set nextReg and automatically update highWaterMark if needed
+  ra.nextReg = newNextReg
+  if ra.nextReg > ra.highWaterMark:
+    ra.highWaterMark = ra.nextReg
 
 # Bytecode generation helpers
 proc emitABC*(prog: var RegBytecodeProgram, op: RegOpCode, a, b, c: uint8,

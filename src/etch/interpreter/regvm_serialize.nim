@@ -263,7 +263,7 @@ proc serializeToBinary*(prog: RegBytecodeProgram, sourceHash: string = "",
     stream.write(uint32(info.startPos))
     stream.write(uint32(info.endPos))
     stream.write(uint32(info.numParams))
-    stream.write(uint32(info.numLocals))
+    stream.write(uint32(info.maxRegister))
 
   # Function table (index -> name mapping for direct calls)
   var funcTableCount = uint32(prog.functionTable.len)
@@ -444,7 +444,7 @@ proc deserializeFromBinary*(data: string): RegBytecodeProgram =
     info.startPos = int(stream.readUint32())
     info.endPos = int(stream.readUint32())
     info.numParams = int(stream.readUint32())
-    info.numLocals = int(stream.readUint32())
+    info.maxRegister = int(stream.readUint32())
     result.functions[name] = info
 
   # Read function table (index -> name mapping for direct calls)
@@ -711,6 +711,7 @@ proc `$`*(op: RegOpCode): string =
   of ropCall: "CALL"
   of ropTailCall: "TAILCALL"
   of ropReturn: "RETURN"
+  of ropNoOp: "NOOP"
   of ropPushDefer: "PUSHDEFER"
   of ropExecDefers: "EXECDEFERS"
   of ropDeferEnd: "DEFEREND"

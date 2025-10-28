@@ -154,6 +154,8 @@ proc compileAndRunCBackend(bytecode: RegBytecodeProgram, sourceFile: string, ver
   if not debug:
     compileArgs.add("-O3")
     compileArgs.add("-fomit-frame-pointer")
+  else:
+    compileArgs.add("-g")
 
   compileArgs.add("-o")
   compileArgs.add(exeFile)

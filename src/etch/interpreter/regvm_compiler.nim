@@ -5,7 +5,7 @@ import std/[tables, macros, options, strutils, strformat]
 import ../common/[constants, types, logging]
 import ../frontend/ast
 import ./[regvm, regvm_lifetime]
-import regvm_optimizer
+#import regvm_optimizer
 
 
 type
@@ -21,6 +21,7 @@ type
     lifetimeTracker*: LifetimeTracker  # Track variable lifetimes for debugging and destructors
     currentFunction*: string          # Current function being compiled (for debug info)
     globalVars*: seq[string]          # Names of global variables
+    hasDefers*: bool                  # True if current function has defer statements
 
   LoopInfo = object
     startLabel*: int
@@ -963,7 +964,7 @@ proc compileCall(c: var RegCompiler, e: Expr): uint8 =
     let targetReg = result + uint8(i) + 1
     # Make sure these registers are marked as allocated
     if targetReg >= c.allocator.nextReg:
-      c.allocator.nextReg = targetReg + 1
+      c.allocator.setNextReg(targetReg + 1)
 
   # Then compile arguments
   var argRegs: seq[uint8] = @[]
@@ -1114,7 +1115,7 @@ proc compileForLoop(c: var RegCompiler, s: Stmt) =
   let stepReg = idxReg + 2
 
   # Make sure we account for these registers in the allocator
-  c.allocator.nextReg = max(c.allocator.nextReg, stepReg + 1)
+  c.allocator.setNextReg(max(c.allocator.nextReg, stepReg + 1))
 
   # Initialize loop variables - first operation has debug info so we stop at for statement once
   let startReg = c.compileExpr(startExpr)
@@ -1189,7 +1190,7 @@ proc compileForLoop(c: var RegCompiler, s: Stmt) =
 
   # Restore register state (but keep loop variable if needed)
   # Only restore if loop variable is not used after loop
-  c.allocator.nextReg = savedNextReg + 3  # Keep the 3 loop registers
+  c.allocator.setNextReg(savedNextReg + 3)  # Keep the 3 loop registers
 
 proc compileStmt*(c: var RegCompiler, s: Stmt) =
   case s.kind:
@@ -1469,8 +1470,12 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
     discard c.loopStack.pop()
 
   of skReturn:
-    # Execute all registered defers before returning
-    c.prog.emitABC(ropExecDefers, 0, 0, 0, c.makeDebugInfo(s.pos))
+    # Execute all registered defers before returning (only if function has defers)
+    # Always emit an instruction to keep jump offsets consistent
+    if c.hasDefers:
+      c.prog.emitABC(ropExecDefers, 0, 0, 0, c.makeDebugInfo(s.pos))
+    else:
+      c.prog.emitABC(ropNoOp, 0, 0, 0, c.makeDebugInfo(s.pos))
 
     let debug = c.makeDebugInfo(s.pos)
     if s.re.isSome():
@@ -1497,6 +1502,7 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
 
   of skDefer:
     # Defer statement - compile defer body and emit registration instruction
+    c.hasDefers = true  # Mark that this function has defer statements
     log(c.verbose, &"Compiling defer block with {s.deferBody.len} statements")
 
     # Emit jump over defer body (we'll patch this later)
@@ -1595,14 +1601,19 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
       echo "Error: Field assignment target must be field access or array index" # TODO - implement proper error/warnings handling
       return
 
-proc compileFunDecl*(c: var RegCompiler, name: string, params: seq[Param], retType: EtchType, body: seq[Stmt]) =
+proc compileFunDecl*(c: var RegCompiler, name: string, params: seq[Param], retType: EtchType, body: seq[Stmt]): int =
+  ## Compile a function declaration and return the maximum register used
   # Set current function for debug info
   c.currentFunction = name
+
+  # Reset defer tracking for this function
+  c.hasDefers = false
 
   # Reset allocator for new function - preserve max register count
   c.allocator = RegAllocator(
     nextReg: 0,
     maxRegs: uint8(MAX_REGISTERS),
+    highWaterMark: 0,
     regMap: initTable[string, uint8]()
   )
 
@@ -1621,8 +1632,13 @@ proc compileFunDecl*(c: var RegCompiler, name: string, params: seq[Param], retTy
   for stmt in body:
     c.compileStmt(stmt)
 
-  # Execute all registered defers at the end of the function
-  c.prog.emitABC(ropExecDefers, 0, 0, 0)
+  # Execute all registered defers at the end of the function (only if function has any)
+  # Always emit an instruction to keep jump offsets consistent
+  if c.hasDefers:
+    c.prog.emitABC(ropExecDefers, 0, 0, 0)
+    c.prog.emitABC(ropReturn, 0, 0, 0)
+  else:
+    c.prog.emitABC(ropReturn, 0, 0, 0)
 
   # Exit function scope
   let endPC = c.prog.instructions.len
@@ -1652,6 +1668,9 @@ proc compileFunDecl*(c: var RegCompiler, name: string, params: seq[Param], retTy
      c.prog.instructions[^1].op != ropReturn:
     c.prog.emitABC(ropReturn, 0, 0, 0)  # No results
 
+  # Return the maximum register count used (highWaterMark tracks the highest nextReg value)
+  result = int(c.allocator.highWaterMark)
+
 proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = false, debug: bool = true): RegBytecodeProgram =
   ## Compile AST to register-based bytecode with optimizations
   if verbose:
@@ -1669,6 +1688,7 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
     allocator: RegAllocator(
       nextReg: 0,
       maxRegs: uint8(MAX_REGISTERS),
+      highWaterMark: 0,
       regMap: initTable[string, uint8]()
     ),
     constMap: initTable[string, uint16](),
@@ -1723,10 +1743,14 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
 
       log(verbose, &"Compiling function {fname}")
 
+      # Reset defer tracking for this function
+      compiler.hasDefers = false
+
       # Reset allocator for new function
       compiler.allocator = RegAllocator(
         nextReg: 0,
         maxRegs: uint8(MAX_REGISTERS),
+        highWaterMark: 0,
         regMap: initTable[string, uint8]()
       )
 
@@ -1746,8 +1770,13 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
       for stmt in funcDecl.body:
         compiler.compileStmt(stmt)
 
-      # Execute all registered defers at the end of the function
-      compiler.prog.emitABC(ropExecDefers, 0, 0, 0)
+      # Execute all registered defers at the end of the function (only if function has any)
+      # Always emit an instruction to keep jump offsets consistent
+      if compiler.hasDefers:
+        compiler.prog.emitABC(ropExecDefers, 0, 0, 0)
+        compiler.prog.emitABC(ropReturn, 0, 0, 0)
+      else:
+        compiler.prog.emitABC(ropReturn, 0, 0, 0)
 
       # Exit function scope
       let endPC = compiler.prog.instructions.len
@@ -1776,13 +1805,14 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
 
       let endPos = compiler.prog.instructions.len - 1
 
-      # Store function info
+      # Store function info with max register count
+      let maxReg = int(compiler.allocator.highWaterMark)
       compiler.prog.functions[fname] = regvm.FunctionInfo(
         name: fname,
         startPos: startPos,
         endPos: endPos,
         numParams: funcDecl.params.len,
-        numLocals: 0  # TODO: Calculate actual locals
+        maxRegister: maxReg
       )
 
       log(verbose, &"Compiled function {fname} at {startPos}..{endPos}")
@@ -1836,12 +1866,13 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
 
     # Register the global initialization code as a special function for debugging
     let globalInitEnd = compiler.prog.instructions.len - 1
+    let globalMaxReg = int(compiler.allocator.highWaterMark)
     compiler.prog.functions[GLOBAL_INIT_FUNCTION_NAME] = regvm.FunctionInfo(
       name: GLOBAL_INIT_FUNCTION_NAME,
       startPos: globalInitStart,
       endPos: globalInitEnd,
       numParams: 0,
-      numLocals: 0
+      maxRegister: globalMaxReg
     )
 
     log(verbose, &"Registered {GLOBAL_INIT_FUNCTION_NAME} initialization function at PC {globalInitStart}..{globalInitEnd}")
@@ -1861,7 +1892,7 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
     )
 
     let mainStartPos = compiler.prog.instructions.len
-    compiler.compileFunDecl(MAIN_FUNCTION_NAME, mainFunc.params, mainFunc.ret, mainFunc.body)
+    let mainMaxReg = compiler.compileFunDecl(MAIN_FUNCTION_NAME, mainFunc.params, mainFunc.ret, mainFunc.body)
     let mainEndPos = compiler.prog.instructions.len
 
     # Store main function info
@@ -1870,7 +1901,7 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
       startPos: mainStartPos,
       endPos: mainEndPos,
       numParams: mainFunc.params.len,
-      numLocals: 0
+      maxRegister: mainMaxReg
     )
 
     log(verbose, &"Compiled main function at {mainStartPos}..{mainEndPos}")
