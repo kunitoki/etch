@@ -104,8 +104,13 @@ proc newReplayEngine*(vm: RegisterVM, snapshotInterval: int = DEFAULT_SNAPSHOT_I
 
 # Deep copy a RegisterFrame (needed for snapshots)
 proc copyRegisterFrame(frame: RegisterFrame): RegisterFrame =
+  # Deep copy the register array (seq assignment is shallow, so we need to copy explicitly)
+  var regsCopy = newSeq[V](frame.regs.len)
+  for i in 0..<frame.regs.len:
+    regsCopy[i] = frame.regs[i]
+
   result = RegisterFrame(
-    regs: frame.regs,
+    regs: regsCopy,
     pc: frame.pc,
     base: frame.base,
     returnAddr: frame.returnAddr,
@@ -448,8 +453,11 @@ proc saveToFile*(engine: ReplayEngine, filename: string, sourceFile: string) =
         stream.write(int32(frame.returnAddr))
         stream.write(uint8(frame.baseReg))
 
+        # Write register count (dynamic size optimization)
+        stream.write(uint32(frame.regs.len))
+
         # Write registers
-        for i in 0..<MAX_REGISTERS:
+        for i in 0..<frame.regs.len:
           # Simplified V serialization - just write kind and basic values
           let val = frame.regs[i]
           stream.write(uint8(val.kind))
@@ -548,6 +556,9 @@ proc loadFromFile*(filename: string): tuple[sourceFile: string, totalStatements:
         let returnAddr = stream.readInt32()
         let baseReg = stream.readUint8()
 
+        # Read register count (dynamic size optimization)
+        let regCount = int(stream.readUint32())
+
         var frame = RegisterFrame(
           pc: pc,
           base: base,
@@ -557,8 +568,11 @@ proc loadFromFile*(filename: string): tuple[sourceFile: string, totalStatements:
           deferReturnPC: -1
         )
 
+        # Allocate registers with dynamic size
+        frame.regs = newSeq[V](regCount)
+
         # Read registers
-        for i in 0..<MAX_REGISTERS:
+        for i in 0..<regCount:
           let kind = VKind(stream.readUint8())
           case kind
           of vkInt:

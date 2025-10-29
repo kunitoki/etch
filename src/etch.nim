@@ -523,6 +523,10 @@ when isMainModule:
       echo ""
 
     echo "==== Replay Complete ===="
+
+    # Clean up replay engine before exiting
+    vm.cleanupReplayEngine()
+
     quit 0
 
   if files.len != 1: usage()
@@ -599,7 +603,11 @@ when isMainModule:
           logCLI(verbose, &"\nSaved {stats.statements} statements ({stats.snapshots} snapshots) to {replayFile}")
       except Exception as e:
         echo &"Error saving replay: {e.msg}"
+        vm.cleanupReplayEngine()
         quit 1
+
+    # Clean up replay engine after saving
+    vm.cleanupReplayEngine()
 
     quit exitCode
 

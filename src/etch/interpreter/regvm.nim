@@ -127,7 +127,7 @@ type
     debug*: RegDebugInfo  # Debug information for this instruction
 
   RegisterFrame* = object
-    regs*: array[256, V]  # Register file (actual size 256, indexed 0-255)
+    regs*: seq[V]                    # Register file (dynamically sized based on function's maxRegister)
     pc*: int                         # Program counter
     base*: int                       # Base register for current function
     returnAddr*: int                 # Return address for function calls
@@ -136,11 +136,11 @@ type
     deferReturnPC*: int              # PC to return to after executing a defer body
 
   RegisterVM* = ref object
-    frames*: seq[RegisterFrame]     # Call stack of register frames
+    frames*: seq[RegisterFrame]      # Call stack of register frames
     currentFrame*: ptr RegisterFrame
     constants*: seq[V]               # Constant pool
-    globals*: Table[string, V]      # Global variables
-    program*: RegBytecodeProgram    # The program being executed
+    globals*: Table[string, V]       # Global variables
+    program*: RegBytecodeProgram     # The program being executed
     debugger*: pointer               # Optional debugger (nil for production)
     isDebugging*: bool               # True when running in debug server mode
     outputCallback*: proc(output: string) {.closure.}  # Callback for capturing program output in debug mode

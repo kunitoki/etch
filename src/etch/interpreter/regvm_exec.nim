@@ -51,10 +51,30 @@ proc etch_rand(vm: RegisterVM): uint64 {.inline.} =
   result = x * 0x2545F4914F6CDD1D'u64  # Multiplication constant for better distribution
 
 
+# Helper to create initial frame with dynamically sized register array
+proc createInitialFrame(prog: RegBytecodeProgram): RegisterFrame =
+  result = RegisterFrame()
+
+  # Allocate registers based on <global> function's maxRegister
+  if prog.functions.hasKey(GLOBAL_INIT_FUNCTION_NAME):
+    let globalFunc = prog.functions[GLOBAL_INIT_FUNCTION_NAME]
+    let numRegs = max(1, globalFunc.maxRegister + 1)
+    result.regs = newSeq[V](numRegs)
+    for i in 0..<numRegs:
+      result.regs[i] = V(kind: vkNil)
+  else:
+    # Default to 64 registers if no global function (shouldn't normally happen)
+    result.regs = newSeq[V](64)
+    for i in 0..<64:
+      result.regs[i] = V(kind: vkNil)
+
+
 # Create new VM instance
 proc newRegisterVM*(prog: RegBytecodeProgram): RegisterVM =
+  let initialFrame = createInitialFrame(prog)
+
   result = RegisterVM(
-    frames: @[RegisterFrame()],
+    frames: @[initialFrame],
     program: prog,
     constants: prog.constants,
     globals: initTable[string, V](),
@@ -72,8 +92,10 @@ proc newRegisterVM*(prog: RegBytecodeProgram): RegisterVM =
 
 
 proc newRegisterVMWithDebugger*(prog: RegBytecodeProgram, debugger: RegEtchDebugger): RegisterVM =
+  let initialFrame = createInitialFrame(prog)
+
   result = RegisterVM(
-    frames: @[RegisterFrame()],
+    frames: @[initialFrame],
     program: prog,
     constants: prog.constants,
     globals: initTable[string, V](),
@@ -95,10 +117,11 @@ proc newRegisterVMWithDebugger*(prog: RegBytecodeProgram, debugger: RegEtchDebug
 
 proc newRegisterVMWithProfiler*(prog: RegBytecodeProgram): RegisterVM =
   let profiler = newProfiler()
-  GC_ref(profiler)  # Keep profiler alive
+
+  let initialFrame = createInitialFrame(prog)
 
   result = RegisterVM(
-    frames: @[RegisterFrame()],
+    frames: @[initialFrame],
     program: prog,
     constants: prog.constants,
     globals: initTable[string, V](),
@@ -1261,10 +1284,19 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
           let profiler = cast[RegVMProfiler](vm.profiler)
           profiler.enterFunction(funcName)
 
-        # Create new frame for the function
+        # Create new frame for the function with dynamic register allocation
+        # Allocate exactly the number of registers this function needs
+        let numRegs = max(1, funcInfo.maxRegister + 1)
         var newFrame = RegisterFrame()
+        newFrame.regs = newSeq[V](numRegs)
         newFrame.returnAddr = pc + 1
         newFrame.baseReg = resultReg
+
+        log(verbose, "Allocating frame with " & $numRegs & " registers (maxRegister=" & $funcInfo.maxRegister & ")")
+
+        # Initialize all registers to nil
+        for i in 0..<numRegs:
+          newFrame.regs[i] = V(kind: vkNil)
 
         # Copy arguments to new frame's registers
         for i in 0'u8..<numArgs:
@@ -1686,15 +1718,23 @@ proc runRegProgramWithProfiler*(prog: RegBytecodeProgram, verbose: bool = false)
 proc enableReplayRecording*(vm: RegisterVM, snapshotInterval: int = DEFAULT_SNAPSHOT_INTERVAL) =
   let engine = newReplayEngine(vm, snapshotInterval)
   vm.replayEngine = cast[pointer](engine)
-  GC_ref(engine)  # Keep engine alive
+  GC_ref(engine)  # Must keep reference - engine stored as pointer in VM
   engine.startRecording()
 
 
-# Stop replay recording
+# Stop replay recording (but keep engine alive for data extraction)
 proc stopReplayRecording*(vm: RegisterVM) =
   if vm.replayEngine != nil:
     let engine = cast[ReplayEngine](vm.replayEngine)
     engine.stopRecording()
+
+
+# Clean up replay engine (call after data has been saved/used)
+proc cleanupReplayEngine*(vm: RegisterVM) =
+  if vm.replayEngine != nil:
+    let engine = cast[ReplayEngine](vm.replayEngine)
+    GC_unref(engine)  # Release the reference we took in enableReplayRecording/restoreReplayEngine
+    vm.replayEngine = nil
 
 
 # Seek to a specific statement index
