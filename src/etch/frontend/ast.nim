@@ -17,6 +17,7 @@ type
     name*: string              # for tkGeneric, tkUserDefined, tkDistinct, tkObject
     inner*: EtchType           # for tkRef and tkArray, base type for tkDistinct
     fields*: seq[ObjectField]  # for tkObject
+    destructor*: Option[string]  # for tkObject - destructor function name  (fn ~(obj: Type))
     generation*: uint32        # for generational reference tracking
     unionTypes*: seq[EtchType] # for tkUnion - list of possible types
 
@@ -135,7 +136,7 @@ type
       compilesEnv*: Table[string, EtchType]           # captured type environment from surrounding scope
 
   StmtKind* = enum
-    skVar, skAssign, skFieldAssign, skIf, skWhile, skFor, skBreak, skExpr, skReturn, skComptime, skTypeDecl, skImport, skDiscard, skDefer
+    skVar, skAssign, skFieldAssign, skIf, skWhile, skFor, skBreak, skExpr, skReturn, skComptime, skTypeDecl, skImport, skDiscard, skDefer, skBlock
 
   VarFlag* = enum
     vfLet, vfVar
@@ -191,6 +192,8 @@ type
       discard
     of skDefer:
       deferBody*: seq[Stmt]   # statements to execute at scope exit
+    of skBlock:
+      blockBody*: seq[Stmt]   # statements in unnamed scope block
 
   ImportItem* = object
     itemKind*: string       # "function", "const", "type"
@@ -234,12 +237,14 @@ proc tString*(): EtchType = EtchType(kind: tkString)
 proc tInferred*(): EtchType = EtchType(kind: tkInferred)
 proc tArray*(inner: EtchType): EtchType = EtchType(kind: tkArray, inner: inner)
 proc tRef*(inner: EtchType): EtchType = EtchType(kind: tkRef, inner: inner)
+proc tWeak*(inner: EtchType): EtchType = EtchType(kind: tkWeak, inner: inner)
 proc tGeneric*(name: string): EtchType = EtchType(kind: tkGeneric, name: name)
 proc tOption*(inner: EtchType): EtchType = EtchType(kind: tkOption, inner: inner)
 proc tResult*(inner: EtchType): EtchType = EtchType(kind: tkResult, inner: inner)
 proc tUserDefined*(name: string): EtchType = EtchType(kind: tkUserDefined, name: name)
 proc tDistinct*(name: string, base: EtchType): EtchType = EtchType(kind: tkDistinct, name: name, inner: base)
-proc tObject*(name: string, fields: seq[ObjectField]): EtchType = EtchType(kind: tkObject, name: name, fields: fields)
+proc tObject*(name: string, fields: seq[ObjectField], destructor: Option[string] = none(string)): EtchType =
+  EtchType(kind: tkObject, name: name, fields: fields, destructor: destructor)
 proc tUnion*(types: seq[EtchType]): EtchType = EtchType(kind: tkUnion, unionTypes: types)
 
 
@@ -264,6 +269,7 @@ proc `$`*(t: EtchType): string =
   of tkString: "string"
   of tkArray: "array[" & $t.inner & "]"
   of tkRef: "ref[" & $t.inner & "]"
+  of tkWeak: "weak[" & $t.inner & "]"
   of tkGeneric: t.name
   of tkOption: "option[" & $t.inner & "]"
   of tkResult: "result[" & $t.inner & "]"
@@ -339,6 +345,7 @@ proc copyType*(t: EtchType): EtchType =
   of tkString: tString()
   of tkArray: tArray(copyType(t.inner))
   of tkRef: tRef(copyType(t.inner))
+  of tkWeak: tWeak(copyType(t.inner))
   of tkGeneric: tGeneric(t.name)
   of tkOption: tOption(copyType(t.inner))
   of tkResult: tResult(copyType(t.inner))
@@ -371,7 +378,7 @@ proc isCompatibleWith*(actual: EtchType, expected: EtchType): bool =
 
   if actual.kind == expected.kind:
     case actual.kind
-    of tkRef, tkArray, tkOption:
+    of tkRef, tkWeak, tkArray, tkOption:
       return actual.inner.isCompatibleWith(expected.inner)
     of tkResult:
       return actual.inner.isCompatibleWith(expected.inner)
@@ -399,7 +406,7 @@ proc generateOverloadSignature*(funDecl: FunDecl): string =
   ## Format: funcName__paramTypes_returnType
   result = funDecl.name & FUNCTION_NAME_SEPARATOR_STRING
 
-  # Compact type encoding: v=void, b=bool, c=char, i=int, f=float, s=string, A=array, R=ref, O=option, E=result, U=user-defined, D=distinct, T=object, N=union
+  # Compact type encoding: v=void, b=bool, c=char, i=int, f=float, s=string, A=array, R=ref, W=weak, O=option, E=result, U=user-defined, D=distinct, T=object, N=union
   proc encodeType(t: EtchType): string =
     case t.kind
     of tkVoid: return "v"
@@ -410,6 +417,7 @@ proc generateOverloadSignature*(funDecl: FunDecl): string =
     of tkString: return "s"
     of tkArray: return "A" & encodeType(t.inner)
     of tkRef: return "R" & encodeType(t.inner)
+    of tkWeak: return "W" & encodeType(t.inner)
     of tkGeneric: return "G" & $t.name.len & t.name
     of tkOption: return "O" & encodeType(t.inner)
     of tkResult: return "E" & encodeType(t.inner)

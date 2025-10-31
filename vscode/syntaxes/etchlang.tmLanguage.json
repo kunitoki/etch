@@ -22,7 +22,7 @@
     "types": {
       "patterns": [
         {
-          "match": "\\b(nil|void|bool|char|int|float|string|array|ref|option|result)\\b",
+          "match": "\\b(nil|void|bool|char|int|float|string|array|ref|weak|option|result)\\b",
           "name": "storage.type.etchlang"
         }
       ]

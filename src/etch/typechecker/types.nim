@@ -15,23 +15,23 @@ type
 
 
 proc typeEq*(a, b: EtchType): bool =
-  if a.kind != b.kind: return false
+  # Special case: tkUserDefined can match tkObject with same name
+  if a.kind != b.kind:
+    if (a.kind == tkUserDefined and b.kind == tkObject) or
+       (a.kind == tkObject and b.kind == tkUserDefined):
+      return a.name == b.name
+    return false
+
   case a.kind
   of tkRef: return typeEq(a.inner, b.inner)
+  of tkWeak: return typeEq(a.inner, b.inner)
   of tkArray: return typeEq(a.inner, b.inner)
   of tkOption: return typeEq(a.inner, b.inner)
   of tkResult: return typeEq(a.inner, b.inner)
   of tkGeneric: return a.name == b.name
   of tkUserDefined, tkDistinct, tkObject:
     # For user-defined and object types, check name equality
-    # Also allow matching between tkUserDefined and tkObject with same name
-    if a.kind == b.kind:
-      return a.name == b.name
-    elif (a.kind == tkUserDefined and b.kind == tkObject) or
-         (a.kind == tkObject and b.kind == tkUserDefined):
-      return a.name == b.name
-    else:
-      return false
+    return a.name == b.name
   of tkUnion:
     if a.unionTypes.len != b.unionTypes.len: return false
     # Check if all types in a exist in b (order doesn't matter for union equality)
@@ -66,6 +66,7 @@ proc resolveTy*(t: EtchType, subst: var TySubst): EtchType =
     if t.name in subst: return subst[t.name]
     else: return t
   of tkRef: return tRef(resolveTy(t.inner, subst))
+  of tkWeak: return tWeak(resolveTy(t.inner, subst))
   of tkArray: return tArray(resolveTy(t.inner, subst))
   of tkOption: return tOption(resolveTy(t.inner, subst))
   of tkResult: return tResult(resolveTy(t.inner, subst))
@@ -139,6 +140,14 @@ proc canAssignDistinct*(targetType: EtchType, sourceType: EtchType): bool =
   elif sourceType.kind == tkDistinct:
     # Can't implicitly convert distinct type to base type
     return false
+  # Allow ref[T] <-> weak[T] conversions
+  elif targetType.kind == tkRef and sourceType.kind == tkWeak and typeEq(targetType.inner, sourceType.inner):
+    return true  # weak to strong promotion
+  elif targetType.kind == tkWeak and sourceType.kind == tkRef and typeEq(targetType.inner, sourceType.inner):
+    return true  # strong to weak conversion
+  # Allow nil (ref[void]) to be assigned to weak[T]
+  elif sourceType.kind == tkRef and sourceType.inner.kind == tkVoid and targetType.kind == tkWeak:
+    return true
   else:
     # Regular type equality
     return typeEq(targetType, sourceType)
@@ -160,6 +169,10 @@ proc resolveNestedUserTypes*(sc: Scope, typ: EtchType, pos: Pos): EtchType =
     # Recursively resolve the inner type
     let resolvedInner = resolveNestedUserTypes(sc, typ.inner, pos)
     return tRef(resolvedInner)
+  of tkWeak:
+    # Recursively resolve the inner type
+    let resolvedInner = resolveNestedUserTypes(sc, typ.inner, pos)
+    return tWeak(resolvedInner)
   of tkArray:
     # Recursively resolve the element type
     let resolvedInner = resolveNestedUserTypes(sc, typ.inner, pos)

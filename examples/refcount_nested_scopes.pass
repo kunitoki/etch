@@ -1,0 +1,11 @@
+=== Nested Scopes Test ===
+Outer created: 1
+Inner created: 2
+Deepest created: 3
+All three alive
+Destroying node with value: 3
+After deepest scope - inner still alive: 2
+Destroying node with value: 2
+After inner scope - outer still alive: 1
+=== Test Complete ===
+Destroying node with value: 1

@@ -1,0 +1,3 @@
+Weak ref is still alive
+1
+Weak ref is nil after strong ref is gone

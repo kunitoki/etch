@@ -1,0 +1,27 @@
+// Test destructor with field access
+// Validates that destructor can access object fields safely
+
+type Resource = object {
+  name: string;
+  value: int;
+  active: bool;
+};
+
+fn ~(r: Resource) -> void {
+  print("Cleaning up resource:");
+  print("  Name: " + r.name);
+  print("  Value: " + toString(r.value));
+  print("  Active: " + toString(r.active));
+}
+
+fn main() -> void {
+  print("Creating resource with fields...");
+  let res = new[Resource](
+    name: "TestResource",
+    value: 42,
+    active: true
+  );
+  discard res;
+  print("Resource created");
+  print("Exiting main...");
+}

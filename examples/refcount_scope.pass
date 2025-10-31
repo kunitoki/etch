@@ -1,0 +1,18 @@
+=== Scope Tests ===
+Outer value:
+100
+Inner function value:
+200
+Outer after scopeTest1:
+100
+Param-based value:
+1
+Param-based value:
+2
+Param-based value:
+3
+Conditional value:
+300
+Outer after conditional:
+100
+=== All Scope Tests Complete ===

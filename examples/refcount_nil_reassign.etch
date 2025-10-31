@@ -1,0 +1,42 @@
+// Test nil reassignment and conditionals
+type Node = object {
+    value: int;
+};
+
+fn ~(node: Node) {
+    print("Destroying: " + node.value.toString());
+}
+
+fn main() -> void {
+    print("=== Nil Reassignment Test ===");
+
+    var ref1: ref[Node] = new[Node](value: 10);
+    print("Created ref1: " + ref1.value.toString());
+
+    var ref2: ref[Node] = new[Node](value: 20);
+    print("Created ref2: " + ref2.value.toString());
+
+    // Reassign ref1 to nil - should destroy node with value 10
+    ref1 = nil;
+    print("Set ref1 to nil");
+
+    if ref1 == nil {
+        print("ref1 is nil");
+    } else {
+        print("ref1 is not nil");
+    }
+
+    if ref2 != nil {
+        print("ref2 is not nil: " + ref2.value.toString());
+    }
+
+    // Reassign ref2 to nil - should destroy node with value 20
+    ref2 = nil;
+    print("Set ref2 to nil");
+
+    if ref2 == nil {
+        print("ref2 is now nil");
+    }
+
+    print("=== Test Complete ===");
+}

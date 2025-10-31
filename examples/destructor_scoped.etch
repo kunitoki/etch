@@ -1,0 +1,27 @@
+// Test destructor with nested scopes
+// KNOWN LIMITATION: Destructors are NOT called when functions return
+// This is because the compiler doesn't generate ropDecRef for local variables
+// Objects are only destroyed when explicitly reassigned or at main() exit
+
+type Resource = object {
+  id: int;
+};
+
+fn ~(r: Resource) -> void {
+  print("Destructor called for Resource #" + toString(r.id));
+}
+
+fn createAndUse(id: int) -> void {
+  print("Creating resource " + toString(id));
+  let res = new[Resource]( id: id );
+  discard res;
+  print("Exiting scope for resource " + toString(id));
+}
+
+fn main() -> void {
+  print("Starting test...");
+  createAndUse(1);
+  createAndUse(2);
+  createAndUse(3);
+  print("All scopes exited");
+}

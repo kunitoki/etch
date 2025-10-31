@@ -350,7 +350,7 @@ when isMainModule:
       # Check if there's an optional backend argument (not a file path)
       if i + 1 <= paramCount():
         let nextArg = paramStr(i + 1)
-        if not nextArg.startsWith("--") and not nextArg.endsWith(".etch") and not ('/' in nextArg or '\\' in nextArg):
+        if not nextArg.startsWith("--") and not nextArg.endsWith(SOURCE_FILE_EXTENSION) and not ('/' in nextArg or '\\' in nextArg):
           runBackend = nextArg
           inc i
     elif a == "--gen":

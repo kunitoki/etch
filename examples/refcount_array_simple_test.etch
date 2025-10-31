@@ -1,0 +1,17 @@
+// Simple test for array ref assignment
+type Node = object {
+    value: int;
+};
+
+fn ~(node: Node) {
+    print("Destroying: " + node.value.toString());
+}
+
+fn main() -> void {
+    var arr: array[ref[Node]] = [new[Node](value: 1), new[Node](value: 2)];
+    print("Created array");
+
+    // This should destroy element 1 immediately
+    arr[1] = nil;
+    print("After nil assignment");
+}

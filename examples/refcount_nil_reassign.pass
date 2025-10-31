@@ -1,0 +1,11 @@
+=== Nil Reassignment Test ===
+Created ref1: 10
+Created ref2: 20
+Destroying: 10
+Set ref1 to nil
+ref1 is nil
+ref2 is not nil: 20
+Destroying: 20
+Set ref2 to nil
+ref2 is now nil
+=== Test Complete ===

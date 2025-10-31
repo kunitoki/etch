@@ -1,0 +1,9 @@
+=== Weak Promotion Test ===
+Created original: 99
+Created weak reference
+Promoted weak to strong
+Original scope ended
+Promoted still alive: 99
+Weak ref still valid: 99
+=== Test Complete ===
+Destroying: 99

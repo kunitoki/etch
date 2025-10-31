@@ -1,0 +1,31 @@
+// Test nested scopes with references
+type Node = object {
+    value: int;
+};
+
+fn ~(node: Node) {
+    print("Destroying node with value: " + node.value.toString());
+}
+
+fn main() -> void {
+    print("=== Nested Scopes Test ===");
+
+    var outer: ref[Node] = new[Node](value: 1);
+    print("Outer created: " + outer.value.toString());
+
+    {
+        var inner: ref[Node] = new[Node](value: 2);
+        print("Inner created: " + inner.value.toString());
+
+        {
+            var deepest: ref[Node] = new[Node](value: 3);
+            print("Deepest created: " + deepest.value.toString());
+            print("All three alive");
+        }
+
+        print("After deepest scope - inner still alive: " + inner.value.toString());
+    }
+
+    print("After inner scope - outer still alive: " + outer.value.toString());
+    print("=== Test Complete ===");
+}

@@ -1,0 +1,17 @@
+=== Function Argument Tests ===
+Node value:
+100
+Before modification:
+100
+After modification:
+200
+Linked nodes:
+10
+20
+Got value:
+200
+Node value:
+200
+Node value:
+200
+=== All Argument Tests Complete ===

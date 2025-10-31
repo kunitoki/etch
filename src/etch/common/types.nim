@@ -20,7 +20,7 @@ type
 
   TypeKind* = enum
     tkVoid, tkBool, tkChar, tkInt, tkFloat, tkString, tkArray, tkObject, tkUnion,
-    tkRef, tkGeneric, tkOption, tkResult, tkUserDefined, tkDistinct, tkInferred
+    tkRef, tkWeak, tkGeneric, tkOption, tkResult, tkUserDefined, tkDistinct, tkInferred
 
   GlobalValue* = object
     kind*: TypeKind

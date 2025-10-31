@@ -1,0 +1,47 @@
+// Test multiple weak references to same object
+type Node = object {
+    value: int;
+};
+
+fn ~(node: Node) {
+    print("Destroying: " + node.value.toString());
+}
+
+fn main() -> void {
+    print("=== Multiple Weak References Test ===");
+
+    var weak1: weak[Node];
+    var weak2: weak[Node];
+    var weak3: weak[Node];
+
+    {
+        let strong: ref[Node] = new[Node](value: 42);
+        print("Created strong ref: " + strong.value.toString());
+
+        weak1 = strong;
+        weak2 = strong;
+        weak3 = strong;
+
+        // All three weak refs point to same object
+        let check1: ref[Node] = weak1;
+        let check2: ref[Node] = weak2;
+        let check3: ref[Node] = weak3;
+
+        if check1 != nil {
+            print("Weak1 alive: " + check1.value.toString());
+        }
+        if check2 != nil {
+            print("Weak2 alive: " + check2.value.toString());
+        }
+        if check3 != nil {
+            print("Weak3 alive: " + check3.value.toString());
+        }
+    }
+
+    // All weak refs should be nil now
+    print(if weak1 == nil { "Weak1 is nil" } else { "Weak1 still alive" });
+    print(if weak2 == nil { "Weak2 is nil" } else { "Weak2 still alive" });
+    print(if weak3 == nil { "Weak3 is nil" } else { "Weak3 still alive" });
+
+    print("=== Test Complete ===");
+}

@@ -1,0 +1,6 @@
+Creating objects...
+Objects created
+Exiting main...
+Parent destructor called for: ParentObj
+Parent child ID was: 123
+Child destructor called for ID: 123

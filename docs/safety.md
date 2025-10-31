@@ -73,7 +73,7 @@ See [Overflow Detection](overflow.md) for detailed documentation.
 
 ```etch
 // ❌ No null pointers in Etch!
-let x: int = null;  // ERROR: null doesn't exist
+let x: ref[int] = nil;  // ERROR: nil doesn't exist
 
 // ✅ Use option[T] for optional values
 let x: option[int] = none;
@@ -118,7 +118,7 @@ let y: float = 3.14;
 let z = x + y;  // ERROR: cannot add int and float
 
 // ✅ Explicit conversions required
-let z = toFloat(x) + y;  // Safe (if toFloat exists)
+let z = float(x) + y;  // Safe
 ```
 
 ### 7. Unreachable Code Detection

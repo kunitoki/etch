@@ -1,0 +1,46 @@
+// Test weak reference promotion keeps object alive
+type Node = object {
+    value: int;
+};
+
+fn ~(node: Node) {
+    print("Destroying: " + node.value.toString());
+}
+
+fn main() -> void {
+    print("=== Weak Promotion Test ===");
+
+    var weak_ref: weak[Node];
+    var promoted: ref[Node];
+
+    {
+        let original: ref[Node] = new[Node](value: 99);
+        print("Created original: " + original.value.toString());
+
+        weak_ref = original;
+        print("Created weak reference");
+
+        // Promote weak to strong before original dies
+        promoted = weak_ref;
+        print("Promoted weak to strong");
+    }
+
+    print("Original scope ended");
+
+    // promoted should keep the object alive
+    if promoted != nil {
+        print("Promoted still alive: " + promoted.value.toString());
+    } else {
+        print("Promoted is nil");
+    }
+
+    // weak_ref should still work since object is alive
+    let check: ref[Node] = weak_ref;
+    if check != nil {
+        print("Weak ref still valid: " + check.value.toString());
+    } else {
+        print("Weak ref is nil");
+    }
+
+    print("=== Test Complete ===");
+}

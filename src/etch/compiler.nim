@@ -1,7 +1,7 @@
 # compiler.nim
 # Etch compiler: compilation and execution orchestration
 
-import std/[os, tables, times, strformat, hashes, options]
+import std/[os, tables, times, strformat, hashes, options, strutils]
 import common/[constants, types, errors, logging, cffi, library_resolver]
 import frontend/[ast, lexer, parser]
 import interpreter/[regvm, regvm_compiler, regvm_exec, regvm_serialize]  # Register VM
@@ -228,6 +228,25 @@ proc parseAndTypecheck*(options: CompilerOptions): (Program, string, Table[strin
   logCompiler(options.verbose, "Processing imports")
   globalModuleRegistry.processImports(prog, options.sourceFile)
   logCompiler(options.verbose, &"After imports: {prog.funs.len} functions and {prog.globals.len} globals")
+
+  # Register destructors with their types
+  logCompiler(options.verbose, "Registering destructors")
+  for name, overloads in prog.funs:
+    # Check if this is a destructor (name starts with ~)
+    if name.startsWith("~") and name.len > 1:
+      let typeName = name[1..^1]  # Remove ~ prefix
+      if prog.types.hasKey(typeName):
+        # Set the destructor field on the type
+        prog.types[typeName].destructor = some(name)
+        logCompiler(options.verbose, &"Registered destructor ~{typeName} for type {typeName}")
+
+        # Also add destructor to funInstances so it gets compiled into bytecode
+        # Destructors are never explicitly called in user code, so they won't be
+        # instantiated automatically - we need to do it manually
+        if overloads.len > 0:
+          let destructor = overloads[0]  # Destructors don't have overloads
+          prog.funInstances[name] = destructor
+          logCompiler(options.verbose, &"Added destructor {name} to funInstances for bytecode compilation")
 
   # For this MVP, instantiation occurs when functions are called during typecheck inference
   logCompiler(options.verbose, "Starting type checking phase")

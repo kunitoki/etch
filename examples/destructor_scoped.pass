@@ -1,0 +1,8 @@
+Starting test...
+Creating resource 1
+Exiting scope for resource 1
+Creating resource 2
+Exiting scope for resource 2
+Creating resource 3
+Exiting scope for resource 3
+All scopes exited

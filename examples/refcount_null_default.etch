@@ -1,0 +1,23 @@
+// Test reference counting with scopes
+type Node = object {
+    value: int;
+};
+
+fn ~(node: Node) {
+    print(node.value.toString());
+}
+
+fn main() -> void {
+    print("=== Scope Tests ===");
+
+    {
+        var outer: ref[Node];
+        if (outer == nil) {
+            print("outer is nil");
+        } else {
+            print(outer.value);
+        }
+    }
+
+    print("=== All Scope Tests Complete ===");
+}

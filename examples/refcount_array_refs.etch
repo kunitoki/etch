@@ -1,0 +1,40 @@
+// Test arrays of references
+type Node = object {
+    value: int;
+};
+
+fn ~(node: Node) {
+    print("Destroying: " + node.value.toString());
+}
+
+fn main() -> void {
+    print("=== Array of Refs Test ===");
+
+    var arr: array[ref[Node]] = [
+        new[Node](value: 1),
+        new[Node](value: 2),
+        new[Node](value: 3)
+    ];
+
+    print("Created array of 3 refs");
+
+    for i in 0..2 {
+        if arr[i] != nil {
+            print("arr[" + i.toString() + "] = " + arr[i].value.toString());
+        }
+    }
+
+    // Nullify middle element
+    arr[1] = nil;
+    print("Nullified arr[1]");
+
+    for i in 0..2 {
+        if arr[i] != nil {
+            print("arr[" + i.toString() + "] = " + arr[i].value.toString());
+        } else {
+            print("arr[" + i.toString() + "] = nil");
+        }
+    }
+
+    print("=== Test Complete ===");
+}

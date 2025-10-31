@@ -6,7 +6,7 @@ def main():
 
     # String operations benchmark
     for i in range(5000):
-        num = 0
+        num = random.randint(0, 9)
         str_num = str(num)
 
         # String concatenation

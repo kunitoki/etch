@@ -89,6 +89,10 @@ proc serializeV(stream: Stream, val: V) =
   of vkSome, vkOk, vkErr:
     # Option/Result types with wrapped values
     serializeV(stream, val.wrapped[])
+  of vkRef:
+    stream.write(int32(val.refId))
+  of vkWeak:
+    stream.write(int32(val.weakId))
   of vkNil, vkNone:
     discard  # No additional data to serialize
 
@@ -130,6 +134,10 @@ proc deserializeV(stream: Stream): V =
     result = makeOk(deserializeV(stream))
   of vkErr:
     result = makeErr(deserializeV(stream))
+  of vkRef:
+    result = makeRef(stream.readInt32())
+  of vkWeak:
+    result = makeWeak(stream.readInt32())
   of vkNil:
     result = makeNil()
   of vkNone:
@@ -704,6 +712,12 @@ proc `$`*(op: RegOpCode): string =
   of ropNewTable: "NEWTABLE"
   of ropGetField: "GETFIELD"
   of ropSetField: "SETFIELD"
+  of ropNewRef: "NEWREF"
+  of ropIncRef: "INCREF"
+  of ropDecRef: "DECREF"
+  of ropNewWeak: "NEWWEAK"
+  of ropWeakToStrong: "WEAKTOSTRONG"
+  of ropCheckCycles: "CHECKCYCLES"
   of ropJmp: "JMP"
   of ropTest: "TEST"
   of ropTestSet: "TESTSET"

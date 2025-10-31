@@ -14,7 +14,7 @@ type
 
 const keywords = [
   "fn","let","var","return","if","elif","else","while","for","break","in",
-  "true","false","int","float","string","char","bool","void","ref",
+  "true","false","int","float","string","char","bool","void","ref","weak",
   "comptime","compiles","defer","new","and","or","not","array","nil","option","match",
   "some","none","ok","error","type","distinct","object","import","export","discard"
 ].toSeq
@@ -80,7 +80,7 @@ proc lex*(src: string, filename: string = ""): seq[Token] =
       continue
 
     # single symbol
-    if src[i] in "+-*/%(){}<>=;:,[]@#.":
+    if src[i] in "+-*/%(){}<>=;:,[]@#.~":
       result.add Token(kind: tkSymbol, lex: $src[i], line: line, col: col)
       inc i; inc col
       continue

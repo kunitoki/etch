@@ -1,0 +1,24 @@
+// Test destructor with explicit variable scope end
+// Validates that destructors are called when variable lifetime ends
+
+type Resource = object {
+  id: int;
+};
+
+fn ~(r: Resource) -> void {
+  print("Destructor called for Resource #" + toString(r.id));
+}
+
+fn main() -> void {
+  print("Creating resource 1...");
+  var res1 = new[Resource]( id: 1 );
+  discard res1;
+
+  print("Resource 1 going out of scope");
+  res1 = new[Resource]( id: 2 );
+
+  print("Resource 2 created, resource 1 should be destroyed");
+  discard res1;
+
+  print("Exiting main...");
+}

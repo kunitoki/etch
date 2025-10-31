@@ -173,18 +173,22 @@ proc dumpConstants*(prog: RegBytecodeProgram) =
   else:
     for i, constant in prog.constants:
       let valueStr = case constant.kind
+        of vkNil:
+          "nil"
+        of vkBool:
+          if constant.bval: "true" else: "false"
+        of vkChar:
+          &"'{constant.cval}'"
         of vkInt:
           &"{constant.ival}"
         of vkFloat:
           &"{constant.fval}"
-        of vkBool:
-          if constant.bval: "true" else: "false"
         of vkString:
           &"\"{constant.sval}\""
-        of vkNil:
-          "nil"
-        of vkChar:
-          &"'{constant.cval}'"
+        of vkRef:
+          "ref(...)"
+        of vkWeak:
+          "weak(...)"
         of vkSome:
           "some(...)"
         of vkNone:

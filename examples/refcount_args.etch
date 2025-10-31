@@ -1,0 +1,56 @@
+// Test reference counting with function arguments
+type Node = object {
+    value: int;
+    next: ref[Node];
+};
+
+fn printNode(node: ref[Node]) -> void {
+    print("Node value:");
+    print(node.value);
+}
+
+fn modifyNode(node: ref[Node], newVal: int) -> void {
+    node.value = newVal;
+}
+
+fn linkNodes(first: ref[Node], second: ref[Node]) -> void {
+    first.next = second;
+}
+
+fn getNodeValue(node: ref[Node]) -> int {
+    return node.value;
+}
+
+fn main() -> void {
+    print("=== Function Argument Tests ===");
+
+    // Test 1: Pass ref to function
+    let n1 = new[Node]( value: 100, next: nil );
+    printNode(n1);
+
+    // Test 2: Modify through ref parameter
+    print("Before modification:");
+    print(n1.value);
+    modifyNode(n1, 200);
+    print("After modification:");
+    print(n1.value);
+
+    // Test 3: Multiple ref arguments
+    let n2 = new[Node]( value: 10, next: nil );
+    let n3 = new[Node]( value: 20, next: nil );
+    linkNodes(n2, n3);
+    print("Linked nodes:");
+    print(n2.value);
+    print(n2.next.value);
+
+    // Test 4: Return value from ref parameter
+    let val = getNodeValue(n1);
+    print("Got value:");
+    print(val);
+
+    // Test 5: Pass same ref multiple times
+    printNode(n1);
+    printNode(n1);
+
+    print("=== All Argument Tests Complete ===");
+}

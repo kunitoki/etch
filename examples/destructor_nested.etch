@@ -1,0 +1,33 @@
+// Test nested objects with destructors
+// Validates that parent destructor can access child reference fields
+
+type Child = object {
+  id: int;
+};
+
+type Parent = object {
+  name: string;
+  childId: int;
+};
+
+fn ~(c: Child) -> void {
+  print("Child destructor called for ID: " + toString(c.id));
+}
+
+fn ~(p: Parent) -> void {
+  print("Parent destructor called for: " + p.name);
+  print("Parent child ID was: " + toString(p.childId));
+}
+
+fn main() -> void {
+  print("Creating objects...");
+  let child = new[Child]( id: 123 );
+  let parent = new[Parent](
+    name: "ParentObj",
+    childId: 123
+  );
+  discard child;
+  discard parent;
+  print("Objects created");
+  print("Exiting main...");
+}

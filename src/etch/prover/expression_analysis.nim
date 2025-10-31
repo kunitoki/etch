@@ -8,15 +8,15 @@ import ../common/[constants, logging]
 import types, binary_operations, function_evaluation, symbolic_execution
 
 
-proc proveStmt*(s: Stmt; env: Env, ctx: ProverContext)
-proc analyzeExpr*(e: Expr; env: Env, ctx: ProverContext): Info
-proc analyzeBinaryExpr*(e: Expr, env: Env, ctx: ProverContext): Info
-proc analyzeCallExpr*(e: Expr, env: Env, ctx: ProverContext): Info
+proc proveStmt*(s: Stmt; env: var Env, ctx: ProverContext)
+proc analyzeExpr*(e: Expr; env: var Env, ctx: ProverContext): Info
+proc analyzeBinaryExpr*(e: Expr, env: var Env, ctx: ProverContext): Info
+proc analyzeCallExpr*(e: Expr, env: var Env, ctx: ProverContext): Info
 proc checkUnusedVariables*(env: Env, ctx: ProverContext, scopeName: string = "", excludeGlobals: bool = false)
 proc checkUnusedGlobalVariables*(env: Env, ctx: ProverContext)
 
 
-proc evaluateCondition*(cond: Expr, env: Env, ctx: ProverContext): ConditionResult =
+proc evaluateCondition*(cond: Expr, env: var Env, ctx: ProverContext): ConditionResult =
   ## Unified condition evaluation for dead code detection
   let condInfo = analyzeExpr(cond, env, ctx)
 
@@ -98,18 +98,19 @@ proc analyzeCharExpr*(e: Expr): Info =
   Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
 
 
-proc analyzeVarExpr*(e: Expr, env: Env): Info =
+proc analyzeVarExpr*(e: Expr, env: var Env): Info =
   if env.vals.hasKey(e.vname):
-    let info = env.vals[e.vname]
+    var info = env.vals[e.vname]
     if not info.initialized:
       raise newProverError(e.pos, &"use of uninitialized variable '{e.vname}' - variable may not be initialized in all control flow paths")
-    # Mark variable as used (read)
-    env.vals[e.vname].used = true
+    # Mark variable as used (read) - must update the table entry explicitly
+    info.used = true
+    env.vals[e.vname] = info  # Update the table entry
     return info
   raise newProverError(e.pos, &"use of undeclared variable '{e.vname}'")
 
 
-proc analyzeUnaryExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeUnaryExpr*(e: Expr, env: var Env, ctx: ProverContext): Info =
   let i0 = analyzeExpr(e.ue, env, ctx)
   case e.uop
   of uoNeg:
@@ -130,7 +131,7 @@ proc analyzeUnaryExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
     return infoBool(if i0.known: (i0.cval == 0) else: false) # boolean domain is tiny; not needed for arithmetic safety
 
 
-proc analyzeBinaryExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeBinaryExpr*(e: Expr, env: var Env, ctx: ProverContext): Info =
   let a = analyzeExpr(e.lhs, env, ctx)
   let b = analyzeExpr(e.rhs, env, ctx)
   case e.bop
@@ -144,12 +145,12 @@ proc analyzeBinaryExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
   of boIn,boNotIn: return analyzeBinaryComparison(e, a, b)  # Membership operators return bool like comparisons
 
 
-proc analyzePrintCall*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzePrintCall*(e: Expr, env: var Env, ctx: ProverContext): Info =
   for arg in e.args: discard analyzeExpr(arg, env, ctx)
   return infoUnknown()
 
 
-proc analyzeRandCall*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeRandCall*(e: Expr, env: var Env, ctx: ProverContext): Info =
   for arg in e.args: discard analyzeExpr(arg, env, ctx)
 
   # Track the range of rand(max) or rand(max, min)
@@ -188,7 +189,7 @@ proc analyzeRandCall*(e: Expr, env: Env, ctx: ProverContext): Info =
     return infoUnknown()
 
 
-proc analyzeToStringCall*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeToStringCall*(e: Expr, env: var Env, ctx: ProverContext): Info =
   ## Compute string length for toString() conversion based on integer range
   ## Accounts for sign character in negative numbers
   if e.args.len > 0:
@@ -218,7 +219,7 @@ proc analyzeToStringCall*(e: Expr, env: Env, ctx: ProverContext): Info =
   return infoString(0, sizeKnown = false)
 
 
-proc analyzeParseIntCall*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeParseIntCall*(e: Expr, env: var Env, ctx: ProverContext): Info =
   if e.args.len > 0:
     discard analyzeExpr(e.args[0], env, ctx)
   # parseInt can return any valid integer that fits in a string representation
@@ -226,7 +227,7 @@ proc analyzeParseIntCall*(e: Expr, env: Env, ctx: ProverContext): Info =
   return Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
 
 
-proc analyzeArrayNewCall*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeArrayNewCall*(e: Expr, env: var Env, ctx: ProverContext): Info =
   if e.args.len != 2:
     return infoUnknown()
 
@@ -246,7 +247,7 @@ proc analyzeArrayNewCall*(e: Expr, env: Env, ctx: ProverContext): Info =
   else:
     return infoArray(-1, sizeKnown = false)
 
-proc analyzeBuiltinCall*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeBuiltinCall*(e: Expr, env: var Env, ctx: ProverContext): Info =
   # recognize trusted builtins affecting nonNil/nonZero
   if e.fname == "print": return analyzePrintCall(e, env, ctx)
   if e.fname == "rand": return analyzeRandCall(e, env, ctx)
@@ -258,7 +259,7 @@ proc analyzeBuiltinCall*(e: Expr, env: Env, ctx: ProverContext): Info =
   return infoUnknown()
 
 
-proc extractPreconditionsFromExpr*(expr: Expr, paramNames: seq[string], paramMap: Table[string, int], abstractEnv: Env, ctx: ProverContext): seq[Constraint] =
+proc extractPreconditionsFromExpr*(expr: Expr, paramNames: seq[string], paramMap: Table[string, int], abstractEnv: var Env, ctx: ProverContext): seq[Constraint] =
   ## Extract weakest preconditions from an expression
   ## Returns constraints on parameters that must hold for the expression to be safe
   result = @[]
@@ -326,7 +327,7 @@ proc extractPreconditionsFromExpr*(expr: Expr, paramNames: seq[string], paramMap
     discard
 
 
-proc extractPreconditionsFromStmt*(stmt: Stmt, paramNames: seq[string], paramMap: Table[string, int], abstractEnv: Env, ctx: ProverContext): seq[Constraint] =
+proc extractPreconditionsFromStmt*(stmt: Stmt, paramNames: seq[string], paramMap: Table[string, int], abstractEnv: var Env, ctx: ProverContext): seq[Constraint] =
   ## Extract weakest preconditions from a statement
   result = @[]
 
@@ -476,7 +477,7 @@ proc inferFunctionContract*(fn: FunDecl, fname: string, ctx: ProverContext): Fun
   logProver(ctx.options.verbose, &"Inferred contract for {fname}: {result.preconditions.len} preconditions, {result.postconditions.len} postconditions")
 
 
-proc analyzeUserDefinedCall*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeUserDefinedCall*(e: Expr, env: var Env, ctx: ProverContext): Info =
   # User-defined function call - can use contracts or full analysis
   let fn = ctx.prog.funInstances[e.fname]
 
@@ -707,7 +708,7 @@ proc analyzeUserDefinedCall*(e: Expr, env: Env, ctx: ProverContext): Info =
   return infoUnknown()
 
 
-proc analyzeCallExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeCallExpr*(e: Expr, env: var Env, ctx: ProverContext): Info =
   # User-defined function call - perform call-site safety analysis
   if ctx.prog != nil and ctx.prog.funInstances.hasKey(e.fname):
     return analyzeUserDefinedCall(e, env, ctx)
@@ -715,13 +716,13 @@ proc analyzeCallExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
     return analyzeBuiltinCall(e, env, ctx)
 
 
-proc analyzeNewRefExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeNewRefExpr*(e: Expr, env: var Env, ctx: ProverContext): Info =
   # newRef always non-nil
   discard analyzeExpr(e.init, env, ctx)  # Analyze the initialization expression
   Info(known: false, nonNil: true, initialized: true)
 
 
-proc analyzeDerefExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeDerefExpr*(e: Expr, env: var Env, ctx: ProverContext): Info =
   let i0 = analyzeExpr(e.refExpr, env, ctx)
 
   # Check if dereferencing a variable that is tracked as nil
@@ -735,7 +736,7 @@ proc analyzeDerefExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
   infoUnknown()
 
 
-proc analyzeCastExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeCastExpr*(e: Expr, env: var Env, ctx: ProverContext): Info =
   # Explicit cast - analyze the source expression and return appropriate info for target type
   let sourceInfo = analyzeExpr(e.castExpr, env, ctx)  # Analyze source for safety
 
@@ -758,7 +759,7 @@ proc analyzeCastExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
     Info(known: false, minv: IMin, maxv: IMax, nonZero: false, initialized: true)
 
 
-proc analyzeArrayExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeArrayExpr*(e: Expr, env: var Env, ctx: ProverContext): Info =
   # Array literal - analyze all elements for safety and track size and element ranges
   var minElementValue = int64.high
   var maxElementValue = int64.low
@@ -784,7 +785,7 @@ proc analyzeArrayExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
   return res
 
 
-proc analyzeIndexExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeIndexExpr*(e: Expr, env: var Env, ctx: ProverContext): Info =
   # Array/String indexing - comprehensive bounds checking
   let arrayInfo = analyzeExpr(e.arrayExpr, env, ctx)
   let indexInfo = analyzeExpr(e.indexExpr, env, ctx)
@@ -895,7 +896,7 @@ proc analyzeIndexExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
   infoUnknown()
 
 
-proc analyzeSliceExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeSliceExpr*(e: Expr, env: var Env, ctx: ProverContext): Info =
   # Array slicing - comprehensive slice bounds checking
   let arrayInfo = analyzeExpr(e.sliceExpr, env, ctx)
 
@@ -993,7 +994,7 @@ proc analyzeSliceExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
     return infoUnknown()
 
 
-proc analyzeArrayLenExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeArrayLenExpr*(e: Expr, env: var Env, ctx: ProverContext): Info =
   # Array/String length operator: #array/#string -> int
   let arrayInfo = analyzeExpr(e.lenExpr, env, ctx)
   if arrayInfo.isArray and arrayInfo.arraySizeKnown:
@@ -1024,7 +1025,7 @@ proc analyzeNilExpr*(e: Expr): Info =
   Info(known: false, nonNil: false, initialized: true)
 
 
-proc analyzeOptionSomeExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeOptionSomeExpr*(e: Expr, env: var Env, ctx: ProverContext): Info =
   # some(value) - analyze the wrapped value
   discard analyzeExpr(e.someExpr, env, ctx)
   infoUnknown()  # option value is unknown without pattern matching
@@ -1035,19 +1036,19 @@ proc analyzeOptionNoneExpr*(e: Expr): Info =
   infoUnknown()
 
 
-proc analyzeResultOkExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeResultOkExpr*(e: Expr, env: var Env, ctx: ProverContext): Info =
   # ok(value) - analyze the wrapped value
   discard analyzeExpr(e.okExpr, env, ctx)
   infoUnknown()  # result value is unknown without pattern matching
 
 
-proc analyzeResultErrExpr*(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeResultErrExpr*(e: Expr, env: var Env, ctx: ProverContext): Info =
   # error(msg) - analyze the error message
   discard analyzeExpr(e.errExpr, env, ctx)
   infoUnknown()  # error value is unknown without pattern matching
 
 
-proc analyzeMatchExpr(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeMatchExpr(e: Expr, env: var Env, ctx: ProverContext): Info =
   # Simplified match expression analysis that only handles expressions, not full statements
   let matchedInfo = analyzeExpr(e.matchExpr, env, ctx)
 
@@ -1109,7 +1110,7 @@ proc analyzeMatchExpr(e: Expr, env: Env, ctx: ProverContext): Info =
   return infoUnknown()  # match result is unknown without deeper analysis
 
 
-proc analyzeObjectLiteralExpr(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeObjectLiteralExpr(e: Expr, env: var Env, ctx: ProverContext): Info =
   # Object literals are properly initialized values
   # Analyze all field initializations for safety
   for field in e.fieldInits:
@@ -1117,7 +1118,7 @@ proc analyzeObjectLiteralExpr(e: Expr, env: Env, ctx: ProverContext): Info =
   return Info(known: false, initialized: true, nonNil: true)
 
 
-proc analyzeFieldAccessExpr(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeFieldAccessExpr(e: Expr, env: var Env, ctx: ProverContext): Info =
   # Analyze the object being accessed for safety
   discard analyzeExpr(e.objectExpr, env, ctx)
 
@@ -1133,7 +1134,7 @@ proc analyzeFieldAccessExpr(e: Expr, env: Env, ctx: ProverContext): Info =
   return Info(known: false, cval: 0, initialized: true)
 
 
-proc analyzeNewExpr(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeNewExpr(e: Expr, env: var Env, ctx: ProverContext): Info =
   # new(value) or new[Type]{value} - analyze initialization expression if present
   if e.initExpr.isSome:
     discard analyzeExpr(e.initExpr.get, env, ctx)
@@ -1141,12 +1142,12 @@ proc analyzeNewExpr(e: Expr, env: Env, ctx: ProverContext): Info =
   return Info(known: false, nonNil: true, initialized: true)
 
 
-proc analyzeIfExpr(e: Expr, env: Env, ctx: ProverContext): Info =
+proc analyzeIfExpr(e: Expr, env: var Env, ctx: ProverContext): Info =
   # Analyze if-expression: evaluate condition and return appropriate branch
   let condInfo = analyzeExpr(e.ifCond, env, ctx)
 
   # Helper to extract expression from a single-statement branch
-  proc getBranchValue(stmts: seq[Stmt]): Info =
+  proc getBranchValue(stmts: seq[Stmt], env: var Env, ctx: ProverContext): Info =
     if stmts.len == 1 and stmts[0].kind == skExpr:
       # Single expression statement - analyze the expression
       return analyzeExpr(stmts[0].sexpr, env, ctx)
@@ -1160,30 +1161,30 @@ proc analyzeIfExpr(e: Expr, env: Env, ctx: ProverContext): Info =
   if condInfo.known:
     if condInfo.cval != 0:
       # Condition is true - return then branch value
-      return getBranchValue(e.ifThen)
+      return getBranchValue(e.ifThen, env, ctx)
     else:
       # Condition is false - check elif/else branches
       for elifCase in e.ifElifChain:
         let elifCondInfo = analyzeExpr(elifCase.cond, env, ctx)
         if elifCondInfo.known and elifCondInfo.cval != 0:
-          return getBranchValue(elifCase.body)
+          return getBranchValue(elifCase.body, env, ctx)
 
       # All elif conditions false or no elif - use else branch
-      return getBranchValue(e.ifElse)
+      return getBranchValue(e.ifElse, env, ctx)
 
   # Condition is unknown - need to merge results from all branches
   var branchInfos: seq[Info] = @[]
 
   # Analyze then branch
-  branchInfos.add(getBranchValue(e.ifThen))
+  branchInfos.add(getBranchValue(e.ifThen, env, ctx))
 
   # Analyze elif branches
   for elifCase in e.ifElifChain:
     discard analyzeExpr(elifCase.cond, env, ctx)
-    branchInfos.add(getBranchValue(elifCase.body))
+    branchInfos.add(getBranchValue(elifCase.body, env, ctx))
 
   # Analyze else branch
-  branchInfos.add(getBranchValue(e.ifElse))
+  branchInfos.add(getBranchValue(e.ifElse, env, ctx))
 
   # Merge all branch results
   if branchInfos.len > 0:
@@ -1195,7 +1196,7 @@ proc analyzeIfExpr(e: Expr, env: Env, ctx: ProverContext): Info =
   return Info(known: false, initialized: true)
 
 
-proc analyzeExpr*(e: Expr; env: Env, ctx: ProverContext): Info =
+proc analyzeExpr*(e: Expr; env: var Env, ctx: ProverContext): Info =
   logProver(ctx.options.verbose, "Analyzing " & $e.kind & (if e.kind == ekVar: " '" & e.vname & "'" else: ""))
 
   case e.kind
@@ -1235,14 +1236,14 @@ proc analyzeExpr*(e: Expr; env: Env, ctx: ProverContext): Info =
     return infoRange(0, 1)
 
 
-proc analyzeFunctionBody*(statements: seq[Stmt], env: Env, ctx: ProverContext) =
+proc analyzeFunctionBody*(statements: seq[Stmt], env: var Env, ctx: ProverContext) =
   ## Analyze a sequence of statements in a function body with full control flow analysis
   for i, stmt in statements:
     logProver(ctx.options.verbose, &"Analyzing statement {i + 1}/{statements.len}: {stmt.kind}")
     proveStmt(stmt, env, ctx)
 
 
-proc proveVar(s: Stmt; env: Env, ctx: ProverContext) =
+proc proveVar(s: Stmt; env: var Env, ctx: ProverContext) =
   logProver(ctx.options.verbose, "Declaring variable: " & s.vname)
   # Store declaration position for error reporting
   env.declPos[s.vname] = s.pos
@@ -1261,13 +1262,23 @@ proc proveVar(s: Stmt; env: Env, ctx: ProverContext) =
     else:
       logProver(ctx.options.verbose, "Variable " & s.vname & " initialized with range [" & $info.minv & ".." & $info.maxv & "]")
   else:
-    logProver(ctx.options.verbose, "Variable " & s.vname & " declared without initializer (uninitialized)")
-    # Variable is declared but not initialized
-    env.vals[s.vname] = infoUninitialized()
-    env.nils[s.vname] = true
+    # Variable declared without initializer
+    # For ref/weak types, they default to nil and are considered initialized
+    let isRefType = s.vtype != nil and (s.vtype.kind == tkRef or s.vtype.kind == tkWeak)
+    if isRefType:
+      logProver(ctx.options.verbose, "Variable " & s.vname & " declared without initializer (defaults to nil)")
+      # Ref types default to nil - mark as initialized with nil
+      env.vals[s.vname] = infoRange(0, 0)  # nil is represented as 0
+      env.vals[s.vname].initialized = true
+      env.nils[s.vname] = true  # Is nil
+    else:
+      logProver(ctx.options.verbose, "Variable " & s.vname & " declared without initializer (uninitialized)")
+      # Variable is declared but not initialized
+      env.vals[s.vname] = infoUninitialized()
+      env.nils[s.vname] = true
 
 
-proc proveAssign(s: Stmt; env: Env, ctx: ProverContext) =
+proc proveAssign(s: Stmt; env: var Env, ctx: ProverContext) =
   logProver(ctx.options.verbose, "Assignment to variable: " & s.aname)
   # Check if the variable being assigned to exists
   if not env.vals.hasKey(s.aname):
@@ -1277,6 +1288,8 @@ proc proveAssign(s: Stmt; env: Env, ctx: ProverContext) =
   # Assignment initializes the variable
   var newInfo = info
   newInfo.initialized = true
+  # Preserve the 'used' flag from the existing variable (assignment doesn't reset usage tracking)
+  newInfo.used = env.vals[s.aname].used
   env.vals[s.aname] = newInfo
   env.exprs[s.aname] = s.aval  # Store original expression
   # Track nil status: true if assigning nil, false if assigning non-nil
@@ -1287,7 +1300,7 @@ proc proveAssign(s: Stmt; env: Env, ctx: ProverContext) =
     logProver(ctx.options.verbose, "Variable " & s.aname & " assigned range [" & $info.minv & ".." & $info.maxv & "]")
 
 
-proc proveFieldAssign(s: Stmt; env: Env, ctx: ProverContext) =
+proc proveFieldAssign(s: Stmt; env: var Env, ctx: ProverContext) =
   logProver(ctx.options.verbose, "Field assignment")
   # Analyze the target expression to check initialization
   discard analyzeExpr(s.faTarget, env, ctx)
@@ -1306,7 +1319,7 @@ proc hasReturn(stmts: seq[Stmt]): bool =
   return false
 
 
-proc applyConstraintToInfo(info: Info, cond: Expr, baseEnv: Env, ctx: ProverContext, negate: bool, varName: string): Info =
+proc applyConstraintToInfo(info: Info, cond: Expr, baseEnv: var Env, ctx: ProverContext, negate: bool, varName: string): Info =
   ## Apply a constraint to a single Info value and return the refined Info
   ## This is a pure function that doesn't mutate the input
   ## varName is the variable we're refining
@@ -1325,7 +1338,19 @@ proc applyConstraintToInfo(info: Info, cond: Expr, baseEnv: Env, ctx: ProverCont
   of boNe:
     # Handle x != value or value != x
     let valueExpr = if isLeftSide: cond.rhs else: cond.lhs
-    if valueExpr.kind == ekInt and valueExpr.ival == 0:
+    if valueExpr.kind == ekNil:
+      # Comparing with nil (for ref/weak types)
+      if not negate:
+        # x != nil: variable is non-nil
+        result.nonNil = true
+      else:
+        # !(x != nil): x == nil
+        result.minv = 0
+        result.maxv = 0
+        result.known = true
+        result.cval = 0
+        result.nonNil = false
+    elif valueExpr.kind == ekInt and valueExpr.ival == 0:
       if not negate:
         # x != 0: x is nonZero
         result.nonZero = true
@@ -1338,7 +1363,19 @@ proc applyConstraintToInfo(info: Info, cond: Expr, baseEnv: Env, ctx: ProverCont
   of boEq:
     # Handle x == value or value == x
     let valueExpr = if isLeftSide: cond.rhs else: cond.lhs
-    if valueExpr.kind == ekInt and valueExpr.ival == 0:
+    if valueExpr.kind == ekNil:
+      # Comparing with nil (for ref/weak types)
+      if not negate:
+        # x == nil: variable is nil
+        result.minv = 0
+        result.maxv = 0
+        result.known = true
+        result.cval = 0
+        result.nonNil = false
+      else:
+        # !(x == nil): x != nil, x is non-nil
+        result.nonNil = true
+    elif valueExpr.kind == ekInt and valueExpr.ival == 0:
       if not negate:
         # x == 0
         result.minv = 0
@@ -1471,7 +1508,7 @@ proc collectVariablesInCondition(cond: Expr): seq[string] =
     discard
 
 
-proc applyConstraints(env: Env, cond: Expr, baseEnv: Env, ctx: ProverContext, negate: bool = false) =
+proc applyConstraints(env: Env, cond: Expr, baseEnv: var Env, ctx: ProverContext, negate: bool = false) =
   ## Apply constraints from a condition expression to an environment
   ## Handles compound conditions (AND/OR) recursively
   ## Modifies env in place for efficiency (env is already a copy from copyEnv)
@@ -1536,10 +1573,12 @@ proc applyConstraints(env: Env, cond: Expr, baseEnv: Env, ctx: ProverContext, ne
       if env.vals.hasKey(varName):
         let refinedInfo = applyConstraintToInfo(env.vals[varName], cond, baseEnv, ctx, negate, varName)
         env.vals[varName] = refinedInfo
+        # Update nils table based on nonNil flag
+        env.nils[varName] = not refinedInfo.nonNil
   else:
     discard
 
-proc proveIf(s: Stmt; env: Env, ctx: ProverContext) =
+proc proveIf(s: Stmt; env: var Env, ctx: ProverContext) =
   let condResult = evaluateCondition(s.cond, env, ctx)
   logProver(ctx.options.verbose, "If condition evaluation result: " & $condResult)
 
@@ -1755,7 +1794,7 @@ proc proveIf(s: Stmt; env: Env, ctx: ProverContext) =
       env.vals[varName] = mergedInfo
 
 
-proc proveWhile(s: Stmt; env: Env, ctx: ProverContext) =
+proc proveWhile(s: Stmt; env: var Env, ctx: ProverContext) =
   # Enhanced while loop analysis using symbolic execution
   let condResult = evaluateCondition(s.wcond, env, ctx)
 
@@ -1851,7 +1890,7 @@ proc proveWhile(s: Stmt; env: Env, ctx: ProverContext) =
     discard
 
 
-proc proveFor(s: Stmt; env: Env, ctx: ProverContext) =
+proc proveFor(s: Stmt; env: var Env, ctx: ProverContext) =
   # Analyze for loop: for var in start..end or for var in array
   logProver(ctx.options.verbose, "Analyzing for loop variable: " & s.fvar)
 
@@ -2008,17 +2047,17 @@ proc proveFor(s: Stmt; env: Env, ctx: ProverContext) =
     env.nils.del(s.fvar)
 
 
-proc proveBreak(s: Stmt; env: Env, ctx: ProverContext) =
+proc proveBreak(s: Stmt; env: var Env, ctx: ProverContext) =
   # Break statements are valid only inside loops, but this is a parse-time concern
   # For prover purposes, break doesn't change variable states
   logProver(ctx.options.verbose, "Break statement (control flow transfer)")
 
 
-proc proveExpr(s: Stmt; env: Env, ctx: ProverContext) =
+proc proveExpr(s: Stmt; env: var Env, ctx: ProverContext) =
   discard analyzeExpr(s.sexpr, env, ctx)
 
 
-proc proveReturn(s: Stmt; env: Env, ctx: ProverContext) =
+proc proveReturn(s: Stmt; env: var Env, ctx: ProverContext) =
   if s.re.isSome():
       let returnInfo = analyzeExpr(s.re.get(), env, ctx)
       # Check if the returned expression is initialized
@@ -2026,13 +2065,13 @@ proc proveReturn(s: Stmt; env: Env, ctx: ProverContext) =
         raise newProverError(s.pos, "returning uninitialized value")
 
 
-proc proveComptime(s: Stmt; env: Env, ctx: ProverContext) =
+proc proveComptime(s: Stmt; env: var Env, ctx: ProverContext) =
   # Comptime blocks may contain injected statements after folding
   for injectedStmt in s.cbody:
     proveStmt(injectedStmt, env, ctx)
 
 
-proc proveStmt*(s: Stmt; env: Env, ctx: ProverContext) =
+proc proveStmt*(s: Stmt; env: var Env, ctx: ProverContext) =
   let stmtKindStr = case s.kind
     of skVar: "variable declaration"
     of skAssign: "assignment"
@@ -2048,6 +2087,7 @@ proc proveStmt*(s: Stmt; env: Env, ctx: ProverContext) =
     of skImport: "import statement"
     of skDiscard: "discard statement"
     of skDefer: "defer block"
+    of skBlock: "unnamed scope block"
 
   logProver(ctx.options.verbose, "Analyzing " & stmtKindStr & (if ctx.fnContext != "": " in " & ctx.fnContext else: ""))
 
@@ -2065,6 +2105,10 @@ proc proveStmt*(s: Stmt; env: Env, ctx: ProverContext) =
   of skDefer:
     # Defer blocks - analyze the deferred statements
     for stmt in s.deferBody:
+      proveStmt(stmt, env, ctx)
+  of skBlock:
+    # Unnamed scope blocks - analyze all statements in the block
+    for stmt in s.blockBody:
       proveStmt(stmt, env, ctx)
   of skTypeDecl:
     # Type declarations don't need proving
@@ -2246,6 +2290,9 @@ proc markGlobalsUsedInFunctions*(env: var Env, ctx: ProverContext) =
         scanStmtForGlobals(s, env, globals)
     of skDefer:
       for s in stmt.deferBody:
+        scanStmtForGlobals(s, env, globals)
+    of skBlock:
+      for s in stmt.blockBody:
         scanStmtForGlobals(s, env, globals)
     of skBreak, skTypeDecl, skImport:
       discard

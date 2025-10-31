@@ -1,0 +1,27 @@
+// Test reference counting with arrays of refs
+type Node = object {
+    value: int;
+};
+
+fn main() -> void {
+    // Create some ref objects
+    let node1 = new[Node]( value: 1 );
+    let node2 = new[Node]( value: 2 );
+    let node3 = new[Node]( value: 3 );
+
+    // Create an array of refs
+    let arr: array[ref[Node]] = [node1, node2, node3];
+
+    // Access array elements
+    print(arr[0].value);
+    print(arr[1].value);
+    print(arr[2].value);
+
+    // Modify array - old ref should be decRef'd, new ref incRef'd
+    let node4 = new[Node]( value: 4 );
+    arr[1] = node4;
+
+    print(arr[1].value);
+
+    print("Array test complete");
+}

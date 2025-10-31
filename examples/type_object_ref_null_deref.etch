@@ -9,7 +9,7 @@ fn test(p: ref[Person]) -> string {
 }
 
 fn main() {
-    var p = new[Person]{ name: "Alice", age: 25 };
+    var p = new[Person]( name: "Alice", age: 25 );
     p = nil;
     print(p.name);
     print(@p.age);

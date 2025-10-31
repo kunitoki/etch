@@ -1,0 +1,29 @@
+// Test destructor that allocates new objects
+// Validates that destructors can safely allocate without causing issues
+
+type Logger = object {
+  message: string;
+};
+
+type Resource = object {
+  id: int;
+};
+
+fn ~(l: Logger) -> void {
+  print("Logger destroyed: " + l.message);
+}
+
+fn ~(r: Resource) -> void {
+  print("Resource #" + toString(r.id) + " being destroyed");
+  // Allocate a temporary object during destruction
+  let log = new[Logger]( message: "Cleanup complete for resource " + toString(r.id) );
+  discard log;
+}
+
+fn main() -> void {
+  print("Creating resource...");
+  let res = new[Resource]( id: 42);
+  discard res;
+  print("Resource created");
+  print("Exiting main...");
+}

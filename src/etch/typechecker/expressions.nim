@@ -177,7 +177,12 @@ proc inferUnOp(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubs
     e.typ = tBool(); return e.typ
 
 
-proc inferLiteralExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst): EtchType =
+proc inferLiteralExpr(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst; expectedTy: EtchType = nil): EtchType =
+  # Special handling for nil - adopt expected type if it's a reference or weak reference
+  if e.kind == ekNil and expectedTy != nil and expectedTy.kind in {tkRef, tkWeak}:
+    e.typ = expectedTy
+    return e.typ
+
   e.typ = inferLiteralType(e.kind)
   return e.typ
 
@@ -609,14 +614,20 @@ proc inferBinOp(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySub
       if e.bop notin {boEq, boNe}:
         raise newTypecheckError(e.pos, &"only == and != are allowed for reference comparisons")
       e.typ = tBool(); return e.typ
+    elif (lt.kind == tkWeak and rt.kind == tkRef and rt.inner.kind == tkVoid) or
+         (lt.kind == tkRef and lt.inner.kind == tkVoid and rt.kind == tkWeak):
+      # Allow comparison between weak reference and nil (Ref[void])
+      if e.bop notin {boEq, boNe}:
+        raise newTypecheckError(e.pos, &"only == and != are allowed for weak reference comparisons with nil")
+      e.typ = tBool(); return e.typ
     elif lt.kind != rt.kind:
       raise newTypecheckError(e.pos, &"comparison type mismatch: {lt} vs {rt}")
     else:
       # Only allow comparison operators on comparable types
-      if lt.kind notin {tkInt, tkFloat, tkString, tkChar, tkBool, tkRef}:
+      if lt.kind notin {tkInt, tkFloat, tkString, tkChar, tkBool, tkRef, tkWeak}:
         raise newTypecheckError(e.pos, &"comparison not supported for type {lt}")
-      # Only equality operators allowed for references
-      if lt.kind == tkRef and e.bop notin {boEq, boNe}:
+      # Only equality operators allowed for references and weak references
+      if lt.kind in {tkRef, tkWeak} and e.bop notin {boEq, boNe}:
         raise newTypecheckError(e.pos, &"only == and != are allowed for reference comparisons")
       e.typ = tBool(); return e.typ
   of boAnd, boOr:
@@ -642,7 +653,7 @@ proc inferBinOp(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySub
 
 proc inferExprTypes*(prog: Program; fd: FunDecl; sc: Scope; e: Expr; subst: var TySubst; expectedTy: EtchType = nil): EtchType =
   case e.kind
-  of ekInt, ekFloat, ekString, ekChar, ekBool, ekNil: return inferLiteralExpr(prog, fd, sc, e, subst)
+  of ekInt, ekFloat, ekString, ekChar, ekBool, ekNil: return inferLiteralExpr(prog, fd, sc, e, subst, expectedTy)
   of ekVar: return inferVarExpr(prog, fd, sc, e, subst)
   of ekUn: return inferUnOp(prog, fd, sc, e, subst)
   of ekBin: return inferBinOp(prog, fd, sc, e, subst)

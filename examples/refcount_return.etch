@@ -1,0 +1,45 @@
+// Test reference counting with return values
+type Node = object {
+    value: int;
+};
+
+fn createNode(val: int) -> ref[Node] {
+    let node = new[Node]( value: val );
+    return node;
+}
+
+fn createAndDouble(val: int) -> ref[Node] {
+    let node = new[Node]( value: val * 2 );
+    return node;
+}
+
+fn main() -> void {
+    print("=== Return Value Tests ===");
+
+    // Test 1: Basic return
+    let n1 = createNode(42);
+    print("Created node value:");
+    print(n1.value);
+
+    // Test 2: Multiple returns
+    let n2 = createNode(10);
+    let n3 = createNode(20);
+    let n4 = createNode(30);
+    print("Multiple nodes:");
+    print(n2.value);
+    print(n3.value);
+    print(n4.value);
+
+    // Test 3: Using return value immediately
+    let doubled = createAndDouble(50);
+    print("Doubled value:");
+    print(doubled.value);
+
+    // Test 4: Chain of creation
+    let chain1 = createNode(1);
+    let chain2 = createAndDouble(chain1.value);
+    print("Chain result:");
+    print(chain2.value);
+
+    print("=== All Return Tests Complete ===");
+}

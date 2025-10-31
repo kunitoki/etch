@@ -2,7 +2,7 @@
 # Pratt parser for Etch using tokens from lexer
 
 import std/[strformat, tables, options, strutils]
-import ast, lexer, ../common/[errors, types, builtins]
+import ast, lexer, ../common/[constants, errors, types, builtins]
 import ../typechecker/types
 
 
@@ -46,6 +46,7 @@ proc expect(p: Parser, kind: TokKind, lex: string = ""): Token =
 proc parseType(p: Parser): EtchType
 proc parseExpr*(p: Parser; rbp=0): Expr
 proc parseStmt*(p: Parser): Stmt
+proc parseNewExpr(p: Parser; t: Token): Expr
 proc parseMatchExpr(p: Parser; t: Token): Expr
 proc parseIfExpr(p: Parser; t: Token): Expr
 proc parsePattern(p: Parser): Pattern
@@ -91,6 +92,13 @@ proc parseSingleType(p: Parser): EtchType =
     let inner = p.parseType()
     discard p.expect(tkSymbol, "]")
     return tRef(inner)
+
+  of "weak":
+    discard p.expect(tkKeyword, "weak")
+    discard p.expect(tkSymbol, "[")
+    let inner = p.parseType()
+    discard p.expect(tkSymbol, "]")
+    return tWeak(inner)
 
   of "array":
     discard p.expect(tkKeyword, "array")
@@ -210,23 +218,7 @@ proc parseBuiltinKeywordExpr(p: Parser; t: Token): Expr =
     return Expr(kind: ekUn, uop: uoNot, ue: e, pos: p.posOf(t))
 
   of "new":
-    # Check for new[Type] or new[Type]{value} syntax
-    if p.cur.kind == tkSymbol and p.cur.lex == "[":
-      discard p.eat()  # consume "["
-      let typeExpr = p.parseType()  # Parse the type
-      discard p.expect(tkSymbol, "]")
-      var initExpr = none(Expr)
-      # Check for optional {value} initialization
-      if p.cur.kind == tkSymbol and p.cur.lex == "{":
-        initExpr = some(p.parseExpr())
-      return Expr(kind: ekNew, newType: typeExpr, initExpr: initExpr, pos: p.posOf(t))
-    else:
-      # Inferred syntax: new(value) - infer type from value
-      discard p.expect(tkSymbol, "(")
-      let valueExpr = p.parseExpr()
-      discard p.expect(tkSymbol, ")")
-      # Create new expression with type inference marker
-      return Expr(kind: ekNew, newType: nil, initExpr: some(valueExpr), pos: p.posOf(t))
+    return p.parseNewExpr(t)
 
   of "match":
     return p.parseMatchExpr(t)
@@ -267,6 +259,45 @@ proc parseBuiltinKeywordExpr(p: Parser; t: Token): Expr =
 
   else:
     return Expr(kind: ekVar, vname: t.lex, pos: p.posOf(t))
+
+
+# Parses built-in new
+proc parseNewExpr(p: Parser; t: Token): Expr =
+  # Check for new[Type] or new[Type](value) syntax
+  if p.cur.kind == tkSymbol and p.cur.lex == "[":
+    discard p.eat()  # consume "["
+    let typeExpr = p.parseType()  # Parse the type
+    discard p.expect(tkSymbol, "]")
+    var initExpr = none(Expr)
+    # Check for optional (field: value) initialization
+    if p.cur.kind == tkSymbol and p.cur.lex == "(":
+      discard p.eat()  # consume (
+      var fieldInits: seq[tuple[name: string, value: Expr]] = @[]
+      if not (p.cur.kind == tkSymbol and p.cur.lex == ")"):
+        while true:
+          let fieldName = p.expect(tkIdent).lex
+          discard p.expect(tkSymbol, ":")
+          let fieldValue = p.parseExpr()
+          fieldInits.add((name: fieldName, value: fieldValue))
+          if p.cur.kind == tkSymbol and p.cur.lex == ",":
+            discard p.eat()
+          elif p.cur.kind == tkSymbol and p.cur.lex == ")":
+            break
+          else:
+            let current = p.cur
+            let actualName = friendlyTokenName(current.kind, current.lex)
+            raise newParseError(p.posOf(current), &"expected ',' or ')', got {actualName}")
+      discard p.expect(tkSymbol, ")")
+      # Create object literal expression with the type
+      initExpr = some(Expr(kind: ekObjectLiteral, objectType: typeExpr, fieldInits: fieldInits, pos: p.posOf(t)))
+    return Expr(kind: ekNew, newType: typeExpr, initExpr: initExpr, pos: p.posOf(t))
+  else:
+    # Inferred syntax: new(value) - infer type from value
+    discard p.expect(tkSymbol, "(")
+    let valueExpr = p.parseExpr()
+    discard p.expect(tkSymbol, ")")
+    # Create new expression with type inference marker
+    return Expr(kind: ekNew, newType: nil, initExpr: some(valueExpr), pos: p.posOf(t))
 
 
 # Parses match expressions: match expr { pattern => body, ... }
@@ -455,9 +486,38 @@ proc parseFunctionCallExpr(p: Parser; t: Token): Expr =
 # Parses identifier expressions (variables, function calls, or casts)
 proc parseIdentifierExpr(p: Parser; t: Token): Expr =
   if p.cur.kind == tkSymbol and p.cur.lex == "(":
+    # Check if this is a cast, object literal, or function call
     if t.lex in ["bool", "char", "int", "float", "string"]:
       return p.parseCastExpr(t)
+
+    # Look ahead to distinguish between object literal Type(field: value) and function call func(arg)
+    # Object literals have "identifier :" pattern after opening paren
+    # Empty parentheses () are treated as function calls, not object literals
+    let isObjectLiteral = (p.peek(1).kind == tkIdent and p.peek(2).kind == tkSymbol and p.peek(2).lex == ":")
+
+    if isObjectLiteral:
+      # Typed object literal: Type(field: value, ...)
+      discard p.eat()  # consume (
+      var fieldInits: seq[tuple[name: string, value: Expr]] = @[]
+      if not (p.cur.kind == tkSymbol and p.cur.lex == ")"):
+        while true:
+          let fieldName = p.expect(tkIdent).lex
+          discard p.expect(tkSymbol, ":")
+          let fieldValue = p.parseExpr()
+          fieldInits.add((name: fieldName, value: fieldValue))
+          if p.cur.kind == tkSymbol and p.cur.lex == ",":
+            discard p.eat()
+          elif p.cur.kind == tkSymbol and p.cur.lex == ")":
+            break
+          else:
+            let current = p.cur
+            let actualName = friendlyTokenName(current.kind, current.lex)
+            raise newParseError(p.posOf(current), &"expected ',' or ')', got {actualName}")
+      discard p.expect(tkSymbol, ")")
+      # Create typed object literal with the type name
+      return Expr(kind: ekObjectLiteral, objectType: tUserDefined(t.lex), fieldInits: fieldInits, pos: p.posOf(t))
     else:
+      # Regular function call
       return p.parseFunctionCallExpr(t)
   else:
     return Expr(kind: ekVar, vname: t.lex, pos: p.posOf(t))
@@ -544,10 +604,7 @@ proc parseArrayAccessOrSlice(p: Parser; left: Expr; t: Token): Expr =
   if p.cur.kind == tkSymbol and p.cur.lex == ":":
     # Slicing from start: expr[:end]
     discard p.eat()  # consume ":"
-    let endExpr = if p.cur.kind == tkSymbol and p.cur.lex == "]":
-                    none(Expr)
-                  else:
-                    some(p.parseExpr())
+    let endExpr = if p.cur.kind == tkSymbol and p.cur.lex == "]": none(Expr) else: some(p.parseExpr())
     discard p.expect(tkSymbol, "]")
     return Expr(kind: ekSlice, sliceExpr: left, startExpr: none(Expr), endExpr: endExpr, pos: p.posOf(t))
   else:
@@ -555,10 +612,7 @@ proc parseArrayAccessOrSlice(p: Parser; left: Expr; t: Token): Expr =
     if p.cur.kind == tkSymbol and p.cur.lex == ":":
       # Slicing: expr[start:end]
       discard p.eat()  # consume ":"
-      let endExpr = if p.cur.kind == tkSymbol and p.cur.lex == "]":
-                      none(Expr)
-                    else:
-                      some(p.parseExpr())
+      let endExpr = if p.cur.kind == tkSymbol and p.cur.lex == "]": none(Expr) else: some(p.parseExpr())
       discard p.expect(tkSymbol, "]")
       return Expr(kind: ekSlice, sliceExpr: left, startExpr: some(firstExpr), endExpr: endExpr, pos: p.posOf(t))
     else:
@@ -804,8 +858,8 @@ proc parseImport(p: Parser): Stmt =
         raise newParseError(Pos(filename: p.filename, line: p.cur.line, col: p.cur.col), "Expected module name after '/'")
 
     # Add .etch extension if not present (but not for paths ending with /)
-    if not importPath.endsWith(".etch") and not importPath.endsWith("/"):
-      importPath = importPath & ".etch"
+    if not importPath.endsWith(SOURCE_FILE_EXTENSION) and not importPath.endsWith("/"):
+      importPath = importPath & SOURCE_FILE_EXTENSION
 
   # Parse optional import list
   var items: seq[ImportItem] = @[]
@@ -975,6 +1029,7 @@ proc parseSimpleStmt(p: Parser): Stmt =
   # Check for simple identifier assignment (x = ...)
   if start.kind == tkIdent and p.peek().kind == tkSymbol and p.peek().lex == "=":
     isAssignment = true
+
   # Check for array index assignment (arr[idx] = ...)
   elif start.kind == tkIdent and p.peek().kind == tkSymbol and p.peek().lex == "[":
     # Look for pattern: identifier [ ... ] =
@@ -995,6 +1050,7 @@ proc parseSimpleStmt(p: Parser): Stmt =
               isArrayIndexAssign = true
             break
       lookAheadIdx += 1
+
   # Check for field assignment (obj.field = ...)
   elif start.kind == tkIdent:
     # Look for pattern: identifier . identifier =
@@ -1024,18 +1080,13 @@ proc parseSimpleStmt(p: Parser): Stmt =
       discard p.expect(tkSymbol, ";")
 
       # Create appropriate assignment statement based on left expression type
-      if leftExpr.kind == ekFieldAccess:
-        # Support nested field access: p.sub.field = value
-        return Stmt(kind: skFieldAssign,
-                   faTarget: leftExpr,  # Store the full field access expression
-                   faValue: rightExpr,
-                   pos: p.posOf(start))
-      elif leftExpr.kind == ekIndex:
+      if leftExpr.kind == ekFieldAccess or leftExpr.kind == ekIndex:
+        # Nested field access: p.sub.field = value
         # Array index assignment: arr[idx] = value
         return Stmt(kind: skFieldAssign,
-                   faTarget: leftExpr,  # Store the index expression
-                   faValue: rightExpr,
-                   pos: p.posOf(start))
+                    faTarget: leftExpr,
+                    faValue: rightExpr,
+                    pos: p.posOf(start))
       else:
         raise newParseError(p.posOf(start), "invalid assignment target")
   else:
@@ -1132,20 +1183,31 @@ proc parseTypeDecl(p: Parser): Stmt =
 # Parse function declarations
 proc parseFn(p: Parser; prog: Program; isExported: bool = false) =
   discard p.expect(tkKeyword, "fn")
+
+  # Check for destructor syntax: fn ~(obj: Type)
+  var isDestructor = false
+  if p.cur.kind == tkSymbol and p.cur.lex == "~":
+    isDestructor = true
+    discard p.eat()  # consume "~"
+
   # Allow operator symbols as function names for operator overloading
   let nameToken = p.cur
   var name: string
-  if nameToken.kind == tkIdent:
+  if isDestructor:
+    name = "~"  # temporary placeholder
+  elif nameToken.kind == tkIdent:
     name = p.eat().lex
   elif nameToken.kind == tkSymbol and nameToken.lex in ["+", "-", "*", "/", "%", "==", "!=", "<", "<=", ">", ">="]:
     name = p.eat().lex
   else:
     let actualName = friendlyTokenName(nameToken.kind, nameToken.lex)
     raise newParseError(p.posOf(nameToken), &"expected function name or operator symbol, got {actualName}")
-  let tps = p.parseTyParams()
+
   # Track generic parameters for type parsing
+  let tps = p.parseTyParams()
   for tp in tps:
     p.genericParams.add(tp.name)
+
   discard p.expect(tkSymbol, "(")
   var ps: seq[Param] = @[]
   if not (p.cur.kind == tkSymbol and p.cur.lex == ")"):
@@ -1166,11 +1228,27 @@ proc parseFn(p: Parser; prog: Program; isExported: bool = false) =
       else: break
   discard p.expect(tkSymbol, ")")
 
+  # Validate destructor constraints
+  if isDestructor:
+    if ps.len != 1:
+      raise newParseError(p.posOf(nameToken), "destructor must have exactly one parameter")
+    if ps[0].typ.kind != tkObject and ps[0].typ.kind != tkUserDefined:
+      raise newParseError(p.posOf(nameToken), "destructor parameter must be an object type")
+    # Set destructor name based on type: ~TypeName
+    let typeName = ps[0].typ.name
+    name = "~" & typeName
+
   # Return type is optional - if -> is present, parse it, otherwise infer from body
   var rt: EtchType = nil
   if p.cur.kind == tkSymbol and p.cur.lex == "->":
     discard p.eat()  # consume "->"
     rt = p.parseType()
+
+  # Validate destructor return type
+  if isDestructor:
+    if rt != nil and rt.kind != tkVoid:
+      raise newParseError(p.posOf(nameToken), "destructor must return void")
+    rt = tVoid()  # Ensure return type is void
 
   let body = p.parseBlock()
   let fd = FunDecl(name: name, typarams: tps, params: ps, ret: rt, body: body, isExported: isExported)
@@ -1181,6 +1259,12 @@ proc parseFn(p: Parser; prog: Program; isExported: bool = false) =
 
 # Parse a single statement
 proc parseStmt*(p: Parser): Stmt =
+  # Handle unnamed scope blocks: { ... }
+  if p.cur.kind == tkSymbol and p.cur.lex == "{":
+    let startPos = p.posOf(p.cur)
+    let blockStmts = p.parseBlock()
+    return Stmt(kind: skBlock, blockBody: blockStmts, pos: startPos)
+
   if p.cur.kind == tkKeyword:
     case p.cur.lex
     of "let":
@@ -1265,7 +1349,7 @@ proc parseProgram*(toks: seq[Token], filename: string = "<unknown>"): Program =
       # Handle multi-module imports by expanding them
       if importStmt.importKind == "multi-module":
         # Remove .etch extension from importPath if present for the base path
-        let basePath = if importStmt.importPath.endsWith(".etch"):
+        let basePath = if importStmt.importPath.endsWith(SOURCE_FILE_EXTENSION):
           importStmt.importPath[0..^6]
         else:
           importStmt.importPath
@@ -1273,7 +1357,7 @@ proc parseProgram*(toks: seq[Token], filename: string = "<unknown>"): Program =
         # Create individual import statements for each module
         for item in importStmt.importItems:
           if item.itemKind == "module":
-            let fullPath = basePath & "/" & item.name & ".etch"
+            let fullPath = basePath & "/" & item.name & SOURCE_FILE_EXTENSION
             result.globals.add Stmt(
               kind: skImport,
               importKind: "module",

@@ -3,11 +3,27 @@
 
 import std/[tables, macros, math, strutils, strformat, times]
 import ../common/[constants, cffi, values, logging]
-import ./[regvm, regvm_debugger, regvm_profiler, regvm_replay, regvm_lifetime]
+import ./[regvm, regvm_debugger, regvm_profiler, regvm_replay, regvm_lifetime, regvm_heap]
 
 
 # Global table to store values injected during comptime execution
 var comptimeInjections*: Table[string, V] = initTable[string, V]()
+
+# Global table to keep heap references alive (prevents GC from collecting them)
+var heapRefs: Table[pointer, Heap] = initTable[pointer, Heap]()
+
+# Helper proc to run final cycle detection
+proc runFinalCycleDetection(vm: RegisterVM) =
+  if vm.heap != nil:
+    let heap = cast[Heap](vm.heap)
+    let cycles = heap.detectCycles()
+    if cycles.len > 0:
+      for cycle in cycles:
+        var info = ""
+        for i in 0 ..< cycle.objectIds.len:
+          if i > 0: info &= ", "
+          info &= "#" & $cycle.objectIds[i] & " (" & $cycle.objectKinds[i] & ")"
+        echo "[HEAP] Cycle detected with ", cycle.totalSize, " objects: ", info
 
 
 # Logging helper for VM execution
@@ -15,6 +31,10 @@ macro log(verbose: untyped, msg: untyped): untyped =
   result = quote do:
     if `verbose`:
       logCompiler(true, `msg`)
+
+
+# Forward declaration for invokeDestructor (defined later in this file)
+proc invokeDestructor*(vm: RegisterVM, funcIdx: int, objId: int)
 
 
 # Cross-platform deterministic PRNG using Xorshift64*
@@ -85,10 +105,24 @@ proc newRegisterVM*(prog: RegBytecodeProgram): RegisterVM =
     profiler: nil,                                    # No profiler by default - zero cost
     isProfiling: false,                               # Not profiling by default
     replayEngine: nil,                                # No replay engine by default - zero cost
-    isReplaying: false                                # Not replaying by default
+    isReplaying: false,                               # Not replaying by default
+    heap: nil,                                        # Heap will be initialized below
+    inDestructor: false                               # Not in destructor initially
   )
 
   result.currentFrame = addr result.frames[0]
+
+  # Initialize heap for reference counting
+  let heap = newHeap(verbose = false, cycleInterval = 1000)
+  result.heap = cast[pointer](heap)
+  # Set VM reference in heap for destructor calls
+  heap.vm = cast[pointer](result)
+  # Set destructor callback so heap can invoke destructors
+  heap.callDestructor = proc(vmPtr: pointer, funcIdx: int, objId: int) =
+    let vm = cast[RegisterVM](vmPtr)
+    invokeDestructor(vm, funcIdx, objId)
+  # Keep heap reference alive in global table
+  heapRefs[result.heap] = heap
 
 
 proc newRegisterVMWithDebugger*(prog: RegBytecodeProgram, debugger: RegEtchDebugger): RegisterVM =
@@ -106,10 +140,24 @@ proc newRegisterVMWithDebugger*(prog: RegBytecodeProgram, debugger: RegEtchDebug
     profiler: nil,                                    # No profiler by default - zero cost
     isProfiling: false,                               # Not profiling by default
     replayEngine: nil,                                # No replay engine by default - zero cost
-    isReplaying: false                                # Not replaying by default
+    isReplaying: false,                               # Not replaying by default
+    heap: nil,                                        # Heap will be initialized below
+    inDestructor: false                               # Not in destructor initially
   )
 
   result.currentFrame = addr result.frames[0]
+
+  # Initialize heap for reference counting
+  let heap = newHeap(verbose = false, cycleInterval = 1000)
+  result.heap = cast[pointer](heap)
+  # Set VM reference in heap for destructor calls
+  heap.vm = cast[pointer](result)
+  # Set destructor callback so heap can invoke destructors
+  heap.callDestructor = proc(vmPtr: pointer, funcIdx: int, objId: int) =
+    let vm = cast[RegisterVM](vmPtr)
+    invokeDestructor(vm, funcIdx, objId)
+  # Keep heap reference alive in global table
+  heapRefs[result.heap] = heap
 
   if debugger != nil:
     debugger.attachToVM(cast[pointer](result))
@@ -132,9 +180,23 @@ proc newRegisterVMWithProfiler*(prog: RegBytecodeProgram): RegisterVM =
     profiler: cast[pointer](profiler),
     isProfiling: true,
     replayEngine: nil,  # No replay engine by default - zero cost
-    isReplaying: false  # Not replaying by default
+    isReplaying: false, # Not replaying by default
+    heap: nil,          # Heap will be initialized below
+    inDestructor: false # Not in destructor initially
   )
   result.currentFrame = addr result.frames[0]
+
+  # Initialize heap for reference counting
+  let heap = newHeap(verbose = false, cycleInterval = 1000)
+  result.heap = cast[pointer](heap)
+  # Set VM reference in heap for destructor calls
+  heap.vm = cast[pointer](result)
+  # Set destructor callback so heap can invoke destructors
+  heap.callDestructor = proc(vmPtr: pointer, funcIdx: int, objId: int) =
+    let vm = cast[RegisterVM](vmPtr)
+    invokeDestructor(vm, funcIdx, objId)
+  # Keep heap reference alive in global table
+  heapRefs[result.heap] = heap
 
 
 # Fast register access macros
@@ -195,6 +257,10 @@ proc formatRegisterValue*(v: V): string =
   of vkErr:
     let inner = v.wrapped[]
     result = "error(" & formatRegisterValue(inner) & ")"
+  of vkRef:
+    result = "ref#" & $v.refId
+  of vkWeak:
+    result = "weak#" & $v.weakId
 
 
 proc formatValueForPrint*(v: V): string =
@@ -260,6 +326,10 @@ proc formatValueForPrint*(v: V): string =
     result = "ok(" & formatValueForPrint(v.wrapped[]) & ")"
   of vkErr:
     result = "error(" & formatValueForPrint(v.wrapped[]) & ")"
+  of vkRef:
+    result = "<ref#" & $v.refId & ">"
+  of vkWeak:
+    result = "<weak#" & $v.weakId & ">"
   else:
     result = "nil"
 
@@ -304,6 +374,10 @@ proc getValueType*(v: V): string =
     result = "result"
   of vkErr:
     result = "result"
+  of vkRef:
+    result = "ref"
+  of vkWeak:
+    result = "weak"
 
 
 # Optimized arithmetic operations with type specialization
@@ -379,23 +453,52 @@ template doLe(a, b: V): bool =
   else:
     false
 
-template doEq(a, b: V): bool =
+proc doEq(vm: RegisterVM, a, b: V): bool =
+  # Handle cross-type comparisons for references and nil
+  if a.kind == vkNil and b.kind == vkRef:
+    return b.refId == 0
+  elif a.kind == vkRef and b.kind == vkNil:
+    return a.refId == 0
+  elif a.kind == vkNil and b.kind == vkWeak:
+    # Check if weak reference's target is freed
+    if vm.heap == nil or b.weakId == 0:
+      return true
+    let heap = cast[Heap](vm.heap)
+    let weakObj = heap.getObject(b.weakId)
+    if weakObj == nil:
+      return true
+    return weakObj.targetId <= 0  # -1 means freed, 0 means nil
+  elif a.kind == vkWeak and b.kind == vkNil:
+    # Check if weak reference's target is freed
+    if vm.heap == nil or a.weakId == 0:
+      return true
+    let heap = cast[Heap](vm.heap)
+    let weakObj = heap.getObject(a.weakId)
+    if weakObj == nil:
+      return true
+    return weakObj.targetId <= 0  # -1 means freed, 0 means nil
+
+  # Same-type comparisons
   if a.kind != b.kind:
-    false
+    return false
   elif a.kind == vkInt:
-    a.ival == b.ival
+    return a.ival == b.ival
   elif a.kind == vkFloat:
-    a.fval == b.fval
+    return a.fval == b.fval
   elif a.kind == vkBool:
-    a.bval == b.bval
+    return a.bval == b.bval
   elif a.kind == vkChar:
-    a.cval == b.cval
+    return a.cval == b.cval
   elif a.kind == vkString:
-    a.sval == b.sval
+    return a.sval == b.sval
   elif a.kind == vkNil:
-    true
+    return true
+  elif a.kind == vkRef:
+    return a.refId == b.refId
+  elif a.kind == vkWeak:
+    return a.weakId == b.weakId
   else:
-    false
+    return false
 
 
 # Converter between V type (VM value) and Value type (C FFI value)
@@ -492,8 +595,12 @@ proc vmPrint(vm: RegisterVM, output: string, outputBuffer: var string, outputCou
 
 # Main execution loop - highly optimized with case statements
 proc execute*(vm: RegisterVM, verbose: bool = false): int =
-  # When debugging, resume from where we left off; otherwise start from entry point
-  var pc = if vm.isDebugging and vm.currentFrame.pc >= 0: vm.currentFrame.pc else: vm.program.entryPoint
+  # When debugging or in destructor, resume from where we left off; otherwise start from entry point
+  # For destructors, we set currentFrame.pc before calling execute(), so we need to use it
+  var pc = if (vm.isDebugging or vm.inDestructor) and vm.currentFrame.pc >= 0:
+    vm.currentFrame.pc
+  else:
+    vm.program.entryPoint
   let instructions = vm.program.instructions
   let maxInstr = instructions.len
   vm.currentFrame.pc = pc  # Initialize PC in frame
@@ -738,7 +845,7 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
     of ropEq:
       let b = getReg(vm, instr.b)
       let c = getReg(vm, instr.c)
-      let isEqual = doEq(b, c)
+      let isEqual = doEq(vm, b, c)
       let skipIfNot = instr.a != 0
       log(verbose, "ropEq: reg" & $instr.b & " kind=" & $b.kind & " reg" & $instr.c & " kind=" & $c.kind &
           " equal=" & $isEqual & " skipIfNot=" & $skipIfNot & " willSkip=" & $(isEqual != skipIfNot))
@@ -785,12 +892,12 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
     of ropEqStore:
       let b = getReg(vm, instr.b)
       let c = getReg(vm, instr.c)
-      setReg(vm, instr.a, makeBool(doEq(b, c)))
+      setReg(vm, instr.a, makeBool(doEq(vm, b, c)))
 
     of ropNeStore:
       let b = getReg(vm, instr.b)
       let c = getReg(vm, instr.c)
-      setReg(vm, instr.a, makeBool(not doEq(b, c)))
+      setReg(vm, instr.a, makeBool(not doEq(vm, b, c)))
 
     of ropLtStore:
       let b = getReg(vm, instr.b)
@@ -845,7 +952,7 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       if isArray(haystack):
         # Check if needle is in array
         for i in 0..<haystack.aval.len:
-          if doEq(needle, haystack.aval[i]):
+          if doEq(vm, needle, haystack.aval[i]):
             found = true
             break
       elif isString(haystack):
@@ -867,7 +974,7 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       if isArray(haystack):
         # Check if needle is in array
         for i in 0..<haystack.aval.len:
-          if doEq(needle, haystack.aval[i]):
+          if doEq(vm, needle, haystack.aval[i]):
             found = true
             break
       elif isString(haystack):
@@ -1116,29 +1223,151 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       log(verbose, "ropNewTable: created new table in reg " & $instr.a)
 
     of ropGetField:
-      # Get field from table: R[A] = R[B][K[C]]
-      let table = getReg(vm, instr.b)
-      if isTable(table):
-        let fieldName = vm.constants[instr.c].sval
-        if table.tval.hasKey(fieldName):
-          setReg(vm, instr.a, table.tval[fieldName])
+      # Get field from table or heap object: R[A] = R[B][K[C]]
+      let objVal = getReg(vm, instr.b)
+      let fieldName = vm.constants[instr.c].sval
+
+      if objVal.isRef and vm.heap != nil:
+        # Heap reference - get field from heap object
+        let heap = cast[Heap](vm.heap)
+        let heapObj = heap.getObject(objVal.refId)
+        if heapObj != nil and heapObj.kind == hokTable:
+          if heapObj.fields.hasKey(fieldName):
+            setReg(vm, instr.a, heapObj.fields[fieldName])
+            log(verbose, "ropGetField: got field '" & fieldName & "' from heap object #" & $objVal.refId)
+          else:
+            setReg(vm, instr.a, makeNil())
+            log(verbose, "ropGetField: field '" & fieldName & "' not found in heap object")
+        else:
+          setReg(vm, instr.a, makeNil())
+          log(verbose, "ropGetField: ERROR - heap object not found or not a table")
+      elif objVal.isTable:
+        # Regular table value
+        if objVal.tval.hasKey(fieldName):
+          setReg(vm, instr.a, objVal.tval[fieldName])
         else:
           setReg(vm, instr.a, makeNil())
           log(verbose, "ropGetField: field '" & fieldName & "' not found in table")
       else:
         setReg(vm, instr.a, makeNil())
-        log(verbose, "ropGetField: ERROR - reg " & $instr.b & " is not a table")
+        log(verbose, "ropGetField: ERROR - not a table or heap ref")
 
     of ropSetField:
-      # Set field in table: R[B][K[C]] = R[A]
-      var table = getReg(vm, instr.b)
-      if isTable(table):
-        let fieldName = vm.constants[instr.c].sval
-        table.tval[fieldName] = getReg(vm, instr.a)
+      # Set field in table or heap object: R[B][K[C]] = R[A]
+      let objVal = getReg(vm, instr.b)
+      let fieldName = vm.constants[instr.c].sval
+      let valueToSet = getReg(vm, instr.a)
+
+      if objVal.isRef and vm.heap != nil:
+        # Heap reference - set field in heap object
+        let heap = cast[Heap](vm.heap)
+        let heapObj = heap.getObject(objVal.refId)
+        if heapObj != nil and heapObj.kind == hokTable:
+          heapObj.fields[fieldName] = valueToSet
+          log(verbose, "ropSetField: set field '" & fieldName & "' in heap object #" & $objVal.refId)
+
+          # Track reference for cycle detection
+          heap.trackRef(objVal.refId, valueToSet)
+        else:
+          log(verbose, "ropSetField: ERROR - heap object not found or not a table")
+      elif objVal.isTable:
+        # Regular table value - modify and set back
+        var table = objVal
+        table.tval[fieldName] = valueToSet
         setReg(vm, instr.b, table)
         log(verbose, "ropSetField: set field '" & fieldName & "' in table")
       else:
-        log(verbose, "ropSetField: ERROR - reg " & $instr.b & " is not a table")
+        log(verbose, "ropSetField: ERROR - not a table or heap ref")
+
+    # --- Reference Counting ---
+    of ropNewRef:
+      # Allocate a new heap object (table or scalar)
+      # C=1: scalar ref - allocate scalar with value from R[B]
+      # C=0: table ref - allocate empty table with B=destructor function index (0 if none)
+      if vm.heap != nil:
+        let heap = cast[Heap](vm.heap)
+        if instr.c == 1:
+          # Scalar ref: R[A] = new(R[B])
+          let scalarValue = getReg(vm, instr.b)
+          let objId = heap.allocScalar(scalarValue)
+          setReg(vm, instr.a, makeRef(objId))
+          log(verbose, "ropNewRef: allocated scalar heap object #" & $objId & " in reg " & $instr.a)
+        else:
+          # Table ref: R[A] = new[T]{}
+          # B contains encoded destructor index: 0 = none, n+1 = function index n
+          let destructorIdx = if instr.b == 0: -1 else: int(instr.b) - 1
+          let objId = heap.allocTable(destructorFuncIdx = destructorIdx)
+          setReg(vm, instr.a, makeRef(objId))
+          log(verbose, "ropNewRef: allocated table heap object #" & $objId & " with destructor funcIdx=" & $destructorIdx & " in reg " & $instr.a)
+      else:
+        # Fallback to non-heap table if heap not initialized
+        setReg(vm, instr.a, makeTable())
+        log(verbose, "ropNewRef: WARNING - heap not initialized, using makeTable()")
+
+    of ropIncRef:
+      # Increment reference count of R[A]
+      let val = getReg(vm, instr.a)
+      if val.isRef and vm.heap != nil:
+        let heap = cast[Heap](vm.heap)
+        heap.incRef(val.refId)
+        log(verbose, "ropIncRef: incremented refcount for object #" & $val.refId)
+      else:
+        log(verbose, "ropIncRef: skipped (not a ref or heap not initialized)")
+
+    of ropDecRef:
+      # Decrement reference count of R[A], free if zero
+      let val = getReg(vm, instr.a)
+      if val.isRef and vm.heap != nil:
+        # Flush output buffer before decRef, since it might invoke a destructor
+        # which will create its own execute() context with its own buffer
+        flushOutput()
+        let heap = cast[Heap](vm.heap)
+        heap.decRef(val.refId)
+        log(verbose, "ropDecRef: decremented refcount for object #" & $val.refId)
+      else:
+        log(verbose, "ropDecRef: skipped (not a ref or heap not initialized)")
+
+    of ropNewWeak:
+      # Create weak reference to R[B]
+      let targetVal = getReg(vm, instr.b)
+      if targetVal.isRef and vm.heap != nil:
+        let heap = cast[Heap](vm.heap)
+        let weakId = heap.allocWeak(targetVal.refId, "unknown")  # TODO: pass type info
+        setReg(vm, instr.a, makeWeak(weakId))
+        log(verbose, "ropNewWeak: created weak ref #" & $weakId & " to object #" & $targetVal.refId)
+      else:
+        setReg(vm, instr.a, makeNil())
+        log(verbose, "ropNewWeak: target is not a ref, storing nil")
+
+    of ropWeakToStrong:
+      # Promote weak ref R[B] to strong ref in R[A]
+      let weakVal = getReg(vm, instr.b)
+      if weakVal.isWeak and vm.heap != nil:
+        let heap = cast[Heap](vm.heap)
+        let strongId = heap.weakToStrong(weakVal.weakId)
+        if strongId > 0:
+          setReg(vm, instr.a, makeRef(strongId))
+          log(verbose, "ropWeakToStrong: promoted weak #" & $weakVal.weakId & " to strong #" & $strongId)
+        else:
+          setReg(vm, instr.a, makeNil())
+          log(verbose, "ropWeakToStrong: weak ref target was freed, storing nil")
+      else:
+        setReg(vm, instr.a, makeNil())
+        log(verbose, "ropWeakToStrong: not a weak ref, storing nil")
+
+    of ropCheckCycles:
+      # Manually trigger cycle detection
+      if vm.heap != nil:
+        let heap = cast[Heap](vm.heap)
+        let cycles = heap.detectCycles()
+        if cycles.len > 0:
+          log(verbose, "ropCheckCycles: detected " & $cycles.len & " cycle(s)")
+          for cycle in cycles:
+            echo formatCycle(cycle)
+        else:
+          log(verbose, "ropCheckCycles: no cycles detected")
+      else:
+        log(verbose, "ropCheckCycles: heap not initialized")
 
     # --- Control Flow ---
     of ropJmp:
@@ -1383,7 +1612,19 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
       of "deref":
         if numArgs == 1:
           let val = getReg(vm, resultReg + 1)
-          setReg(vm, resultReg, val)
+          # If it's a heap reference, dereference it
+          if val.isRef and vm.heap != nil:
+            let heap = cast[Heap](vm.heap)
+            let obj = heap.getObject(val.refId)
+            if obj != nil and obj.kind == hokScalar:
+              # For scalar refs, extract the underlying value
+              setReg(vm, resultReg, obj.value)
+            else:
+              # For table/array/weak refs, return the ref itself (@ is a no-op)
+              setReg(vm, resultReg, val)
+          else:
+            # Not a ref, just return as-is
+            setReg(vm, resultReg, val)
         else:
           setReg(vm, resultReg, makeNil())
 
@@ -1539,6 +1780,9 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
           let report = profiler.generateReport()
           echo report
 
+        # Run final cycle detection before exit
+        runFinalCycleDetection(vm)
+
         return 0
 
       # Get return value (if any)
@@ -1581,6 +1825,9 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
           profiler.executionEndTime = getTime()
           let report = profiler.generateReport()
           echo report
+
+        # Run final cycle detection before exit
+        runFinalCycleDetection(vm)
 
         return 0
 
@@ -1697,6 +1944,9 @@ proc execute*(vm: RegisterVM, verbose: bool = false): int =
     let report = profiler.generateReport()
     echo report
 
+  # Run final cycle detection before exit
+  runFinalCycleDetection(vm)
+
   return 0
 
 
@@ -1710,6 +1960,75 @@ proc runRegProgram*(prog: RegBytecodeProgram, verbose: bool = false): int =
 proc runRegProgramWithProfiler*(prog: RegBytecodeProgram, verbose: bool = false): int =
   let vm = newRegisterVMWithProfiler(prog)
   return vm.execute(verbose)
+
+
+# Invoke a destructor function for an object being freed
+# This is called from heap deallocation (regvm_heap.nim)
+proc invokeDestructor*(vm: RegisterVM, funcIdx: int, objId: int) =
+  ## Invoke a destructor function with the given object ID as argument
+  ## Called from freeObject when an object with a destructor is being deallocated
+
+  # Prevent recursive destructor calls
+  if vm.inDestructor:
+    return
+
+  # Validate function index
+  if funcIdx < 0 or funcIdx >= vm.program.functionTable.len:
+    return
+
+  let funcName = vm.program.functionTable[funcIdx]
+
+  if not vm.program.functions.hasKey(funcName):
+    return
+
+  let funcInfo = vm.program.functions[funcName]
+
+  # Mark that we're in a destructor
+  vm.inDestructor = true
+
+  # Create temporary frame for destructor execution
+  let numRegs = max(1, funcInfo.maxRegister + 1)
+  var destructorFrame = RegisterFrame()
+  destructorFrame.regs = newSeq[V](numRegs)
+  destructorFrame.returnAddr = -1  # Special marker: destructor call
+  destructorFrame.baseReg = 0
+  destructorFrame.deferStack = @[]
+  destructorFrame.deferReturnPC = -1
+
+  # Initialize all registers to nil
+  for i in 0..<numRegs:
+    destructorFrame.regs[i] = V(kind: vkNil)
+
+  # Set the object ref as the first argument (register 0)
+  destructorFrame.regs[0] = makeRef(objId)
+
+  # Set PC to destructor start
+  destructorFrame.pc = funcInfo.startPos
+
+  # Save current execution state
+  # IMPORTANT: Save the frame INDEX, not the pointer, since we'll be replacing vm.frames
+  let savedFrameIdx = vm.frames.len - 1
+  let savedFrames = vm.frames
+
+  # Create isolated execution context for destructor
+  vm.frames = @[destructorFrame]
+  vm.currentFrame = addr vm.frames[0]
+
+  # Execute the destructor by calling execute() on the isolated context
+  # This reuses all the opcode handling from the main VM loop
+  try:
+    discard execute(vm, verbose = false)
+  except CatchableError as e:
+    # If destructor throws an error, log it but don't crash
+    echo "[HEAP] Error in destructor ", funcName, ": ", e.msg
+  except Exception as e:
+    echo "[HEAP] Fatal error in destructor ", funcName, ": ", e.msg
+  finally:
+    # Restore execution state
+    vm.inDestructor = false
+    vm.frames = savedFrames
+    if savedFrameIdx >= 0 and savedFrameIdx < vm.frames.len:
+      vm.currentFrame = addr vm.frames[savedFrameIdx]
 
 
 # ===== Replay API =====

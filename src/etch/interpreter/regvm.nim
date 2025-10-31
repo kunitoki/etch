@@ -71,6 +71,14 @@ type
     ropGetField,      # R[A] = R[B][K[C]] (field access with constant key)
     ropSetField,      # R[B][K[C]] = R[A] (field set with constant key)
 
+    # Reference counting
+    ropNewRef,        # R[A] = new heap object (allocate on heap, returns ref)
+    ropIncRef,        # Increment reference count of R[A]
+    ropDecRef,        # Decrement reference count of R[A], free if zero
+    ropNewWeak,       # R[A] = new weak reference to R[B]
+    ropWeakToStrong,  # R[A] = promote weak ref R[B] to strong (nil if freed)
+    ropCheckCycles,   # Check for reference cycles and report
+
     # Control flow
     ropJmp,           # pc += sBx (unconditional jump)
     ropTest,          # if not (R[A] == C) then skip
@@ -150,6 +158,8 @@ type
     isProfiling*: bool               # True when profiling is enabled
     replayEngine*: pointer           # Optional replay engine (nil when not recording/replaying)
     isReplaying*: bool               # True when in replay mode (read-only execution)
+    heap*: pointer                   # Heap for reference counting (regvm_heap.Heap)
+    inDestructor*: bool              # True when executing a destructor (prevents recursion)
 
   FunctionInfo* = object
     name*: string
@@ -175,6 +185,7 @@ type
     cffiInfo*: Table[string, CFFIInfo]  # C FFI function metadata
     lifetimeData*: Table[string, pointer]  # Function -> Lifetime data (FunctionLifetimeData) for debugging/destructors
     varMaps*: Table[string, Table[string, uint8]]  # Function -> (variable name -> register) mapping for debugging
+    typeDestructors*: Table[string, int]  # Type name -> destructor function index (-1 if none)
 
   # Optimized V type using discriminated union to reduce memory footprint
   # This significantly improves performance by:
@@ -184,7 +195,8 @@ type
   VKind* = enum
     vkInt, vkFloat, vkBool, vkChar, vkNil,
     vkString, vkArray, vkTable,
-    vkSome, vkNone, vkOk, vkErr
+    vkSome, vkNone, vkOk, vkErr,
+    vkRef, vkWeak  # Heap-managed references
 
   VBox* = ref V  # Boxed V for wrapped types (some/ok/error) to avoid recursion
 
@@ -208,6 +220,10 @@ type
       tval*: Table[string, V]
     of vkSome, vkOk, vkErr:
       wrapped*: VBox
+    of vkRef:
+      refId*: int  # Heap object ID
+    of vkWeak:
+      weakId*: int  # Weak reference ID
 
 # Fast value constructors using discriminated union
 template makeInt*(val: int64): V =
@@ -252,6 +268,12 @@ template makeArray*(vals: sink seq[V]): V =
 template makeTable*(): V =
   V(kind: vkTable, tval: initTable[string, V]())
 
+template makeRef*(id: int): V =
+  V(kind: vkRef, refId: id)
+
+template makeWeak*(id: int): V =
+  V(kind: vkWeak, weakId: id)
+
 # Type checking functions
 template isInt*(v: V): bool =
   v.kind == vkInt
@@ -288,6 +310,12 @@ template isOk*(v: V): bool =
 
 template isErr*(v: V): bool =
   v.kind == vkErr
+
+template isRef*(v: V): bool =
+  v.kind == vkRef
+
+template isWeak*(v: V): bool =
+  v.kind == vkWeak
 
 # Value extraction functions
 template getInt*(v: V): int64 =

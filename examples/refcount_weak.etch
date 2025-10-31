@@ -1,0 +1,26 @@
+// Test weak references
+type Node = object {
+    value: int;
+    parent: weak[Node];  // Weak reference to prevent cycles
+};
+
+fn main() -> void {
+    var weak_ref: weak[Node];
+
+    {
+        let root = new[Node](value: 1, parent: nil);
+
+        // Create weak reference from strong ref
+        weak_ref = root;
+
+        // Promote weak to strong (should succeed)
+        let strong: ref[Node] = weak_ref;
+        if strong != nil {
+            print("Weak ref is still alive");
+            print(strong.value);
+        }
+    }
+
+    // After root goes out of scope, weak ref should be nil
+    print(if weak_ref == nil { "Weak ref is nil after strong ref is gone" } else { "Weak ref is still alive" });
+}

@@ -1,0 +1,11 @@
+=== Ref Overwrite Test ===
+Created ref1: 100
+Created ref2: 200
+Destroying: 100
+Assigned ref2 to ref1
+ref1 value: 200
+ref2 value: 200
+Set ref2 to nil
+ref1 still valid: 200
+=== Test Complete ===
+Destroying: 200

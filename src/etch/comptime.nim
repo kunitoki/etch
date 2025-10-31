@@ -525,6 +525,10 @@ proc foldStmt(prog: Program, s: var Stmt) =
     # Fold statements in defer body
     for i in 0..<s.deferBody.len:
       foldStmt(prog, s.deferBody[i])
+  of skBlock:
+    # Fold statements in unnamed scope block
+    for i in 0..<s.blockBody.len:
+      foldStmt(prog, s.blockBody[i])
   of skTypeDecl:
     discard
   of skImport:

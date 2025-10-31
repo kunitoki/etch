@@ -92,8 +92,14 @@ proc typecheckAssign(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var 
 
   # Allow nil (ref[void]) to be assigned to any reference type
   var typesCompatible = typeEq(t0, varType)
-  if not typesCompatible and t0.kind == tkRef and t0.inner.kind == tkVoid and varType.kind == tkRef:
+  if not typesCompatible and t0.kind == tkRef and t0.inner.kind == tkVoid and varType.kind in {tkRef, tkWeak}:
     typesCompatible = true  # nil can be assigned to any reference type
+  # Allow ref[T] -> weak[T] conversion (creating weak ref from strong ref)
+  if not typesCompatible and t0.kind == tkRef and varType.kind == tkWeak and typeEq(t0.inner, varType.inner):
+    typesCompatible = true
+  # Allow weak[T] -> ref[T] conversion (promoting weak to strong)
+  if not typesCompatible and t0.kind == tkWeak and varType.kind == tkRef and typeEq(t0.inner, varType.inner):
+    typesCompatible = true
 
   if not typesCompatible:
     if t0.kind == tkVoid:
@@ -115,8 +121,14 @@ proc typecheckFieldAssign(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst:
 
   # Check type compatibility
   var typesCompatible = typeEq(valueType, targetType)
-  if not typesCompatible and valueType.kind == tkRef and valueType.inner.kind == tkVoid and targetType.kind == tkRef:
+  if not typesCompatible and valueType.kind == tkRef and valueType.inner.kind == tkVoid and targetType.kind in {tkRef, tkWeak}:
     typesCompatible = true  # nil can be assigned to any reference type
+  # Allow ref[T] -> weak[T] conversion
+  if not typesCompatible and valueType.kind == tkRef and targetType.kind == tkWeak and typeEq(valueType.inner, targetType.inner):
+    typesCompatible = true
+  # Allow weak[T] -> ref[T] conversion
+  if not typesCompatible and valueType.kind == tkWeak and targetType.kind == tkRef and typeEq(valueType.inner, targetType.inner):
+    typesCompatible = true
 
   if not typesCompatible:
     if valueType.kind == tkVoid:
@@ -406,6 +418,10 @@ proc typecheckStmt*(prog: Program; fd: FunDecl; sc: Scope; s: Stmt; subst: var T
   of skReturn: typecheckReturn(prog, fd, sc, s, subst)
   of skComptime: typecheckComptime(prog, fd, sc, s, subst)
   of skDefer: typecheckDefer(prog, fd, sc, s, subst)
+  of skBlock:
+    # Unnamed scope blocks - type check all statements in the block
+    for stmt in s.blockBody:
+      typecheckStmt(prog, fd, sc, stmt, subst, isBlockResult)
   of skTypeDecl:
     # Type declarations are processed during program initialization
     # No runtime type checking needed here

@@ -1,0 +1,29 @@
+// Test tree structure with parent weak references
+type TreeNode = object {
+    value: int;
+    left: ref[TreeNode];
+    right: ref[TreeNode];
+    parent: weak[TreeNode];
+};
+
+fn make_node(value: int, parent: weak[TreeNode]) -> ref[TreeNode] {
+    return new[TreeNode](
+        value: value,
+        left: nil,
+        right: nil,
+        parent: parent
+    );
+}
+
+fn main() -> void {
+    let root = make_node(1, nil);
+    root.left = make_node(2, root);
+    root.right = make_node(3, root);
+
+    print("Tree created");
+    print(root.value);
+    print(root.left.value);
+    print(root.right.value);
+
+    // No cycles due to weak parent refs
+}

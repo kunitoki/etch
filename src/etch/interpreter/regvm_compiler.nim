@@ -1,7 +1,7 @@
 # regcompiler.nim
 # Register-based bytecode compiler with aggressive optimizations
 
-import std/[tables, macros, options, strutils, strformat]
+import std/[tables, macros, options, strutils, strformat, algorithm]
 import ../common/[constants, types, logging]
 import ../frontend/ast
 import ./[regvm, regvm_lifetime]
@@ -22,6 +22,8 @@ type
     currentFunction*: string          # Current function being compiled (for debug info)
     globalVars*: seq[string]          # Names of global variables
     hasDefers*: bool                  # True if current function has defer statements
+    refVars*: Table[uint8, EtchType]  # Track ref-typed variables: register -> type
+    types*: Table[string, EtchType]   # User-defined types for accessing field defaults
 
   LoopInfo = object
     startLabel*: int
@@ -105,6 +107,104 @@ proc makeDebugInfo(c: RegCompiler, pos: Pos): RegDebugInfo =
     )
   else:
     result = RegDebugInfo()  # Empty debug info in release mode
+
+proc needsArrayCleanup(typ: EtchType): bool =
+  ## Recursively check if an array type contains refs/weaks that need cleanup
+  if typ == nil:
+    return false
+  case typ.kind:
+  of tkRef, tkWeak:
+    return true
+  of tkArray:
+    return needsArrayCleanup(typ.inner)
+  else:
+    return false
+
+proc emitDecRefsForScope(c: var RegCompiler, excludeReg: int = -1, removeFromTracking: bool = false) =
+  ## Emit ropDecRef for all ref-typed variables in current scope
+  ## This should be called before function returns or scope exits
+  ## excludeReg: if >= 0, don't emit decRef for this register (for return values)
+  ## removeFromTracking: if true, remove emitted registers from refVars to prevent double-decRef
+  ## Emits in REVERSE register order to ensure proper destruction order
+  log(c.verbose, &"emitDecRefsForScope: refVars count = {c.refVars.len}, excludeReg = {excludeReg}, removeFromTracking = {removeFromTracking}")
+
+  # Collect all registers that need decRef
+  var regsToDecRef: seq[uint8] = @[]
+  for reg, typ in c.refVars:
+    if excludeReg < 0 or reg != uint8(excludeReg):
+      regsToDecRef.add(reg)
+
+  # Sort in REVERSE order (highest register first) to ensure reverse allocation order
+  regsToDecRef.sort(system.cmp[uint8], order = Descending)
+
+  # Emit cleanup code in reverse register order
+  for reg in regsToDecRef:
+    let typ = c.refVars[reg]
+
+    # Check if this is an array of refs or weaks (or nested arrays containing them)
+    if typ.kind == tkArray and typ.inner != nil and (typ.inner.kind == tkRef or typ.inner.kind == tkWeak or (typ.inner.kind == tkArray and needsArrayCleanup(typ.inner))):
+      # For arrays of refs, we need to DecRef each element
+      log(c.verbose, &"Emitting DecRef cleanup for array[ref] in reg {reg}")
+
+      # Get array length into a temp register
+      let lenReg = c.allocator.allocReg()
+      c.prog.emitABC(ropLen, lenReg, reg, 0)
+
+      # Allocate registers for loop: index and element
+      let idxReg = c.allocator.allocReg()
+      let elemReg = c.allocator.allocReg()
+
+      # Initialize index to length (we'll iterate backwards)
+      c.prog.emitABC(ropMove, idxReg, lenReg, 0)
+
+      # Loop start position
+      let loopStart = c.prog.instructions.len
+
+      # Decrement index by 1 first (so we go from length-1 down to 0)
+      # ropSubI uses bx format: lower 8 bits = source reg, upper 8 bits = immediate
+      c.prog.emitABx(ropSubI, idxReg, uint16(idxReg) or (uint16(1) shl 8))
+
+      # Check if index >= 0 by testing 0 <= index
+      let zeroConst = c.addConst(regvm.makeInt(0))
+      let zeroReg = c.allocator.allocReg()
+      c.prog.emitABx(ropLoadK, zeroReg, zeroConst)
+      c.prog.emitABC(ropLe, 0, zeroReg, idxReg)  # Skip next instruction if 0 <= index (i.e., if index >= 0)
+
+      # Jump to end if index < 0 (we skip this jump when index >= 0)
+      let jmpEndPos = c.prog.instructions.len
+      c.prog.emitAsBx(ropJmp, 0, 0)
+
+      c.allocator.freeReg(zeroReg)
+
+      # Get array element
+      c.prog.emitABC(ropGetIndex, elemReg, reg, idxReg)
+
+      # DecRef element
+      c.prog.emitABC(ropDecRef, elemReg, 0, 0)
+
+      # Jump back to loop start
+      let jmpBackOffset = loopStart - c.prog.instructions.len - 1
+      c.prog.emitAsBx(ropJmp, 0, int16(jmpBackOffset))
+
+      # Patch jump to end
+      c.prog.instructions[jmpEndPos].sbx = int16(c.prog.instructions.len - jmpEndPos - 1)
+
+      # Free temporary registers
+      c.allocator.freeReg(elemReg)
+      c.allocator.freeReg(idxReg)
+      c.allocator.freeReg(lenReg)
+
+      log(c.verbose, &"Emitted array[ref] cleanup loop for reg {reg}")
+    else:
+      # Simple ref or weak - just emit DecRef
+      c.prog.emitABC(ropDecRef, reg, 0, 0)
+      log(c.verbose, &"Emitted ropDecRef for ref variable in reg {reg} at scope exit")
+
+  # Remove from tracking if requested (for nested scopes)
+  if removeFromTracking:
+    for reg in regsToDecRef:
+      c.refVars.del(reg)
+      log(c.verbose, &"Removed reg {reg} from refVars tracking")
 
 # Pattern matching for instruction fusion
 proc tryFuseArithmetic(c: var RegCompiler, e: Expr): tuple[fused: bool, reg: uint8] =
@@ -431,41 +531,105 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
     c.prog.instructions.add(instr)
 
   of ekNew:
-    # Handle new for heap allocation (similar to ekNewRef)
-    log(c.verbose, "Compiling ekNew expression")
-    # If there's an init expression, compile it
-    if e.initExpr.isSome:
-      let initReg = c.compileExpr(e.initExpr.get)
+    # Handle new for heap allocation using reference counting
+    log(c.verbose, "Compiling ekNew expression with heap allocation")
+    result = c.allocator.allocReg()
 
-      # Allocate result register
-      result = c.allocator.allocReg()
+    # Determine if we're creating a scalar ref or an object ref
+    let innerType = if e.typ != nil and e.typ.kind == tkRef: e.typ.inner else: nil
+    let isScalarRef = innerType != nil and innerType.kind in {tkInt, tkFloat, tkBool, tkString, tkChar}
 
-      # Get function index for "new"
-      let funcIdx = c.addFunctionIndex("new")
+    if isScalarRef and e.initExpr.isSome:
+      # Scalar reference: new(42) -> compile value and use ropNewRef with value
+      log(c.verbose, "  Creating scalar heap reference")
+      let valueReg = c.compileExpr(e.initExpr.get)
 
-      # Create debug info for the entire new() expression (including argument preparation)
-      let newDebug = c.makeDebugInfo(e.pos)
+      # ropNewRef with B=valueReg, C=1 means "allocate scalar with this value"
+      # C=1 is used as a flag to distinguish scalar allocation from table allocation
+      c.prog.emitABC(ropNewRef, result, valueReg, 1, c.makeDebugInfo(e.pos))
+      log(c.verbose, &"  Emitted ropNewRef for scalar from reg {valueReg} to {result}")
 
-      # Set up argument in next register
-      if initReg != result + 1:
-        c.prog.emitABC(ropMove, result + 1, initReg, 0, newDebug)
-        c.allocator.freeReg(initReg)
-
-      # Call new function using ropCall
-      var instr = RegInstruction(
-        op: ropCall,
-        a: result,
-        opType: 4,
-        funcIdx: funcIdx,
-        numArgs: 1,
-        numResults: 1,
-        debug: newDebug
-      )
-      c.prog.instructions.add(instr)
+      c.allocator.freeReg(valueReg)
     else:
-      # No init expression - just return nil for now
-      result = c.allocator.allocReg()
-      c.prog.emitABC(ropLoadNil, result, result, 0, c.makeDebugInfo(e.pos))
+      # Object reference: new[T]{...} -> allocate table and initialize fields
+      # Look up destructor function index for this type
+      # Note: We encode as funcIdx+1, so 0 means "no destructor", 1 means funcIdx=0, etc.
+      var destructorFuncIdx = 0'u8  # Default: no destructor (0 = none)
+      if innerType != nil and innerType.destructor.isSome:
+        let destructorName = innerType.destructor.get
+        # Use addFunctionIndex to add destructor to functionTable if not already there
+        let funcIdx = c.addFunctionIndex(destructorName)
+        destructorFuncIdx = uint8(funcIdx + 1)  # Encode as index+1
+        log(c.verbose, &"  Found destructor {destructorName} at function index {funcIdx}, encoded as {destructorFuncIdx}")
+
+      # C=0 means table allocation, B=encoded destructor index (0 if none, funcIdx+1 otherwise)
+      c.prog.emitABC(ropNewRef, result, destructorFuncIdx, 0, c.makeDebugInfo(e.pos))
+      log(c.verbose, &"  Emitted ropNewRef for table at reg {result} with destructor encoded={destructorFuncIdx}")
+
+      # If there's an init expression (object literal), initialize fields
+      if e.initExpr.isSome:
+        let initExpr = e.initExpr.get
+
+        # The init expression should be an object literal
+        if initExpr.kind == ekObjectLiteral:
+          log(c.verbose, &"  Initializing {initExpr.fieldInits.len} fields for heap object")
+
+          # Set each field on the heap object
+          for fieldInit in initExpr.fieldInits:
+            let fieldName = fieldInit.name
+            let fieldExpr = fieldInit.value
+
+            # Compile the field value
+            let valueReg = c.compileExpr(fieldExpr)
+
+            # Add field name to constants
+            let fieldConstIdx = c.addStringConst(fieldName)
+
+            # If storing a ref value, increment its reference count
+            if fieldExpr.typ != nil and fieldExpr.typ.kind == tkRef:
+              c.prog.emitABC(ropIncRef, valueReg, 0, 0, c.makeDebugInfo(fieldInit.value.pos))
+              log(c.verbose, &"    Emitted ropIncRef for ref value in reg {valueReg} before storing in field")
+
+            # Set field: heap_object[fieldName] = value
+            # ropSetField: R[B][K[C]] = R[A]
+            # So: B = result (heap ref), C = field name const, A = value reg
+            c.prog.emitABC(ropSetField, valueReg, result, fieldConstIdx.uint8, c.makeDebugInfo(fieldInit.value.pos))
+            log(c.verbose, &"    Set field '{fieldName}' from reg {valueReg}")
+
+            c.allocator.freeReg(valueReg)
+        else:
+          # Non-object-literal init
+          log(c.verbose, "  WARNING: ekNew with non-object-literal init expression for object type")
+      else:
+        # No init expression - check if type has field defaults and initialize them
+        log(c.verbose, "  No init expression provided")
+
+        # Look up the type to see if it has fields with default values
+        if innerType != nil and innerType.kind == tkObject and innerType.fields.len > 0:
+          log(c.verbose, &"  Object type has {innerType.fields.len} fields, checking for defaults")
+
+          for field in innerType.fields:
+            if field.defaultValue.isSome:
+              log(c.verbose, &"  Initializing field '{field.name}' with default value")
+
+              # Compile the default value expression
+              let valueReg = c.compileExpr(field.defaultValue.get)
+
+              # Add field name to constants
+              let fieldConstIdx = c.addStringConst(field.name)
+
+              # If storing a ref value, increment its reference count
+              if field.fieldType.kind == tkRef:
+                c.prog.emitABC(ropIncRef, valueReg, 0, 0, c.makeDebugInfo(field.defaultValue.get.pos))
+                log(c.verbose, &"    Emitted ropIncRef for ref value in reg {valueReg} before storing in field")
+
+              # Set field: heap_object[fieldName] = value
+              c.prog.emitABC(ropSetField, valueReg, result, fieldConstIdx.uint8, c.makeDebugInfo(field.defaultValue.get.pos))
+              log(c.verbose, &"    Set field '{field.name}' from reg {valueReg}")
+
+              c.allocator.freeReg(valueReg)
+        else:
+          log(c.verbose, "  Created empty heap object")
 
   of ekOptionSome:
     # Handle some(value) for option types
@@ -688,6 +852,11 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
       # Add field name to constants if not already there
       let fieldConstIdx = c.addStringConst(fieldName)
 
+      # If storing a ref value, increment its reference count
+      if fieldExpr.typ != nil and fieldExpr.typ.kind == tkRef:
+        c.prog.emitABC(ropIncRef, valueReg, 0, 0)
+        log(c.verbose, &"  Emitted ropIncRef for ref value in reg {valueReg} before storing in field")
+
       # Emit ropSetField: R[tableReg][K[fieldConstIdx]] = R[valueReg]
       c.prog.emitABC(ropSetField, valueReg, result, uint8(fieldConstIdx))
 
@@ -708,6 +877,11 @@ proc compileExpr*(c: var RegCompiler, e: Expr): uint8 =
 
           # Add field name to constants
           let fieldConstIdx = c.addStringConst(field.name)
+
+          # If storing a ref value, increment its reference count
+          if defaultExpr.typ != nil and defaultExpr.typ.kind == tkRef:
+            c.prog.emitABC(ropIncRef, valueReg, 0, 0)
+            log(c.verbose, &"  Emitted ropIncRef for ref default value in reg {valueReg}")
 
           # Set the default value
           c.prog.emitABC(ropSetField, valueReg, result, uint8(fieldConstIdx))
@@ -977,29 +1151,55 @@ proc compileCall(c: var RegCompiler, e: Expr): uint8 =
 
   # Then compile arguments
   var argRegs: seq[uint8] = @[]
+
+  # Get parameter types for conversion checking
+  var paramTypes: seq[EtchType] = @[]
+  if c.funInstances.hasKey(e.fname):
+    let funcDecl = c.funInstances[e.fname]
+    for param in funcDecl.params:
+      paramTypes.add(param.typ)
+
   for i, arg in completeArgs:
     log(c.verbose, &"Compiling argument {i} for function {e.fname}")
     log(c.verbose and arg.kind == ekString, &"   String argument: '{arg.sval}'")
 
     let targetReg = result + uint8(i) + 1
+    var effectiveReg = targetReg
 
-    # For variables, we can reference them directly
+    # Compile argument to a temporary register first
+    var tempReg: uint8
     if arg.kind == ekVar and c.allocator.regMap.hasKey(arg.vname):
-      let sourceReg = c.allocator.regMap[arg.vname]
-      if sourceReg != targetReg:
-        c.prog.emitABC(ropMove, targetReg, sourceReg, 0, callDebug)
-        log(c.verbose, &"  Moving var '{arg.vname}' from reg {sourceReg} to reg {targetReg}")
+      tempReg = c.allocator.regMap[arg.vname]
     else:
-      # For other expressions, compile them to a temporary register then move
-      let tempReg = c.compileExpr(arg)
-      if tempReg != targetReg:
-        c.prog.emitABC(ropMove, targetReg, tempReg, 0, callDebug)
-        log(c.verbose, &"  Moving arg {i} from reg {tempReg} to reg {targetReg}")
-        c.allocator.freeReg(tempReg)
-      else:
-        log(c.verbose, &"  Arg {i} already in correct position: reg {tempReg}")
+      tempReg = c.compileExpr(arg)
 
-    argRegs.add(targetReg)
+    # Check if we need ref->weak conversion
+    let needsWeakConversion =
+      i < paramTypes.len and
+      paramTypes[i].kind == tkWeak and
+      arg.typ != nil and arg.typ.kind == tkRef
+
+    if needsWeakConversion:
+      # Wrap ref in weak wrapper
+      let weakReg = if tempReg == targetReg: c.allocator.allocReg() else: targetReg
+      c.prog.emitABC(ropNewWeak, weakReg, tempReg, 0, callDebug)
+      log(c.verbose, &"  Wrapping ref arg {i} in reg {tempReg} with weak wrapper in reg {weakReg}")
+      # Free tempReg if it's not a variable register
+      let isVarReg = arg.kind == ekVar and c.allocator.regMap.hasKey(arg.vname) and
+                     tempReg == c.allocator.regMap[arg.vname]
+      if not isVarReg:
+        c.allocator.freeReg(tempReg)
+      effectiveReg = weakReg
+    elif tempReg != targetReg:
+      # Normal move
+      c.prog.emitABC(ropMove, targetReg, tempReg, 0, callDebug)
+      log(c.verbose, &"  Moving arg {i} from reg {tempReg} to reg {targetReg}")
+      if not (arg.kind == ekVar and c.allocator.regMap.hasKey(arg.vname)):
+        c.allocator.freeReg(tempReg)
+    else:
+      log(c.verbose, &"  Arg {i} already in correct position: reg {tempReg}")
+
+    argRegs.add(effectiveReg)
 
   # Emit ropCall instruction with function index
   # Uses opType=4 (function call format)
@@ -1220,17 +1420,61 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
     if s.vinit.isSome:
       log(c.verbose, &"Compiling init expression for {s.vname} expr kind: {s.vinit.get.kind}")
       let valReg = c.compileExpr(s.vinit.get)
-      c.allocator.regMap[s.vname] = valReg
+
+      # Check if we need weak-to-strong conversion
+      let varIsRef = s.vtype != nil and s.vtype.kind == tkRef
+      let initIsWeak = s.vinit.get.typ != nil and s.vinit.get.typ.kind == tkWeak
+
+      var finalReg = valReg
+      if varIsRef and initIsWeak:
+        # Promote weak to strong
+        let strongReg = c.allocator.allocReg()
+        c.prog.emitABC(ropWeakToStrong, strongReg, valReg, 0, c.makeDebugInfo(s.pos))
+        log(c.verbose, &"Promoting weak ref in reg {valReg} to strong ref in reg {strongReg} for {s.vname}")
+        # Don't free valReg - it might be a variable's register that's still in use
+        finalReg = strongReg
+
+      c.allocator.regMap[s.vname] = finalReg
+
+      # Track ref-typed, weak-typed, and arrays containing refs/weaks for reference counting
+      let needsTracking = s.vtype != nil and (
+        s.vtype.kind == tkRef or
+        s.vtype.kind == tkWeak or
+        (s.vtype.kind == tkArray and needsArrayCleanup(s.vtype))
+      )
+      if needsTracking:
+        c.refVars[finalReg] = s.vtype
+        let typeName = case s.vtype.kind
+          of tkRef: "ref"
+          of tkWeak: "weak"
+          of tkArray: "array[ref]"
+          else: "unknown"
+        log(c.verbose, &"Tracked {typeName} variable {s.vname} in reg {finalReg}")
 
       # Variable is declared and defined at this point
-      c.lifetimeTracker.declareVariable(s.vname, valReg, currentPC)
+      c.lifetimeTracker.declareVariable(s.vname, finalReg, currentPC)
       c.lifetimeTracker.defineVariable(s.vname, currentPC)
 
-      log(c.verbose, &"Variable {s.vname} allocated to reg {valReg} with initialization")
+      log(c.verbose, &"Variable {s.vname} allocated to reg {finalReg} with initialization")
     else:
       # Uninitialized variable - allocate register with nil
       let reg = c.allocator.allocReg(s.vname)
       c.prog.emitABC(ropLoadNil, reg, 0, 0, c.makeDebugInfo(s.pos))
+
+      # Track ref-typed, weak-typed, and arrays containing refs/weaks even if uninitialized
+      let needsTracking = s.vtype != nil and (
+        s.vtype.kind == tkRef or
+        s.vtype.kind == tkWeak or
+        (s.vtype.kind == tkArray and needsArrayCleanup(s.vtype))
+      )
+      if needsTracking:
+        c.refVars[reg] = s.vtype
+        let typeName = case s.vtype.kind
+          of tkRef: "ref"
+          of tkWeak: "weak"
+          of tkArray: "array[ref]"
+          else: "unknown"
+        log(c.verbose, &"Tracked {typeName} variable {s.vname} in reg {reg} (uninitialized)")
 
       # Variable is declared but not yet defined (holds nil)
       c.lifetimeTracker.declareVariable(s.vname, reg, currentPC)
@@ -1245,12 +1489,73 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
       # Update existing register
       let destReg = c.allocator.regMap[s.aname]
       let valReg = c.compileExpr(s.aval)
+
+      # Check if we need to handle type conversions
+      let destIsWeak = c.refVars.hasKey(destReg) and c.refVars[destReg].kind == tkWeak
+      let destIsRef = c.refVars.hasKey(destReg) and c.refVars[destReg].kind == tkRef
+      let valueIsRef = s.aval.typ != nil and s.aval.typ.kind == tkRef
+      let valueIsWeak = s.aval.typ != nil and s.aval.typ.kind == tkWeak
+
+      # If assigning a weak value to a ref variable, promote weak to strong
+      if destIsRef and valueIsWeak:
+        # Promote weak to strong
+        let strongReg = c.allocator.allocReg()
+        c.prog.emitABC(ropWeakToStrong, strongReg, valReg, 0, c.makeDebugInfo(s.pos))
+        log(c.verbose, &"Promoting weak ref in reg {valReg} to strong ref in reg {strongReg} for {s.aname}")
+
+        # Decrement ref count of old value (if not nil)
+        c.prog.emitABC(ropDecRef, destReg, 0, 0, c.makeDebugInfo(s.pos))
+        log(c.verbose, &"Emitted ropDecRef for old value in {s.aname} (reg {destReg})")
+
+        # Move promoted value
+        if strongReg != destReg:
+          c.prog.emitABC(ropMove, destReg, strongReg, 0, c.makeDebugInfo(s.pos))
+          c.allocator.freeReg(strongReg)
+
+        # strongReg now contains the promoted ref, which already has correct refcount from weakToStrong
+        log(c.verbose, &"Completed weak-to-strong promotion for {s.aname}")
+      elif destIsWeak and valueIsRef:
+        # If assigning a ref value to a weak variable, create weak wrapper
+        # Create weak wrapper
+        let weakReg = c.allocator.allocReg()
+        c.prog.emitABC(ropNewWeak, weakReg, valReg, 0, c.makeDebugInfo(s.pos))
+        log(c.verbose, &"Wrapping ref in reg {valReg} with weak wrapper in reg {weakReg} for {s.aname}")
+
+        # Move weak wrapper to destination
+        if weakReg != destReg:
+          c.prog.emitABC(ropMove, destReg, weakReg, 0, c.makeDebugInfo(s.pos))
+          c.allocator.freeReg(weakReg)
+      elif destIsRef and valueIsRef:
+        # Assigning ref to ref variable - handle reference counting
+        # Decrement ref count of old value (if not nil)
+        c.prog.emitABC(ropDecRef, destReg, 0, 0, c.makeDebugInfo(s.pos))
+        log(c.verbose, &"Emitted ropDecRef for old value in {s.aname} (reg {destReg})")
+
+        # Move new value
+        if valReg != destReg:
+          c.prog.emitABC(ropMove, destReg, valReg, 0, c.makeDebugInfo(s.pos))
+
+        # Increment ref count of new value
+        c.prog.emitABC(ropIncRef, destReg, 0, 0, c.makeDebugInfo(s.pos))
+        log(c.verbose, &"Emitted ropIncRef for new value in {s.aname} (reg {destReg})")
+      else:
+        # Normal non-ref assignment
+        if valReg != destReg:
+          c.prog.emitABC(ropMove, destReg, valReg, 0, c.makeDebugInfo(s.pos))
+
+      # Clean up source register (only if it's not a variable's register)
       if valReg != destReg:
-        c.prog.emitABC(ropMove, destReg, valReg, 0, c.makeDebugInfo(s.pos))
-        # In debug mode, clear the source register to avoid confusion
-        if c.debug:
-          c.prog.emitABC(ropLoadNil, valReg, 0, 0)
-        c.allocator.freeReg(valReg)
+        # Check if this register belongs to a variable - if so, don't free/clear it
+        var isVariableReg = false
+        for varName, varReg in c.allocator.regMap:
+          if varReg == valReg:
+            isVariableReg = true
+            break
+
+        if not isVariableReg:
+          if c.debug:
+            c.prog.emitABC(ropLoadNil, valReg, 0, 0)
+          c.allocator.freeReg(valReg)
 
       # Mark variable as defined (if it wasn't already)
       c.lifetimeTracker.defineVariable(s.aname, currentPC)
@@ -1489,8 +1794,19 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
     let debug = c.makeDebugInfo(s.pos)
     if s.re.isSome():
       let retReg = c.compileExpr(s.re.get())
+
+      # Emit decRefs for all ref variables EXCEPT the one being returned
+      # If returning a ref, don't decRef it (ownership transfers to caller)
+      let returningRef = s.re.get().typ != nil and s.re.get().typ.kind == tkRef
+      if returningRef:
+        c.emitDecRefsForScope(excludeReg = int(retReg))
+      else:
+        c.emitDecRefsForScope()
+
       c.prog.emitABC(ropReturn, 1, retReg, 0, debug)  # 1 result, in retReg
     else:
+      # Emit decRefs for all ref variables AFTER defers (defers might use the refs)
+      c.emitDecRefsForScope()
       c.prog.emitABC(ropReturn, 0, 0, 0, debug)  # 0 results
 
   of skBreak:
@@ -1554,6 +1870,39 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
       let reg = c.compileExpr(expr)
       c.allocator.freeReg(reg)
 
+  of skBlock:
+    # Unnamed scope block - compile all statements with proper scope management
+    log(c.verbose, &"Compiling unnamed scope block with {s.blockBody.len} statements")
+    let blockStartPC = c.prog.instructions.len
+    c.lifetimeTracker.enterScope(blockStartPC)
+
+    # Snapshot ref variables before entering block
+    var refVarsSnapshot: seq[uint8] = @[]
+    for reg in c.refVars.keys:
+      refVarsSnapshot.add(reg)
+
+    # Compile all statements in the block
+    for stmt in s.blockBody:
+      c.compileStmt(stmt)
+
+    # Emit DecRefs only for ref variables declared in this block (not in parent scopes)
+    var blockLocalRegs: seq[uint8] = @[]
+    for reg, typ in c.refVars:
+      if reg notin refVarsSnapshot:
+        blockLocalRegs.add(reg)
+
+    # Sort in REVERSE order and emit DecRefs
+    blockLocalRegs.sort(system.cmp[uint8], order = Descending)
+    for reg in blockLocalRegs:
+      c.prog.emitABC(ropDecRef, reg, 0, 0)
+      log(c.verbose, &"Emitted ropDecRef for block-local ref variable in reg {reg}")
+      c.refVars.del(reg)  # Remove from tracking to prevent double-decRef at function exit
+
+    # Exit the block scope
+    let blockEndPC = c.prog.instructions.len
+    c.lifetimeTracker.exitScope(blockEndPC)
+    log(c.verbose, &"Exited unnamed scope block at PC {blockEndPC}")
+
   of skFieldAssign:
     # Field or array index assignment
     log(c.verbose, "Field/index assignment")
@@ -1577,14 +1926,33 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
       # Compile the value to assign
       let valReg = c.compileExpr(s.faValue)
 
+      # Check if target field is weak[T] and value is ref[T]
+      var finalValReg = valReg
+      let targetIsWeak = s.faTarget.typ != nil and s.faTarget.typ.kind == tkWeak
+      let valueIsRef = s.faValue.typ != nil and s.faValue.typ.kind == tkRef
+
+      if targetIsWeak and valueIsRef:
+        # Need to wrap the ref in a weak wrapper
+        let weakReg = c.allocator.allocReg()
+        c.prog.emitABC(ropNewWeak, weakReg, valReg, 0, c.makeDebugInfo(s.pos))
+        log(c.verbose, &"  Wrapping ref in reg {valReg} with weak wrapper in reg {weakReg}")
+        finalValReg = weakReg
+
       # Get or add the field name to const pool
       let fieldConst = c.addStringConst(s.faTarget.fieldName)
 
-      # Emit ropSetField to set object field: R[objReg][K[fieldConst]] = R[valReg]
-      c.prog.emitABC(ropSetField, valReg, objReg, uint8(fieldConst), c.makeDebugInfo(s.pos))
+      # If storing a ref value, increment its reference count
+      if valueIsRef and not targetIsWeak:
+        c.prog.emitABC(ropIncRef, finalValReg, 0, 0, c.makeDebugInfo(s.pos))
+        log(c.verbose, &"  Emitted ropIncRef for ref value in reg {finalValReg} before storing in field")
 
-      log(c.verbose, &"Set field '{s.faTarget.fieldName}' (const[{fieldConst}]) in object at reg {objReg} to value at reg {valReg}")
+      # Emit ropSetField to set object field: R[objReg][K[fieldConst]] = R[finalValReg]
+      c.prog.emitABC(ropSetField, finalValReg, objReg, uint8(fieldConst), c.makeDebugInfo(s.pos))
 
+      log(c.verbose, &"Set field '{s.faTarget.fieldName}' (const[{fieldConst}]) in object at reg {objReg} to value at reg {finalValReg}")
+
+      if finalValReg != valReg:
+        c.allocator.freeReg(finalValReg)
       c.allocator.freeReg(valReg)
 
     of ekIndex:
@@ -1595,8 +1963,27 @@ proc compileStmt*(c: var RegCompiler, s: Stmt) =
       # Compile the index expression
       let indexReg = c.compileExpr(s.faTarget.indexExpr)
 
+      # If the array element type is ref, we need to DecRef the old value before overwriting
+      let arrayElemType = s.faTarget.typ
+      if arrayElemType != nil and arrayElemType.kind == tkRef:
+        # Get old value from array
+        let oldValueReg = c.allocator.allocReg()
+        c.prog.emitABC(ropGetIndex, oldValueReg, arrayReg, indexReg, c.makeDebugInfo(s.pos))
+        log(c.verbose, &"  Got old ref value from array into reg {oldValueReg}")
+
+        # DecRef old value (it will handle nil safely)
+        c.prog.emitABC(ropDecRef, oldValueReg, 0, 0, c.makeDebugInfo(s.pos))
+        log(c.verbose, &"  Emitted ropDecRef for old ref value before overwriting")
+
+        c.allocator.freeReg(oldValueReg)
+
       # Compile the value to assign
       let valueReg = c.compileExpr(s.faValue)
+
+      # If storing a ref value, increment its reference count
+      if s.faValue.typ != nil and s.faValue.typ.kind == tkRef:
+        c.prog.emitABC(ropIncRef, valueReg, 0, 0, c.makeDebugInfo(s.pos))
+        log(c.verbose, &"  Emitted ropIncRef for ref value in reg {valueReg} before storing in array")
 
       # Emit SETINDEX instruction: R[arrayReg][R[indexReg]] = R[valueReg]
       c.prog.emitABC(ropSetIndex, arrayReg, indexReg, valueReg, c.makeDebugInfo(s.pos))
@@ -1626,6 +2013,9 @@ proc compileFunDecl*(c: var RegCompiler, name: string, params: seq[Param], retTy
     regMap: initTable[string, uint8]()
   )
 
+  # Reset ref variable tracking for new function
+  c.refVars = initTable[uint8, EtchType]()
+
   # Reset lifetime tracker for this function
   let startPC = c.prog.instructions.len
   c.lifetimeTracker = newLifetimeTracker()
@@ -1645,9 +2035,11 @@ proc compileFunDecl*(c: var RegCompiler, name: string, params: seq[Param], retTy
   # Always emit an instruction to keep jump offsets consistent
   if c.hasDefers:
     c.prog.emitABC(ropExecDefers, 0, 0, 0)
-    c.prog.emitABC(ropReturn, 0, 0, 0)
-  else:
-    c.prog.emitABC(ropReturn, 0, 0, 0)
+
+  # Emit decRefs for all ref variables AFTER defers (defers might use the refs)
+  c.emitDecRefsForScope()
+
+  c.prog.emitABC(ropReturn, 0, 0, 0)
 
   # Exit function scope
   let endPC = c.prog.instructions.len
@@ -1675,6 +2067,8 @@ proc compileFunDecl*(c: var RegCompiler, name: string, params: seq[Param], retTy
   # Add implicit return if needed
   if c.prog.instructions.len == 0 or
      c.prog.instructions[^1].op != ropReturn:
+    # Emit decRefs for all ref variables before implicit return
+    c.emitDecRefsForScope()
     c.prog.emitABC(ropReturn, 0, 0, 0)  # No results
 
   # Return the maximum register count used (highWaterMark tracks the highest nextReg value)
@@ -1707,7 +2101,9 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
     verbose: verbose,
     debug: debug,
     funInstances: p.funInstances,
-    lifetimeTracker: newLifetimeTracker()
+    lifetimeTracker: newLifetimeTracker(),
+    refVars: initTable[uint8, EtchType](),
+    types: p.types
   )
 
   # Collect global variable names FIRST - before compiling functions
@@ -1763,6 +2159,9 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
         regMap: initTable[string, uint8]()
       )
 
+      # Reset ref variable tracking for new function
+      compiler.refVars = initTable[uint8, EtchType]()
+
       # Reset lifetime tracker for new function
       compiler.lifetimeTracker = newLifetimeTracker()
       compiler.lifetimeTracker.enterScope(startPos)  # Enter function scope
@@ -1810,6 +2209,8 @@ proc compileProgram*(p: ast.Program, optimizeLevel: int = 2, verbose: bool = fal
       # Add implicit return if needed
       if compiler.prog.instructions.len == startPos or
          compiler.prog.instructions[^1].op != ropReturn:
+        # Emit decRefs for all ref variables before implicit return
+        compiler.emitDecRefsForScope()
         compiler.prog.emitABC(ropReturn, 0, 0, 0)
 
       let endPos = compiler.prog.instructions.len - 1
