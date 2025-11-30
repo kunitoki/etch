@@ -81,7 +81,7 @@ etch --run c game_logic.etch    # C backend
 ## Hello World
 
 ```etch
-fn main() -> void {
+fn main() {
     print("Hello, World!");
 }
 ```
