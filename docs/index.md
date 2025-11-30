@@ -1,22 +1,27 @@
 # Etch Programming Language
 
-**Write code that's safe by construction, fast by design, and simple by nature.**
+**Write once, script fast, ship native.**
 
-Etch is a statically-typed language that catches bugs before your code runs. Its compile-time prover analyzes your entire program to guarantee safety properties that other languages check at runtime—or don't check at all. The result is code that's as fast as C, as safe as Rust, but simpler than both.
+Etch is a statically-typed scripting language built specifically for game development. Run your scripts instantly in a fast VM during development with hot-reloading and debugging, then compile the same code to C for production performance. Get the iteration speed of Lua with compile-time safety guarantees and native-level performance when you need it.
 
 ## The Etch Philosophy
 
-Most languages make you choose: either accept runtime overhead for safety checks, or skip the checks and hope for the best. Etch offers a third path: **prove safety at compile time, then generate fast code with zero overhead**.
+Game development requires two conflicting things: fast iteration during development and maximum performance in production. Most languages make you choose one or compromise on both. Etch offers **dual execution modes**: a fast VM for prototyping with instant compilation and hot-reloading, plus a C backend for production that generates performance competitive with hand-written C—all from the same source code.
 
 ### Safety Without Runtime Cost
 
 Before your program compiles, Etch's prover verifies it's free from entire classes of bugs:
 
-- **Integer overflow and underflow** - Range analysis tracks value ranges through your program
-- **Array bounds violations** - Every array access proven safe before compilation
-- **Null pointer dereferences** - The `option[T]` type makes absence explicit
-- **Uninitialized variables** - The compiler ensures every variable is initialized before use
-- **Division by zero** - The prover verifies divisors are never zero
+- **No null pointer dereferences** - Multiple layers of protection:
+  - `option[T]` and `result[T]` monads make optional values explicit and force handling
+  - Reference types (`ref[T]`, `weak[T]`) are analyzed by the prover for potential nil states
+  - The prover enforces nil checks when it cannot prove a reference is non-nil
+  - Pattern matching ensures all cases (some/none, ok/error) are handled
+  - Compile-time verification prevents dereferencing potentially nil references
+- **No integer overflow/underflow** - Range analysis tracks value ranges through your program
+- **No array bounds violations** - Every array access proven safe before compilation
+- **No uninitialized variables** - The compiler ensures every variable is initialized before use
+- **No division by zero** - The prover verifies divisors are never zero
 
 If the prover can't verify these properties, your code doesn't compile. If it compiles, these bugs literally cannot happen.
 
@@ -50,9 +55,12 @@ let doubled = items.map(|n| n * 2);  // Type flows through functions
 
 Function signatures are explicit (for clarity and documentation), but local variables infer naturally.
 
-### 3. Algebraic Types for Explicit Error Handling
+### 3. Null Safety Through Monads and Reference Types
 
-There are no null pointers in Etch, and functions that can fail return `result[T]` or `option[T]`. Pattern matching forces you to handle both success and failure:
+Etch provides multiple mechanisms to prevent null pointer dereferences:
+
+**Monads for Optional Values**
+Functions that may or may not return a value use `option[T]` or `result[T]`. Pattern matching forces you to handle both cases:
 
 ```etch
 fn divide(a: int, b: int) -> result[int] {
@@ -68,7 +76,38 @@ match divide(10, 2) {
 }
 ```
 
-The compiler won't let you ignore errors or forget to check for `none`. Errors become values you handle explicitly, not exceptions you hope to catch.
+**Reference Types with Compile-Time Verification**
+For heap-allocated objects, use `ref[T]` (strong reference) or `weak[T]` (weak reference). The prover tracks nil states and enforces checking:
+
+```etch
+fn processRef(obj: ref[GameObject]) -> void {
+    // ref[T] can be nil - prover tracks when checking is needed
+    if obj != nil {
+        obj.update();  // Safe: prover verified non-nil
+    }
+}
+
+fn processWeak(weakObj: weak[GameObject]) -> void {
+    // Weak references must be checked before use or promotion to ref
+    if weakObj != nil {
+        let strongObj: ref[GameObject] = weakObj;  // Weak-to-ref promotion
+        strongObj.update();  // Safe: prover knows it's non-nil here
+    }
+}
+
+fn guaranteed(obj: ref[GameObject]) -> void {
+    // If prover knows obj cannot be nil (e.g., freshly created), no check needed
+    obj.update();  // Safe: prover verified through data flow analysis
+}
+```
+
+**Key Semantics:**
+- `ref[T]` - Strong reference, can be nil, prover tracks when nil checking is required
+- `weak[T]` - Weak reference, can be nil, must be checked before use or promotion to `ref[T]`
+- The prover uses control flow and data flow analysis to determine when references might be nil
+- When the prover cannot prove a reference is non-nil, it requires an explicit nil check before dereferencing
+
+The compiler won't let you ignore errors, forget to check for `none`, dereference potentially nil references without checking, or promote weak references without nil checks. Null becomes a compile-time concern, not a runtime crash.
 
 ### 4. UFCS: Functions That Read Like Methods
 
@@ -156,31 +195,42 @@ No special cases, no hidden complexity. The language gets out of your way.
 
 ## When to Use Etch
 
-Etch shines in domains where **correctness and performance both matter**:
+Etch is designed specifically for **game scripting** where you need:
 
-- **Command-line tools** - Fast startup, reliable execution, single binary deployment
-- **Embedded systems** - Predictable performance, small footprint, no GC pauses
-- **High-performance applications** - Safety without sacrificing speed
-- **Scripting with guarantees** - Embed in C/C++ apps for safe, fast scripting
-- **Learning systems programming** - Simpler than Rust, safer than C
+**Primary Use Case: Game Development**
+- **Gameplay logic** - AI behaviors, quest systems, dialogue trees
+- **Level scripting** - Event triggers, interactive objects, cutscenes
+- **Modding support** - Safe, sandboxed scripts for user-generated content
+- **Rapid iteration** - Hot-reload scripts without restarting your game
+- **Production performance** - Compile to C when you ship
+- **Compound debugging** - Step through Etch scripts and C++ engine code together
 
-If you're building something where bugs are costly and performance matters, Etch gives you both safety and speed without compromise.
+**Other Use Cases**
+- **Application scripting** - Embed in C/C++ apps for safe, fast scripting
+- **Plugin systems** - Extend functionality with type-safe scripts
+- **Configuration DSLs** - More expressive than JSON, safer than Lua
+- **Command-line tools** - Fast startup, reliable execution
 
-## How Etch Compares
+If you're building a game and want scripting that's easier than C++, safer than Lua, and can hot-reload during development, Etch is for you.
 
-Understanding Etch's niche:
+## How Etch Compares to Game Scripting Languages
 
-| | Etch | Python | Rust | C |
-|---|------|--------|------|---|
-| **Safety checks** | Compile-time | Runtime | Compile-time | None |
-| **Overflow protection** | Compile-time | Runtime | Debug builds only | None |
-| **Type system** | Static + inference | Dynamic | Static + inference | Static, minimal inference |
-| **Null safety** | `option[T]` | No protection | `Option<T>` | No protection |
-| **Performance** | Native speed | Interpreted | Native speed | Native speed |
-| **Learning curve** | Gentle | Gentle | Steep | Medium |
-| **Memory model** | Ref-counted | GC | Ownership | Manual |
+Understanding Etch's position in the game scripting ecosystem:
 
-**Etch's sweet spot:** The safety of Rust with the simplicity of Python, producing code as fast as C.
+| | Etch (VM) | Etch (C) | Lua | Python | C++ |
+|---|-----------|----------|-----|--------|-----|
+| **Iteration speed** | Instant | Slow | Instant | Instant | Slow |
+| **Hot-reload** | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes | ❌ No |
+| **Type safety** | ✅ Static | ✅ Static | ❌ Dynamic | ❌ Dynamic | ✅ Static |
+| **Safety checks** | Compile-time | Compile-time | Runtime | Runtime | None |
+| **Performance** | ~Lua speed | ~C speed | Fast | Slow | Fastest |
+| **Debugging** | Full (VSCode) | C debugger | Limited | Full | Full |
+| **Compound debug** | ✅ Yes | ✅ Yes | ❌ No | ❌ No | N/A |
+| **Learning curve** | Gentle | Gentle | Gentle | Gentle | Steep |
+| **Memory model** | Ref-counted | Ref-counted | GC | GC | Manual |
+| **Embedding** | Easy (C API) | Native | Easy | Medium | Native |
+
+**Etch's sweet spot:** Lua's ease of use + compile-time safety + optional C-level performance, all with full debugging support.
 
 ## Quick Start
 

@@ -5,10 +5,11 @@ on:
     branches: [ main ]
     paths:
         - '!.github/workflows/test.yml'
+        - '!demo/**'
         - '!docs/**'
-        - '!vscode/**'
         - '!performance/**'
         - '!slides/**'
+        - '!vscode/**'
         - '!**/.gitignore'
         - '!**/*.md'
         - '!justfile'
@@ -17,10 +18,11 @@ on:
     branches: [ main ]
     paths:
         - '!.github/workflows/test.yml'
+        - '!demo/**'
         - '!docs/**'
-        - '!vscode/**'
         - '!performance/**'
         - '!slides/**'
+        - '!vscode/**'
         - '!**/.gitignore'
         - '!**/*.md'
         - '!justfile'

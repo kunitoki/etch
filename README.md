@@ -2,257 +2,137 @@
 
 **Define once, Etch forever.**
 
-A modern, safety-first programming language that proves correctness at compile-time through advanced static analysis. Etch combines the simplicity of C-like syntax with powerful compile-time execution, range-based safety proofs, and intelligent dead code elimination.
+A safety-first scripting language designed for game development. Etch runs as fast bytecode in a VM for rapid prototyping and hot-reloading, then compiles to C for production performance. Write once, deploy both ways—with full VSCode debugging, C/C++ interop, type safety, and ergonomic syntax optimized for game scripting.
 
 [![Tests](https://github.com/kunitoki/etch/actions/workflows/test.yml/badge.svg)](https://github.com/kunitoki/etch/actions/workflows/test.yml)
 
 ## Why Etch?
 
-**Safety Without Runtime Overhead**
-- Prove division-by-zero safety at compile-time using range analysis
-- Detect integer overflow before your code ever runs
-- Eliminate uninitialized variables and dead code branches
-- Array bounds checking with compile-time verification
+**Built for Game Development**
+- **Dual execution modes**: VM for iteration speed, C backend for production performance
+- **Hot-reload scripts** during development without recompiling your engine
+- **Compound debugging**: Step through both Etch scripts and C/C++ engine code together
+- **Easy embedding**: Clean C API designed for game engines
+- **Budgeted GC pauses for cycles**: Deterministic reference counting keeps frame times stable
 
-**Compile-Time Superpowers**
-- Execute functions at compile-time with `comptime()`
-- Read files and inject code during compilation
-- Generate code dynamically based on configuration
-- Zero runtime cost for compile-time computations
+**Safety Without Runtime Cost**
+- **No null pointer dereferences**: Monads (`option[T]`, `result[T]`) for optional values; `ref[T]` and `weak[T]` references with prover-enforced nil checking when potentially nil
+- **No division-by-zero**: Range analysis proves divisors are never zero
+- **No integer overflow**: Detect overflow before your code ever runs
+- **No uninitialized variables**: Definite initialization analysis
+- **No array out-of-bounds**: Compile-time bounds verification
 
 **Developer Experience**
-- Clean, minimal C-like syntax
-- Fast bytecode compilation with caching
-- VSCode integration with full debugger support
+- Clean, minimal C-like syntax that game programmers already know
+- Fast bytecode compilation with caching for instant iteration
+- VSCode integration with breakpoints, stepping, and variable inspection
+- Remote debugging for scripts embedded in running games
 - Helpful error messages that guide you to solutions
+
+**Not Aiming to Replace C, Rust, or Nim**
+Etch focuses on the sweet spot between Lua-style ease of use and native performance. It's not a systems language—it's a game scripting language that doesn't sacrifice safety or debuggability for speed.
 
 ## Quick Start
 
 ```bash
-# Run a program
+# Run a program in VM mode
 etch --run examples/simple_hello.etch
 
-# Compile and cache bytecode
-etch examples/simple_hello.etch
+# Run a program in C mode
+etch --run c examples/simple_hello.etch
 
-# Run test suite
+# Compile and cache bytecode, or cache .c file
+etch --gen examples/simple_hello.etch
+etch --gen c examples/simple_hello.etch
+
+# Run test suite (both VM and C)
 just tests
+just tests-c
 
 # Test a specific file
 just test examples/simple_test.etch
+
+# Try the raylib arkanoid demo with hot reload
+just demo release
+```
+
+## Dual Execution Modes
+
+Etch's killer feature is running the same code in two ways:
+
+**VM Mode (Development)**
+- Instant compilation to bytecode (~milliseconds)
+- Hot-reload scripts without restarting your game
+- Full source-level debugging with breakpoints
+- Perfect for rapid iteration
+
+**C Backend (Production)**
+- Compiles Etch → C for maximum performance
+- Integrates with your existing build system
+- Performance competitive with hand-written C
+- Same source code, zero changes needed
+
+Switch between modes with a single flag:
+```bash
+etch --run game_logic.etch      # VM mode
+etch --run c game_logic.etch    # C backend
+```
+
+## Hello World
+
+```etch
+fn main() -> void {
+    print("Hello, World!");
+}
 ```
 
 ## Language Features
 
 ### 1. Compile-Time Execution
-
-Execute code at compile-time to generate optimized runtime code:
-
-```etch
-fn square(x: int) -> int {
-    return x * x;
-}
-
-fn main() -> void {
-    // Computed at compile-time, stored as constant
-    let result: int = comptime(square(8));
-    print(result);  // Prints: 64
-}
-```
-
-**Code Injection**
-Generate runtime code from compile-time execution:
-
-```etch
-fn main() -> void {
-    comptime {
-        inject("config", "string", readFile("config.txt"));
-        inject("version", "int", 42);
-    }
-    print(config);   // Uses injected variable
-    print(version);  // Prints: 42
-}
-```
+Execute code at compile-time to generate optimized runtime code. Functions marked with `comptime()` are evaluated during compilation, and their results are embedded as constants. Use `comptime { }` blocks to run code during compilation (useful for configuration), and `inject()` to generate runtime variables from compile-time computations.
 
 ### 2. Range-Based Safety Analysis
+Etch tracks value ranges throughout your program to prove safety properties. The prover analyzes integer ranges to prevent division-by-zero, detect potential overflow/underflow, and eliminate dead code branches that can never execute.
 
-Etch tracks value ranges throughout your program to **prove safety properties**:
+### 3. Null Safety
+Multiple layers of protection prevent null pointer dereferences:
+- `option[T]` and `result[T]` monads force explicit handling through pattern matching
+- `ref[T]` and `weak[T]` reference types are analyzed by the prover for potential nil states
+- The prover enforces nil checks when it cannot prove a reference is non-nil
+- Weak-to-ref promotion requires explicit nil checking
 
-**Division-by-Zero Prevention**
-```etch
-fn main() -> void {
-    let divisor: int = rand(10, 5);    // Range: [5, 10]
-    let result: int = 100 / divisor;   // Safe: proven non-zero
-    print(result);
-}
-```
+### 4. Uninitialized Variable Detection
+The compiler ensures all variables are initialized before use through definite initialization analysis. It tracks initialization through all control flow paths, including conditional branches, loops, and function calls.
 
-**Overflow Detection**
-```etch
-fn main() -> void {
-    let large_a: int = rand(9223372036854775800);
-    let large_b: int = rand(1000);
-    let overflow: int = large_a + large_b;  // Compile error: potential overflow!
-}
-```
+### 5. Array Safety
+Compile-time bounds checking and safe array operations. The prover verifies array access is within bounds when possible, and enforces runtime checks when necessary. Supports length operator (`#array`), safe indexing, and slicing.
 
-**Intelligent Dead Code Elimination**
-```etch
-fn main() -> void {
-    let x: int = rand(100, 50);  // Range: [50, 100]
+### 6. Type Safety & Inference
+Strong static typing with Hindley-Milner style type inference for generics. Types flow through expressions automatically while maintaining full type safety. Supports primitives (`int`, `float`, `bool`, `char`, `string`), arrays, objects, unions, generics, options, and results.
 
-    if x > 200 {
-        print(10 / 0);  // Dead code: condition impossible, no error!
-    }
+### 7. Pattern Matching
+Exhaustive pattern matching for `option[T]` and `result[T]` types. The compiler ensures all cases are handled (some/none, ok/error) through match expressions, making error handling explicit and preventing accidental null access.
 
-    if x > 75 {
-        print("Possible!");  // This branch may execute
-    }
-}
-```
+### 8. Uniform Function Call Syntax (UFCS)
+Call any function as if it were a method using dot notation. The first parameter becomes the receiver, enabling clean left-to-right method chains without OOP overhead.
 
-### 3. Uninitialized Variable Detection
+### 9. Lambdas & Closures
+First-class functions with full closure support. Anonymous functions can capture variables from enclosing scope, enabling functional programming patterns like map, filter, and reduce.
 
-Never use a variable before it's initialized:
+### 10. Defer Statements
+Guaranteed cleanup code that executes when scope exits. Defer blocks run in reverse order (LIFO), perfect for resource management and cleanup operations.
 
-```etch
-fn main() -> void {
-    var x: int;
-    print(x);  // Compile error: x used before initialization
-}
-```
+### 11. Objects & Type Aliases
+Define structured data with object types, create type aliases for clarity, and use union types for sum types. Object fields must be initialized before use, enforced by the prover.
 
-**Conditional Initialization Tracking**
-```etch
-fn main() -> void {
-    var x: int;
-    let condition: int = rand(1);
+### 12. Control Flow
+Standard control flow (`if`/`elif`/`else`, `while`, `for`) with safety guarantees. Includes short-circuit boolean operators and loop control statements.
 
-    if condition == 0 {
-        x = 10;
-    } else {
-        x = 20;
-    }
+### 13. Default Parameters
+Function parameters can have default values, checked for safety at compile-time (e.g., default divisors must be non-zero).
 
-    print(x);  // Safe: x initialized in all branches
-}
-```
-
-### 4. Array Safety
-
-Compile-time bounds checking and safe array operations:
-
-```etch
-fn main() -> void {
-    let numbers: array[int] = [10, 20, 30, 40, 50];
-
-    // Length operator
-    let count: int = #numbers;
-
-    // Safe indexing
-    let middle: int = numbers[count / 2];
-
-    // Safe slicing
-    let secondHalf: array[int] = numbers[2:];
-    let slice: array[int] = numbers[1:4];
-}
-```
-
-### 5. Type Safety & Inference
-
-Strong static typing with intelligent type inference:
-
-```etch
-fn main() -> void {
-    let x: int = 42;              // Explicit type
-    let y = 3.14;                 // Inferred as float
-    let name = "Etch";            // Inferred as string
-    let flag = true;              // Inferred as bool
-}
-```
-
-### 6. Default Parameters with Safety
-
-Default parameter values are checked for safety at compile-time:
-
-```etch
-fn safeDivide(numerator: int, divisor: int = 5) -> int {
-    return numerator / divisor;  // Safe: default is non-zero
-}
-
-fn unsafeDivide(numerator: int, divisor: int = 0) -> int {
-    return numerator / divisor;  // Compile error: default causes division by zero!
-}
-```
-
-### 7. Control Flow
-
-Standard control flow with safety guarantees:
-
-```etch
-fn main() -> void {
-    let x: int = rand(10);
-
-    // If-elif-else
-    if x < 3 {
-        print("Small");
-    } else if x < 7 {
-        print("Medium");
-    } else {
-        print("Large");
-    }
-
-    // While loops
-    var i: int = 0;
-    while i < 5 {
-        print(i);
-        i = i + 1;
-    }
-}
-```
-
-## Advanced Examples
-
-### Game Logic with Proven Safety
-
-```etch
-fn roll_dice() -> int {
-    return rand(6, 1);  // 1-6
-}
-
-fn random_damage(base: int) -> int {
-    let variance: int = rand(5);  // 0-5
-    return base + variance;        // Proven: no overflow
-}
-
-fn main() -> void {
-    let roll1: int = roll_dice();
-    let roll2: int = roll_dice();
-    print(roll1);
-    print(roll2);
-
-    let damage: int = random_damage(20);  // 20-25
-    print(damage);
-}
-```
-
-### Configuration-Driven Code Generation
-
-```etch
-fn main() -> void {
-    comptime {
-        let config: string = readFile("config.txt");
-
-        if config == "debug" {
-            inject("LOG_LEVEL", "int", 2);
-        } else {
-            inject("LOG_LEVEL", "int", 0);
-        }
-    }
-
-    print(LOG_LEVEL);  // Value depends on config file
-}
-```
+### 14. C FFI & Module System
+Import Etch modules or call C functions directly through FFI declarations. Zero-cost abstractions with type-safe boundaries and dynamic library loading.
 
 ## Tools & Integration
 
@@ -266,7 +146,7 @@ etch --run --verbose examples/test.etch
 etch --run --release examples/test.etch
 
 # Dump bytecode for inspection
-etch --dump-bytecode examples/test.etch
+etch --dump examples/test.etch
 
 # Start debug server for VSCode
 etch --debug-server examples/test.etch
@@ -293,10 +173,11 @@ Install with: `just vscode`
 nim c src/etch.nim
 
 # Optimized release build
-just build
+just build release
 
 # Run all tests
 just tests
+just tests-c
 
 # Clean build artifacts
 just clean
@@ -320,20 +201,41 @@ Tests require companion files:
 
 ## Architecture
 
-Etch employs a multi-stage compilation pipeline:
+Etch employs a multi-stage compilation pipeline with two backends:
 
 1. **Parsing**: Source code → AST
 2. **Type Checking**: Static analysis with range propagation
 3. **Safety Proofs**: Division-by-zero, overflow, initialization checks
 4. **Compile-Time Execution**: `comptime` evaluation and code injection
-5. **Bytecode Generation**: AST → register-based bytecode
-6. **Bytecode Caching**: Fast re-execution with source hash verification
-7. **VM Execution**: Register-based virtual machine with debugging support
+5. **Backend Selection**:
+   - **VM Path**: AST → register-based bytecode → bytecode caching → VM execution
+   - **C Path**: AST → C code generation → native compilation
+
+### VM Backend
+- Register-based bytecode for fast interpretation
+- Bytecode caching with source hash verification
+- Full debugging support (breakpoints, stepping, variable inspection)
+- Optimized for quick iteration during development
+- Performance: 2-7× faster than Python, comparable to Lua
+
+### C Backend
+- Generates clean, readable C code
+- Integrates with existing C/C++ build systems
+- Near-native performance (competitive with hand-written C)
+- Same safety guarantees as VM mode
+- Performance: 10-20× faster than Python, faster than Lua
 
 ## Safety Guarantees
 
 Etch proves the following at compile-time:
 
+- **No null pointer dereferences**:
+  - Use `option[T]` and `result[T]` monads for optional values (forces explicit checking via pattern matching)
+  - `ref[T]` - Strong references, can be nil, prover enforces checking when potentially nil
+  - `weak[T]` - Weak references, can be nil, must be checked before use or promotion to `ref[T]`
+  - The prover uses data flow and control flow analysis to track nil states
+  - When the prover cannot prove a reference is non-nil, it requires an explicit nil check
+  - Pattern matching ensures all cases are handled
 - **No division by zero**: Range analysis proves divisor is non-zero
 - **No integer overflow**: Arithmetic checked against type bounds
 - **No uninitialized variables**: Definite initialization analysis
@@ -357,15 +259,45 @@ etch/
 └── performance/               # Performance benchmarks
 ```
 
+## Use Cases
+
+**Game Scripting (Primary)**
+- NPC AI behavior trees and state machines
+- Quest logic and dialogue systems
+- Gameplay mechanics and rules
+- Level scripting and event triggers
+- Modding support with safety guarantees
+
+**Other Applications**
+- Embedded scripting for applications
+- Configuration DSLs with validation
+- Plugin systems with sandboxing
+- Command-line tools
+- Educational programming environments
+
+## Performance Context
+
+Etch is designed for game scripting workloads where:
+- Most frame time is in your engine (rendering, physics)
+- Scripts run intermittently (AI decisions, event handlers)
+- You need predictable performance (no GC pauses)
+- Hot-reloading is crucial for iteration speed
+
+**Not designed for:**
+- Replacing your entire engine
+- High-frequency per-frame logic (use C/C++ or the C backend)
+- Systems programming
+- Matching Rust/C++ safety guarantees
+
 ## Contributing
 
 Contributions are welcome! Key areas for improvement:
 
-- Additional compile-time functions
+- Game-specific standard library functions
 - More sophisticated range analysis
-- Loop support in compile-time execution
 - Enhanced type inference
 - Performance optimizations
+- Additional compile-time functions
 
 ## License
 

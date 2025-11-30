@@ -1,12 +1,12 @@
 # Etch Language Documentation
 
-Welcome to Etch! This documentation will guide you through everything you need to know about writing safe, fast, and expressive programs in Etch.
+Welcome to Etch! This documentation will guide you through everything you need to know about writing safe, fast game scripts in Etch.
 
 ## What Makes Etch Special?
 
-Etch is a statically-typed language that combines **compile-time safety verification** with **zero runtime overhead**. Before your code even runs, the Etch prover analyzes your program to guarantee it's free from common bugs like integer overflow, array bounds violations, null pointer dereferences, and uninitialized variables.
+Etch is a statically-typed scripting language designed for **game development**. It runs in two modes: a fast VM for development with hot-reloading and debugging, and a C backend for production performance. Before your code runs, the Etch compiler verifies it's free from common bugs like integer overflow, array bounds violations, and uninitialized variables.
 
-The result? You write code that feels simple and expressive, but get the safety guarantees of formal verification and the performance of hand-optimized C.
+The result? You get Lua-style iteration speed during development, compile-time safety guarantees, and native-level performance in production—all from the same source code.
 
 ## Documentation Structure
 
@@ -64,15 +64,19 @@ Power features for metaprogramming and performance:
 
 ### Development Tools
 
-Tools for debugging and embedding:
+Tools crucial for game development workflows:
 
 10. **[debugging.md](debugging.md)** - Interactive debugging
 
-    Debug Etch programs directly, remotely debug scripts embedded in C++ applications, or use compound debugging to step through both languages simultaneously.
+    Debug Etch programs directly in VSCode with breakpoints and stepping. Remote-debug scripts embedded in running games. Use compound debugging to step through both Etch scripts and C++ engine code simultaneously.
 
-11. **[c-api.md](c-api.md)** - Embedding Etch in C/C++
+11. **[c-api.md](c-api.md)** - Embedding Etch in game engines
 
-    Learn the C API for embedding Etch as a scripting language in your applications, with full control over execution and error handling.
+    Learn the C API for embedding Etch as a scripting language in game engines and applications. Covers hot-reloading, bidirectional value passing, and performance considerations.
+
+12. **[performance.md](performance.md)** - Performance benchmarks
+
+    Understand Etch's performance characteristics compared to Python, Lua, and C. Learn when to use VM mode vs C backend for different game scripting scenarios.
 
 ## Learning Paths
 
@@ -80,30 +84,30 @@ Tools for debugging and embedding:
 
 Start with these fundamentals to build a solid foundation:
 
-1. **[index.md](index.md)** - Get the big picture of what Etch is and why it exists
+1. **[index.md](index.md)** - Get the big picture: Etch as a game scripting language with dual execution modes
 2. **[types.md](types.md)** - Learn the type system and how inference works
 3. **[functions.md](functions.md)** - Write and chain functions with UFCS
 4. **[control-flow.md](control-flow.md)** - Master conditionals, loops, and pattern matching
 
-After these, you'll be ready to write your first Etch programs!
+After these, you'll be ready to write game scripts in Etch!
 
-### Building Real Applications?
+### Integrating with Your Game Engine?
 
 Once you're comfortable with the basics, explore these topics:
 
-1. **[safety.md](safety.md)** - Understand the compile-time safety guarantees that make Etch special
-2. **[overflow.md](overflow.md)** - Learn how the prover prevents overflow bugs before runtime
-3. **[modules.md](modules.md)** - Organize code into modules and call C libraries via FFI
-4. **[globals.md](globals.md)** - Manage application-wide state safely
+1. **[c-api.md](c-api.md)** - Embed Etch in your C/C++ game engine
+2. **[debugging.md](debugging.md)** - Set up compound debugging for Etch + C++
+3. **[performance.md](performance.md)** - Understand when to use VM vs C backend
+4. **[safety.md](safety.md)** - Understand the compile-time safety guarantees
+5. **[modules.md](modules.md)** - Organize code into modules and call C libraries via FFI
 
-### Ready for Advanced Techniques?
+### Ready for Advanced Features?
 
-Push Etch to its limits with these power features:
+Unlock Etch's power features for sophisticated game systems:
 
-- **[comptime.md](comptime.md)** - Execute code at compile time for metaprogramming and optimization
-- **[operator-overloading.md](operator-overloading.md)** - Create intuitive DSLs with custom operators
-- **[c-api.md](c-api.md)** - Embed Etch as a scripting language in C/C++ applications
-- **[debugging.md](debugging.md)** - Debug with full source-level visibility, even when embedded
+- **[comptime.md](comptime.md)** - Execute code at compile time to pre-compute data tables or embed assets
+- **[operator-overloading.md](operator-overloading.md)** - Create intuitive DSLs for AI behavior or math
+- **[overflow.md](overflow.md)** - Deep dive on how range analysis prevents bugs
 
 ## Quick Reference
 
@@ -135,7 +139,11 @@ Etch's prover ensures these properties at compile time:
 
 - **Memory safe** - No buffer overruns; array accesses proven in-bounds
 - **Overflow free** - Range analysis prevents integer overflow/underflow
-- **Null safe** - No null pointers; use `option[T]` for optional values
+- **Null safe** - Multiple layers of protection:
+  - `option[T]` and `result[T]` monads for optional values with mandatory pattern matching
+  - `ref[T]` - Strong references, can be nil, prover enforces checking when potentially nil
+  - `weak[T]` - Weak references, can be nil, must be checked before use or promotion to `ref[T]`
+  - The prover uses data flow and control flow analysis to track nil states and enforce checks
 - **Initialized** - All variables must be initialized before use
 - **Type safe** - Static types with full inference; no implicit conversions
 - **Zero cost** - All verification happens at compile time with no runtime overhead
