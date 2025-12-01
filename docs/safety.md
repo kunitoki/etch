@@ -14,6 +14,24 @@ Before your Etch program ever runs, the prover analyzes every line to guarantee 
 
 Most languages force a choice: either pay runtime overhead for safety checks, or skip the checks and hope nothing goes wrong. Etch takes a different approach—**prove safety at compile time, then generate fast code with zero checks**.
 
+### How Other Languages Handle Safety
+
+Most languages handle safety at runtime, if at all:
+
+- **Lua**: Returns `nil` on out-of-bounds access, silently hiding bugs
+- **Python**: Throws `IndexError` at runtime, crashing in production
+- **TypeScript**: Type system can't prevent out-of-bounds, returns `undefined`
+- **Nim**: Checks bounds at runtime with exceptions
+- **C/C++**: No bounds checking (unless specific compiler flags), leads to crashes and security vulnerabilities
+- **Rust**: Catches constant out-of-bounds at compile time
+- **Etch**: Like Rust, catches at compile time with constant indices
+
+The key insight: **no scripting language is as safe as it could be**. Languages like Lua, Python, and JavaScript only check bounds at runtime—you pay the performance cost on every access, yet still ship bugs to production. C and C++ skip checks entirely for performance, leading to crashes and security vulnerabilities.
+
+Etch and Rust prove there's a better way: verify safety at compile time, then generate code with zero runtime checks. You get both safety and performance.
+
+For detailed language comparisons with code examples, see the [README](../README.md#the-problem-every-scripting-language-compromises).
+
 The prover uses static analysis to track value ranges, follow control flow, and verify array accesses. If it can't prove your code is safe, compilation fails with a clear explanation of why. If it compiles, you get mathematical certainty that entire bug classes cannot occur.
 
 ### The "If It Compiles, It's Safe" Guarantee
@@ -289,18 +307,7 @@ fn divide(a: int, b: int) -> result[int] {
 
 The conditional establishes a fact the prover uses in the success branch.
 
-### Strategy 3: Use Modulo for Accumulation
-
-When accumulating values in a loop, use modulo to keep results bounded:
-
-```etch
-var sum = 0;
-for item in items {
-    sum = (sum + item) % 1000000007;  // Stays bounded
-}
-```
-
-### Strategy 4: Early Return for Out-of-Range
+### Strategy 3: Early Return for Out-of-Range
 
 Filter out-of-range inputs early to narrow the range for subsequent operations:
 
